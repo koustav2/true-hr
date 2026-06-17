@@ -2,12 +2,16 @@ package com.truehr.app.presentation.theme
 
 import androidx.compose.ui.graphics.Color
 
-val Green = Color(0xFF059669)
-val GreenDark = Color(0xFF065F46)
-val GreenLight = Color(0xFF34D399)
-val Teal = Color(0xFF0D9488)
-val Pink = Color(0xFFE11D74)
-val Canvas = Color(0xFFF1F8F4)
+// True Kind Foundation brand — primary BLUE, paired with leaf GREEN (logo gradient),
+// with purple + red as accents. `Green`/`GreenDark`/`GreenLight` keep their names so the
+// existing screens recolour automatically; they now hold the blue family.
+val Green = Color(0xFF2563EB)        // primary (blue-600)
+val GreenDark = Color(0xFF1D4ED8)    // dark primary (blue-700)
+val GreenLight = Color(0xFF60A5FA)   // light primary (blue-400)
+val Teal = Color(0xFF16A34A)         // leaf green (brand secondary / gradient end)
+val Pink = Color(0xFFDC2626)         // logo red accent
+val Grape = Color(0xFF7E22CE)        // logo purple accent
+val Canvas = Color(0xFFF5F8FC)       // cool neutral canvas
 val Surface = Color(0xFFFFFFFF)
 val Ink = Color(0xFF0F172A)
 val InkSoft = Color(0xFF475569)

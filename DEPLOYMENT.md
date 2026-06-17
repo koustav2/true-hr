@@ -166,10 +166,10 @@ Open **https://truehr.co.in** → admin login. Default HR login (change immediat
 
 In `android/.../data/remote` (the Retrofit base URL / NetworkModule), set the base URL to:
 ```
-https://api.truehr.co.in/
+https://api.truehr.co.in/api/
 ```
-(No `/api` suffix — the subdomain already maps to the backend's `/api` mount, and the
-Retrofit endpoints are relative, e.g. `auth/login` → `https://api.truehr.co.in/auth/login`.)
+(The `api` subdomain passes the path through to the backend's `/api` mount, so endpoints
+resolve as `auth/login` → `https://api.truehr.co.in/api/auth/login`.)
 Then rebuild the release APK in Android Studio (Build → Generate Signed Bundle/APK).
 Because it's HTTPS, no cleartext-traffic exception is needed. *(Tell me and I'll make this
 code change and wire it as a build flavor if you want a debug-vs-prod switch.)*

@@ -29,7 +29,7 @@ export default function LoginPage() {
     <div className="min-h-screen grid lg:grid-cols-[1.1fr_1fr] bg-white">
       {/* Left: brand panel */}
       <div className="hidden lg:flex flex-col justify-between p-12 text-white relative overflow-hidden"
-        style={{ background: 'linear-gradient(150deg,#065f46,#059669 45%,#0d9488)' }}>
+        style={{ background: 'linear-gradient(150deg,#1e3a8a 0%,#2563eb 45%,#16a34a 100%)' }}>
         <Logo light size={36} />
         <div className="relative z-10">
           <h1 className="text-[40px] leading-[1.1] font-extrabold tracking-tight">Onboard people,<br/>not paperwork.</h1>

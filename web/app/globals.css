@@ -9,8 +9,8 @@ body {
   /* canvas with a whisper of warmth + depth, not a flat grey */
   background-color: #f6f8fb;
   background-image:
-    radial-gradient(1100px 520px at 100% -8%, rgba(16,185,129,.05), transparent 60%),
-    radial-gradient(900px 500px at -5% 0%, rgba(13,148,136,.045), transparent 55%);
+    radial-gradient(1100px 520px at 100% -8%, rgba(22,163,74,.05), transparent 60%),
+    radial-gradient(900px 500px at -5% 0%, rgba(37,99,235,.05), transparent 55%);
   background-attachment: fixed;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
@@ -18,7 +18,7 @@ body {
   letter-spacing: -0.006em;
 }
 
-::selection { background: rgba(16,185,129,.18); color: #064e3b; }
+::selection { background: rgba(37,99,235,.16); color: #1e3a8a; }
 
 /* thin, quiet scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

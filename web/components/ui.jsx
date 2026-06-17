@@ -2,7 +2,7 @@ export function Button({ as: As = 'button', variant = 'primary', size = 'md', cl
   const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
   const sizes = { md: 'px-4 py-2.5 text-sm', sm: 'px-3 py-1.5 text-[13px]' };
   const styles = {
-    primary: 'text-white bg-gradient-to-b from-brand-500 to-brand-600 hover:from-brand-500 hover:to-brand-700 shadow-btn hover:shadow-pop',
+    primary: 'text-white bg-brand-gradient bg-[length:140%_140%] bg-[position:0%] hover:bg-[position:100%] transition-[background-position,box-shadow] shadow-btn hover:shadow-pop',
     soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100 ring-1 ring-inset ring-brand-100',
     ghost: 'text-ink-soft hover:bg-slate-100',
     danger: 'bg-white border border-rose-200 text-rose-600 hover:bg-rose-50',

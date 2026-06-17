@@ -10,6 +10,7 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import com.truehr.app.presentation.theme.*
@@ -22,7 +23,7 @@ fun GradientHeader(content: @Composable BoxScope.() -> Unit) {
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .background(Brush.linearGradient(listOf(GreenLight, Green, GreenDark)))
+      .background(Brush.linearGradient(listOf(Green, Color(0xFF1C82B0), Teal)))
       .statusBarsPadding()
       .padding(horizontal = 20.dp, vertical = 18.dp),
     content = content,

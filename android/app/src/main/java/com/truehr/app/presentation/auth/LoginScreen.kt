@@ -40,8 +40,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewM
   ) {
     Spacer(Modifier.height(40.dp))
     Row {
-      Text("TRUE ", style = MaterialTheme.typography.headlineSmall, color = GreenDark, fontWeight = FontWeight.Black)
-      Text("HR", style = MaterialTheme.typography.headlineSmall, color = Pink, fontWeight = FontWeight.Black)
+      Text("TRUE ", style = MaterialTheme.typography.headlineSmall, color = Green, fontWeight = FontWeight.Black)
+      Text("KIND", style = MaterialTheme.typography.headlineSmall, color = Teal, fontWeight = FontWeight.Black)
     }
     Text("Sign In", style = MaterialTheme.typography.titleLarge, color = Ink, modifier = Modifier.padding(top = 6.dp))
     Spacer(Modifier.height(36.dp))
@@ -63,7 +63,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewM
     }
     Spacer(Modifier.height(24.dp))
     Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
-      TextButton(onClick = {}) { Text("Forgot Password?", color = Pink) }
+      TextButton(onClick = {}) { Text("Forgot Password?", color = Green) }
       PrimaryButton(if (s.loading) "" else "Login", loading = s.loading, onClick = vm::login, modifier = Modifier.width(150.dp))
     }
   }

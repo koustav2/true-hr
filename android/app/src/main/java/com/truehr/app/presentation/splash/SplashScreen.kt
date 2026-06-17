@@ -26,11 +26,14 @@ fun SplashScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit, vm: SplashViewMode
   }
   Box(Modifier.fillMaxSize().background(Canvas), contentAlignment = Alignment.Center) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Box(Modifier.size(86.dp).clip(CircleShape).background(Brush.linearGradient(listOf(GreenLight, GreenDark))), contentAlignment = Alignment.Center) {
+      Box(Modifier.size(86.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Green, Teal))), contentAlignment = Alignment.Center) {
         Text("T", color = Surface, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
       }
       Spacer(Modifier.height(18.dp))
-      Text("TRUE HR", style = MaterialTheme.typography.headlineSmall, color = GreenDark, fontWeight = FontWeight.Black)
+      Row {
+        Text("TRUE ", style = MaterialTheme.typography.headlineSmall, color = Green, fontWeight = FontWeight.Black)
+        Text("KIND", style = MaterialTheme.typography.headlineSmall, color = Teal, fontWeight = FontWeight.Black)
+      }
       Text("Employee Self Service App", color = InkSoft)
     }
   }

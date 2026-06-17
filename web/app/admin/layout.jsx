@@ -81,7 +81,7 @@ export default function AdminLayout({ children }) {
         {/* Account card */}
         <div className="mt-auto p-3 border-t border-line">
           <div className="flex items-center gap-3 px-2 py-2">
-            <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white text-xs font-bold shrink-0 shadow-pop">{initials}</div>
+            <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-gradient text-white text-xs font-bold shrink-0 shadow-pop">{initials}</div>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
               <span className={`inline-flex mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
@@ -105,7 +105,7 @@ export default function AdminLayout({ children }) {
           </div>
           <div className="flex items-center gap-3">
             <span className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
-            <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white text-xs font-bold ring-2 ring-brand-100 shadow-pop">{initials}</div>
+            <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-gradient text-white text-xs font-bold ring-2 ring-brand-100 shadow-pop">{initials}</div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

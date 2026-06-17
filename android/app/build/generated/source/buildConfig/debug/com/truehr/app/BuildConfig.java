@@ -10,5 +10,5 @@ public final class BuildConfig {
   public static final int VERSION_CODE = 1;
   public static final String VERSION_NAME = "1.0.0";
   // Field from default config.
-  public static final String BASE_URL = "http://192.168.1.5:4000/api/";
+  public static final String BASE_URL = "https://api.truehr.co.in/api/";
 }

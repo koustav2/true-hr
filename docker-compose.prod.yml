@@ -1,0 +1,67 @@
+# ============================================================================
+# TRUE HR — PRODUCTION compose (VPS: truehr.co.in)
+#
+#   db   : Postgres, private to the Docker network (NOT exposed to the internet)
+#   back : API on 127.0.0.1:4000  (only Nginx on the host can reach it)
+#   web  : Next.js on 127.0.0.1:5173 (only Nginx on the host can reach it)
+#
+# Nginx (installed on the host) terminates HTTPS for truehr.co.in and proxies:
+#   /api  -> 127.0.0.1:4000
+#   /     -> 127.0.0.1:5173
+#
+# Run:   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+# ============================================================================
+services:
+  db:
+    image: postgres:16
+    container_name: truehr-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POSTGRES_USER:-postgres}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?set a strong POSTGRES_PASSWORD in .env.production}
+      POSTGRES_DB: ${POSTGRES_DB:-truehr}
+    volumes:
+      - truehr_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-postgres} -d ${POSTGRES_DB:-truehr}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+    # No "ports:" on purpose — the database is reachable only inside the Docker network.
+
+  backend:
+    build: ./backend
+    container_name: truehr-backend
+    restart: unless-stopped
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: production
+      APP_BASE_URL: https://truehr.co.in
+      JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.production}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:?set PII_ENCRYPTION_KEY (64 hex chars) in .env.production}
+      DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-truehr}
+      MAIL_FROM: ${MAIL_FROM}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    ports:
+      - "127.0.0.1:4000:4000"   # bound to localhost only; Nginx proxies to it
+
+  web:
+    build: ./web
+    container_name: truehr-web
+    restart: unless-stopped
+    depends_on:
+      - backend
+    environment:
+      API_ORIGIN: http://backend:4000
+    ports:
+      - "127.0.0.1:5173:5173"   # bound to localhost only; Nginx proxies to it
+
+volumes:
+  truehr_pgdata:

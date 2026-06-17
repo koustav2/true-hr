@@ -1,0 +1,44 @@
+package com.truehr.app.domain.model
+
+data class MonthCell(val day: Int, val status: String?)   // status: P/WO/A/L/H or null
+
+data class MonthlyAttendance(val monthLabel: String, val year: Int, val month: Int, val cells: List<MonthCell>)
+
+data class TeamMember(
+  val employeeId: Long,
+  val name: String,
+  val employeeCode: String,
+  val designation: String?,
+  val punchIn: String?,
+  val punchOut: String?,
+  val status: String,
+  val held: Boolean,
+)
+
+data class MissPunch(
+  val id: Long,
+  val employeeCode: String,
+  val name: String,
+  val days: String,
+  val month: String,
+  val year: Int,
+  val remarks: String?,
+  val status: String,
+  val appliedAt: String?,
+  val reviewedAt: String?,
+)
+
+data class OnDuty(
+  val id: Long,
+  val employeeCode: String,
+  val name: String,
+  val fromDate: String,
+  val toDate: String,
+  val dayType: String,   // FULL | HALF
+  val place: String?,
+  val reason: String?,
+  val status: String,
+  val reviewNote: String?,
+  val appliedAt: String?,
+  val reviewedAt: String?,
+)

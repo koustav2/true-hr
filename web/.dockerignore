@@ -1,0 +1,9 @@
+node_modules
+.next
+.nm_trash_*
+npm-debug.log
+.DS_Store
+# old Vite leftovers (not used by Next.js)
+src
+index.html
+vite.config.js

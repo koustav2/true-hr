@@ -1,0 +1,58 @@
+# One command runs everything:   docker compose up -d --build
+# Then open http://localhost:5173  (HR login: hr@truehr.example / Hr@12345)
+#
+# Values like ${JWT_SECRET} are read from an optional .env file next to this file;
+# sensible defaults are provided so it works out of the box for local use.
+services:
+  db:
+    image: postgres:16
+    container_name: truehr-db
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: truehr
+    ports:
+      - "5433:5432"   # host 5433 -> container 5432 (avoids clashing with a local Postgres on 5432)
+    volumes:
+      - truehr_pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U postgres -d truehr"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+  backend:
+    build: ./backend
+    container_name: truehr-backend
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      PORT: 4000
+      NODE_ENV: development            # keep 'development' so unsent emails are logged to the container console
+      APP_BASE_URL: http://localhost:5173
+      JWT_SECRET: ${JWT_SECRET:-dev-insecure-jwt-secret-change-me-please}
+      PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:-0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef}
+      DATABASE_URL: postgres://postgres:postgres@db:5432/truehr
+      MAIL_FROM: ${MAIL_FROM:-TRUE HR <no-reply@truehr.example>}
+      SENDGRID_API_KEY: ${SENDGRID_API_KEY:-}
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+    ports:
+      - "4000:4000"
+
+  web:
+    build: ./web
+    container_name: truehr-web
+    depends_on:
+      - backend
+    environment:
+      # The Next.js server proxies /api/* to the backend container (server-side rewrite).
+      API_ORIGIN: http://backend:4000
+    ports:
+      - "5173:5173"
+
+volumes:
+  truehr_pgdata:

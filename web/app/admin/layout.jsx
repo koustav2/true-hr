@@ -22,9 +22,11 @@ const ADMINISTRATION = [
 function NavItem({ item: { href, label, Icon }, active }) {
   return (
     <Link href={href}
-      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-colors ${
-        active ? 'bg-brand-50 text-brand-700' : 'text-ink-soft hover:bg-slate-50 hover:text-ink'}`}>
-      {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r bg-brand-600" />}
+      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ease-premium ${
+        active
+          ? 'bg-gradient-to-r from-brand-50 to-brand-50/30 text-brand-700 ring-1 ring-inset ring-brand-100 shadow-soft'
+          : 'text-ink-soft hover:bg-slate-50 hover:text-ink'}`}>
+      {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-brand-400 to-brand-600" />}
       <Icon className={active ? 'text-brand-600' : 'text-ink-faint'} />
       {label}
     </Link>
@@ -70,7 +72,7 @@ export default function AdminLayout({ children }) {
   return (
     <div className="h-screen flex overflow-hidden bg-canvas">
       {/* Sidebar (fixed) */}
-      <aside className="w-[252px] shrink-0 hidden md:flex flex-col bg-white border-r border-line h-screen overflow-y-auto">
+      <aside className="w-[252px] shrink-0 hidden md:flex flex-col bg-white/95 backdrop-blur-sm border-r border-line h-screen overflow-y-auto">
         <div className="h-16 flex items-center px-5 border-b border-line"><Logo size={32} /></div>
         <div className="px-3 pt-5">
           <NavGroup title="Workspace" items={WORKSPACE} role={role} isActive={isActive} />
@@ -79,7 +81,7 @@ export default function AdminLayout({ children }) {
         {/* Account card */}
         <div className="mt-auto p-3 border-t border-line">
           <div className="flex items-center gap-3 px-2 py-2">
-            <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-600 text-white text-xs font-bold shrink-0">{initials}</div>
+            <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white text-xs font-bold shrink-0 shadow-pop">{initials}</div>
             <div className="min-w-0">
               <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
               <span className={`inline-flex mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
@@ -94,12 +96,16 @@ export default function AdminLayout({ children }) {
 
       {/* Main */}
       <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 shrink-0 bg-white border-b border-line flex items-center justify-between px-6">
+        <header className="h-16 shrink-0 bg-white/80 backdrop-blur-md border-b border-line/80 flex items-center justify-between px-6 sticky top-0 z-30">
           <div className="md:hidden"><Logo size={28} /></div>
-          <div className="hidden md:block text-sm text-ink-faint">True HR Pvt Ltd · Admin Console</div>
+          <div className="hidden md:flex items-center gap-2 text-sm text-ink-faint">
+            <span className="font-semibold text-ink-soft">True HR Pvt Ltd</span>
+            <span className="text-line">·</span>
+            <span>Admin Console</span>
+          </div>
           <div className="flex items-center gap-3">
             <span className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
-            <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-600 text-white text-xs font-bold ring-2 ring-brand-100">{initials}</div>
+            <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-400 to-brand-600 text-white text-xs font-bold ring-2 ring-brand-100 shadow-pop">{initials}</div>
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-6 lg:p-8">

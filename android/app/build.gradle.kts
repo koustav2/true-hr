@@ -20,7 +20,7 @@ android {
     vectorDrawables { useSupportLibrary = true }
 
     // Base URL of the TRUE HR backend. Use 10.0.2.2 to reach localhost from the emulator.
-    buildConfigField("String", "BASE_URL", "\"http://192.168.1.5:4000/api/\"")
+    buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
   }
 
   buildTypes {

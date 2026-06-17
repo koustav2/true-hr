@@ -16,14 +16,16 @@ const PIPELINE = [
   { label: 'Active', keys: ['ACTIVE'], color: '#10b981' },
 ];
 
-function Stat({ Icon, tint, label, value, caption }) {
+function Stat({ Icon, tint, accent, label, value, caption }) {
   return (
-    <Card className="p-5 transition-colors hover:border-slate-300">
+    <Card hover className="relative p-5 overflow-hidden">
+      {/* top hairline accent */}
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, transparent 85%)` }} />
       <div className="flex items-start justify-between">
-        <div className={`grid place-items-center h-10 w-10 rounded-xl ${tint}`}><Icon width={18} height={18} /></div>
+        <div className={`grid place-items-center h-10 w-10 rounded-xl ring-1 ring-inset ${tint}`}><Icon width={18} height={18} /></div>
       </div>
-      <div className="text-[32px] leading-none font-bold mt-4 text-ink tracking-tight">{value}</div>
-      <div className="text-[13px] text-ink-soft mt-1.5">{label}</div>
+      <div className="text-[32px] leading-none font-bold mt-4 text-ink tracking-tight tabular-nums">{value}</div>
+      <div className="text-[13px] font-medium text-ink-soft mt-1.5">{label}</div>
       {caption && <div className="text-xs text-ink-faint mt-0.5">{caption}</div>}
     </Card>
   );
@@ -62,10 +64,10 @@ export default function DashboardPage() {
       </div>
 
       <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat Icon={IconUsers} tint="bg-slate-100 text-slate-600" label="Total employees" value={total} caption="across the company" />
-        <Stat Icon={IconClock} tint="bg-amber-50 text-amber-600" label="Onboarding in progress" value={inProgress} caption="offer to e-sign" />
-        <Stat Icon={IconReview} tint="bg-violet-50 text-violet-600" label="Awaiting your review" value={awaiting} caption={awaiting ? 'needs approval' : 'all clear'} />
-        <Stat Icon={IconCheck} tint="bg-brand-50 text-brand-700" label="Active" value={active} caption="fully onboarded" />
+        <Stat Icon={IconUsers} tint="bg-slate-100 text-slate-600 ring-slate-200/70" accent="#94a3b8" label="Total employees" value={total} caption="across the company" />
+        <Stat Icon={IconClock} tint="bg-amber-50 text-amber-600 ring-amber-200/70" accent="#f59e0b" label="Onboarding in progress" value={inProgress} caption="offer to e-sign" />
+        <Stat Icon={IconReview} tint="bg-violet-50 text-violet-600 ring-violet-200/70" accent="#8b5cf6" label="Awaiting your review" value={awaiting} caption={awaiting ? 'needs approval' : 'all clear'} />
+        <Stat Icon={IconCheck} tint="bg-brand-50 text-brand-700 ring-brand-200/70" accent="#10b981" label="Active" value={active} caption="fully onboarded" />
       </div>
 
       <div className="grid lg:grid-cols-3 gap-6 items-start">
@@ -86,7 +88,7 @@ export default function DashboardPage() {
             <ul className="divide-y divide-line">
               {recent.map((r) => (
                 <li key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/70 transition-colors">
-                  <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">
+                  <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 text-xs font-semibold ring-1 ring-inset ring-brand-100">
                     {(r.first_name[0] + r.last_name[0]).toUpperCase()}
                   </div>
                   <div className="min-w-0 flex-1">

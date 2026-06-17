@@ -6,19 +6,31 @@
 html, body { height: 100%; }
 body {
   margin: 0;
-  background: #f7f8fa;
+  /* canvas with a whisper of warmth + depth, not a flat grey */
+  background-color: #f6f8fb;
+  background-image:
+    radial-gradient(1100px 520px at 100% -8%, rgba(16,185,129,.05), transparent 60%),
+    radial-gradient(900px 500px at -5% 0%, rgba(13,148,136,.045), transparent 55%);
+  background-attachment: fixed;
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
+  letter-spacing: -0.006em;
 }
+
+::selection { background: rgba(16,185,129,.18); color: #064e3b; }
 
 /* thin, quiet scrollbar */
-::-webkit-scrollbar { width: 9px; height: 9px; }
-::-webkit-scrollbar-thumb { background: #d7dbe2; border-radius: 8px; border: 2px solid #f7f8fa; }
-::-webkit-scrollbar-thumb:hover { background: #c2c7d0; }
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-thumb { background: #d7dbe2; border-radius: 8px; border: 2px solid transparent; background-clip: padding-box; }
+::-webkit-scrollbar-thumb:hover { background: #c2c7d0; background-clip: padding-box; }
 
-/* minimal, subtle motion only: a quick opacity fade, no movement */
+/* minimal, subtle motion */
 @media (prefers-reduced-motion: no-preference) {
-  @keyframes fadein { from { opacity: 0; } to { opacity: 1; } }
-  .animate-in { animation: fadein .14s ease-out both; }
+  @keyframes fadein { from { opacity: 0; transform: translateY(4px); } to { opacity: 1; transform: none; } }
+  .animate-in { animation: fadein .22s cubic-bezier(.4,0,.2,1) both; }
 }
+
+/* premium hover lift for cards/tiles that opt in */
+.lift { transition: box-shadow .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1), border-color .2s; }
+.lift:hover { transform: translateY(-2px); }

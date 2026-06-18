@@ -431,60 +431,60 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
-
-      static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
-
-      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
-
-      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
-
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
-
-      static String com_truehr_app_presentation_feature_LeaveViewModel = "com.truehr.app.presentation.feature.LeaveViewModel";
-
-      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
-
-      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
-
       static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
-
-      static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
 
       static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
 
-      @KeepFieldType
-      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
+      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
 
-      @KeepFieldType
-      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
+      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
 
-      @KeepFieldType
-      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
+      static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
-      @KeepFieldType
-      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+      static String com_truehr_app_presentation_feature_LeaveViewModel = "com.truehr.app.presentation.feature.LeaveViewModel";
 
-      @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
 
-      @KeepFieldType
-      LeaveViewModel com_truehr_app_presentation_feature_LeaveViewModel2;
+      static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
 
-      @KeepFieldType
-      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
+      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
-      @KeepFieldType
-      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
+
+      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
 
       @KeepFieldType
       MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
 
       @KeepFieldType
+      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
+
+      @KeepFieldType
+      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+
+      @KeepFieldType
+      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+
+      @KeepFieldType
+      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
+
+      @KeepFieldType
+      LeaveViewModel com_truehr_app_presentation_feature_LeaveViewModel2;
+
+      @KeepFieldType
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+
+      @KeepFieldType
       TeamListViewModel com_truehr_app_presentation_feature_TeamListViewModel2;
 
       @KeepFieldType
-      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
+      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
+
+      @KeepFieldType
+      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
+
+      @KeepFieldType
+      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
     }
   }
 
@@ -555,48 +555,30 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
-
-      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
-
       static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
-
-      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
-
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
-
-      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
-
-      static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
       static String com_truehr_app_presentation_feature_LeaveViewModel = "com.truehr.app.presentation.feature.LeaveViewModel";
 
       static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
+      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
+
+      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
+
       static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
 
       static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
 
-      @KeepFieldType
-      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
 
-      @KeepFieldType
-      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
+
+      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
+
+      static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
       @KeepFieldType
       DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
-
-      @KeepFieldType
-      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
-
-      @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
-
-      @KeepFieldType
-      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
-
-      @KeepFieldType
-      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
 
       @KeepFieldType
       LeaveViewModel com_truehr_app_presentation_feature_LeaveViewModel2;
@@ -605,10 +587,28 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
       OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
 
       @KeepFieldType
+      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+
+      @KeepFieldType
+      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
+
+      @KeepFieldType
       LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
 
       @KeepFieldType
       TeamListViewModel com_truehr_app_presentation_feature_TeamListViewModel2;
+
+      @KeepFieldType
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+
+      @KeepFieldType
+      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
+
+      @KeepFieldType
+      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
+
+      @KeepFieldType
+      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
     }
 
     private static final class SwitchingProvider<T> implements Provider<T> {

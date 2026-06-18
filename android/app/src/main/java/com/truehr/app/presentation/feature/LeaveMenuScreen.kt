@@ -11,8 +11,10 @@ import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.EditCalendar
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material.icons.filled.EventNote
 import androidx.compose.material.icons.filled.Groups
+import androidx.compose.material.icons.filled.WorkHistory
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.collectAsState
@@ -39,6 +41,8 @@ fun LeaveMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, profileVm: Pro
     LeaveTile("Apply Leave", Icons.Filled.EditCalendar, Routes.APPLY_LEAVE),
     LeaveTile("View Leave", Icons.Filled.EventNote, Routes.VIEW_LEAVE),
     LeaveTile("Team Leave", Icons.Filled.Groups, Routes.TEAM_LEAVE, managerOnly = true),
+    LeaveTile("Avail CompOff", Icons.Filled.EventAvailable, Routes.AVAIL_COMPOFF),
+    LeaveTile("Team CompOff", Icons.Filled.WorkHistory, Routes.TEAM_COMPOFF, managerOnly = true),
   )
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {

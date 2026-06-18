@@ -111,4 +111,20 @@ interface ApiService {
 
   @POST("leave/{id}/cancel")
   suspend fun leaveCancel(@Path("id") id: Long)
+
+  // Comp-Off
+  @GET("compoff/credits")
+  suspend fun compOffCredits(): List<com.truehr.app.data.remote.dto.CompOffCreditDto>
+
+  @POST("compoff")
+  suspend fun compOffApply(@Body body: com.truehr.app.data.remote.dto.ApplyCompOffRequest)
+
+  @GET("compoff")
+  suspend fun compOffList(@Query("status") status: String): List<com.truehr.app.data.remote.dto.CompOffRequestDto>
+
+  @GET("compoff/team")
+  suspend fun compOffTeam(@Query("status") status: String): List<com.truehr.app.data.remote.dto.CompOffRequestDto>
+
+  @POST("compoff/{id}/review")
+  suspend fun compOffReview(@Path("id") id: Long, @Body body: OdReviewRequest)
 }

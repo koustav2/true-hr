@@ -21,6 +21,7 @@ import com.truehr.app.presentation.feature.MissPunchListScreen
 import com.truehr.app.presentation.feature.MonthlyAttendanceScreen
 import com.truehr.app.presentation.feature.AddressBookScreen
 import com.truehr.app.presentation.feature.ApplyLeaveScreen
+import com.truehr.app.presentation.feature.CompOffScreen
 import com.truehr.app.presentation.feature.LeaveListScreen
 import com.truehr.app.presentation.feature.LeaveMenuScreen
 import com.truehr.app.presentation.feature.OdListScreen
@@ -101,9 +102,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
     composable(Routes.TEAM_OD) { OdListScreen("Team OD", teamView = true, onBack = { nav.popBackStack() }) }
 
     composable(Routes.LEAVE) { LeaveMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }, onAvailCompOff = { nav.navigate(Routes.AVAIL_COMPOFF) }) }
     composable(Routes.VIEW_LEAVE) { LeaveListScreen("View Leave", teamView = false, onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_LEAVE) { LeaveListScreen("Team Leave", teamView = true, onBack = { nav.popBackStack() }) }
+    composable(Routes.AVAIL_COMPOFF) { CompOffScreen("Avail CompOff", teamView = false, onBack = { nav.popBackStack() }) }
+    composable(Routes.TEAM_COMPOFF) { CompOffScreen("Team CompOff", teamView = true, onBack = { nav.popBackStack() }) }
     composable(Routes.SALARY) { FeatureScreen("Salary Slip", onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }

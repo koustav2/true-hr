@@ -30,6 +30,8 @@ object Routes {
   const val APPLY_LEAVE = "apply_leave"
   const val VIEW_LEAVE = "view_leave"
   const val TEAM_LEAVE = "team_leave"
+  const val AVAIL_COMPOFF = "avail_compoff"
+  const val TEAM_COMPOFF = "team_compoff"
   const val SALARY = "salary"
   const val TEAM = "team"
   const val ADDRESS_BOOK = "address_book"

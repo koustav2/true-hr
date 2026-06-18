@@ -43,7 +43,7 @@ private val CHIP_COLORS = mapOf("EL" to Green, "CL" to Amber, "SL" to Rose, "RH"
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ApplyLeaveScreen(onBack: () -> Unit, vm: LeaveViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
+fun ApplyLeaveScreen(onBack: () -> Unit, onAvailCompOff: () -> Unit = {}, vm: LeaveViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   val ctx = LocalContext.current
   val p by profileVm.state.collectAsState()
   val bal by vm.balances.collectAsState()
@@ -122,9 +122,7 @@ fun ApplyLeaveScreen(onBack: () -> Unit, vm: LeaveViewModel = hiltViewModel(), p
         Row(verticalAlignment = Alignment.CenterVertically) {
           IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Surface) }
           Text("Apply Leave", color = Surface, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-          Surface(color = Surface.copy(alpha = 0.18f), shape = RoundedCornerShape(10.dp), modifier = Modifier.clickable {
-            Toast.makeText(ctx, "Comp-Off — coming soon", Toast.LENGTH_SHORT).show()
-          }) {
+          Surface(color = Surface.copy(alpha = 0.18f), shape = RoundedCornerShape(10.dp), modifier = Modifier.clickable { onAvailCompOff() }) {
             Text("Avail CompOff", color = Surface, style = MaterialTheme.typography.labelMedium, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 8.dp))
           }
         }

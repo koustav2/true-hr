@@ -326,6 +326,22 @@ ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day    BOOLEAN NOT NULL
 ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS certificate TEXT;
 ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS certificate_mime TEXT;
 
+-- Comp-Off: an approved OD earns one comp-off credit, availed against a future leave date.
+CREATE TABLE IF NOT EXISTS comp_off_requests (
+  id           BIGSERIAL PRIMARY KEY,
+  employee_id  BIGINT NOT NULL REFERENCES employees(id),
+  on_duty_id   BIGINT NOT NULL REFERENCES on_duty(id),
+  leave_date   DATE NOT NULL,
+  expiry_date  DATE NOT NULL,
+  remark       TEXT,
+  status       TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | APPROVED | REJECTED
+  reviewed_by  BIGINT,
+  review_note  TEXT,
+  applied_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_at  TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_compoff_emp ON comp_off_requests(employee_id, status);
+
 -- HR can set the place-of-posting state that drives statutory EL/CL/SL entitlement.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS posting_state TEXT;
 

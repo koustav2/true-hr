@@ -8,6 +8,7 @@ import * as attendance from '../controllers/attendanceController.js';
 import * as missPunch from '../controllers/missPunchController.js';
 import * as onDuty from '../controllers/onDutyController.js';
 import * as leave from '../controllers/leaveController.js';
+import * as compOff from '../controllers/compOffController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -51,6 +52,13 @@ r.get('/leave/team', authenticate, leave.team);
 r.post('/leave/:id/review', authenticate, leave.review);
 r.post('/leave/:id/cancel', authenticate, leave.cancel);
 r.get('/leave/:id/certificate', authenticate, leave.certificate);
+
+// --- Comp-Off ---
+r.get('/compoff/credits', authenticate, compOff.credits);
+r.get('/compoff', authenticate, compOff.listOwn);
+r.get('/compoff/team', authenticate, compOff.team);
+r.post('/compoff', authenticate, compOff.apply);
+r.post('/compoff/:id/review', authenticate, compOff.review);
 
 // --- Public onboarding (token-gated) ---
 r.get('/onboarding/accept', ob.getAccept);

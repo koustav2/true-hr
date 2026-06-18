@@ -54,6 +54,39 @@ export async function me(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// GET /me/directory — company address book (active employees, with their state/city)
+export async function directory(req, res, next) {
+  try {
+    const empId = req.user.employeeId;
+    if (!empId) return res.json([]);
+    const companyId = (await query(`SELECT company_id FROM employees WHERE id=$1`, [empId])).rows[0]?.company_id;
+    const rows = (await query(
+      `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
+              d.title AS designation, dep.name AS department,
+              a.city, a.state
+       FROM employees e
+       LEFT JOIN designations d ON d.id=e.designation_id
+       LEFT JOIN departments dep ON dep.id=e.department_id
+       LEFT JOIN LATERAL (
+         SELECT city, state FROM employee_addresses
+         WHERE employee_id=e.id
+         ORDER BY CASE WHEN type='CURRENT' THEN 0 ELSE 1 END LIMIT 1
+       ) a ON true
+       WHERE e.company_id=$1 AND e.onboarding_status='ACTIVE'
+       ORDER BY COALESCE(NULLIF(a.state,''),'~') ASC, e.first_name ASC`, [companyId])).rows;
+    res.json(rows.map((r) => ({
+      employeeCode: r.employee_code,
+      name: `${r.first_name} ${r.last_name}`.trim(),
+      designation: r.designation,
+      department: r.department,
+      email: r.official_email,
+      phone: r.phone,
+      city: r.city,
+      state: r.state,
+    })));
+  } catch (e) { next(e); }
+}
+
 // GET /me/team — the logged-in manager's direct reports (ESS team list)
 export async function myTeam(req, res, next) {
   try {

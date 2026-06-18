@@ -42,6 +42,17 @@ data class TeamMate(
   val functionalManager: String? = null,
 )
 
+data class DirectoryEntry(
+  val employeeCode: String,
+  val name: String,
+  val designation: String?,
+  val department: String?,
+  val email: String?,
+  val phone: String?,
+  val city: String?,
+  val state: String?,
+)
+
 data class OnDuty(
   val id: Long,
   val employeeCode: String,

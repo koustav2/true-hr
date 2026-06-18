@@ -1,6 +1,7 @@
 package com.truehr.app.data.repository
 
 import com.truehr.app.data.remote.ApiService
+import com.truehr.app.domain.model.DirectoryEntry
 import com.truehr.app.domain.model.Profile
 import com.truehr.app.domain.model.TeamMate
 import com.truehr.app.domain.repository.ProfileRepository
@@ -52,6 +53,19 @@ class ProfileRepositoryImpl @Inject constructor(
       phone = it.phone,
       reportingManager = it.reportingManager,
       functionalManager = it.functionalManager,
+    )
+  }
+
+  override suspend fun directory(): List<DirectoryEntry> = api.directory().map {
+    DirectoryEntry(
+      employeeCode = it.employeeCode.orEmpty(),
+      name = it.name.orEmpty(),
+      designation = it.designation,
+      department = it.department,
+      email = it.email,
+      phone = it.phone,
+      city = it.city,
+      state = it.state,
     )
   }
 }

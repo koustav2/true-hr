@@ -38,6 +38,18 @@ data class TeamMateDto(
 )
 
 @Serializable
+data class DirectoryEntryDto(
+  val employeeCode: String? = null,
+  val name: String? = null,
+  val designation: String? = null,
+  val department: String? = null,
+  val email: String? = null,
+  val phone: String? = null,
+  val city: String? = null,
+  val state: String? = null,
+)
+
+@Serializable
 data class ApplyMissPunchRequest(val days: String, val month: Int, val year: Int, val remarks: String? = null)
 
 @Serializable

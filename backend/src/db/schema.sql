@@ -265,6 +265,86 @@ CREATE TABLE IF NOT EXISTS attendance_hold (
 -- only one active hold per employee per day
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_active_hold ON attendance_hold(employee_id, hold_date) WHERE status='HELD';
 
+-- ===================== Leave Management =====================
+CREATE TABLE IF NOT EXISTS leave_types (
+  id            BIGSERIAL PRIMARY KEY,
+  code          TEXT UNIQUE NOT NULL,        -- EL, CL, SL, RH, MH, LWP, ML, MSL, WFH
+  name          TEXT NOT NULL,
+  annual_quota  NUMERIC(6,2) NOT NULL DEFAULT 0,
+  requires_balance BOOLEAN NOT NULL DEFAULT true,  -- false => no deduction (LWP, WFH)
+  sort_order    INT NOT NULL DEFAULT 0
+);
+
+-- Per-employee allotment + usage for each leave type
+CREATE TABLE IF NOT EXISTS leave_balances (
+  id            BIGSERIAL PRIMARY KEY,
+  employee_id   BIGINT NOT NULL REFERENCES employees(id),
+  leave_type_id BIGINT NOT NULL REFERENCES leave_types(id),
+  allocated     NUMERIC(6,2) NOT NULL DEFAULT 0,
+  used          NUMERIC(6,2) NOT NULL DEFAULT 0,
+  UNIQUE (employee_id, leave_type_id)
+);
+
+CREATE TABLE IF NOT EXISTS leave_requests (
+  id            BIGSERIAL PRIMARY KEY,
+  employee_id   BIGINT NOT NULL REFERENCES employees(id),
+  leave_type_id BIGINT NOT NULL REFERENCES leave_types(id),
+  from_date     DATE NOT NULL,
+  to_date       DATE NOT NULL,
+  days          NUMERIC(5,1) NOT NULL,
+  reason        TEXT,
+  status        TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | APPROVED | REJECTED
+  reviewed_by   BIGINT,
+  review_note   TEXT,
+  applied_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_leave_emp ON leave_requests(employee_id, status);
+
+-- Seed the standard leave types (quotas are placeholders until HR confirms via PDF)
+INSERT INTO leave_types (code, name, annual_quota, requires_balance, sort_order) VALUES
+  ('EL',  'Earned Leave',        18, true, 1),
+  ('CL',  'Casual Leave',         9, true, 2),
+  ('SL',  'Sick Leave',          12, true, 3),
+  ('RH',  'Restricted Holiday',   2, true, 4),
+  ('MH',  'Monthly Holiday',     12, true, 5),
+  ('ML',  'Maternity Leave',    182, true, 6),
+  ('MSL', 'Menstrual Leave',     12, true, 7),
+  ('LWP', 'Leave Without Pay',    0, false, 8),
+  ('WFH', 'Work From Home',       0, false, 9)
+ON CONFLICT (code) DO NOTHING;
+
+-- HR can set the place-of-posting state that drives statutory EL/CL/SL entitlement.
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS posting_state TEXT;
+
+-- Statutory leave entitlement per state (Shops & Establishment Acts, Annexure A).
+-- el/cl/sl = days per year; *_accum = accumulation (carry-forward) limit.
+CREATE TABLE IF NOT EXISTS leave_entitlements (
+  state      TEXT PRIMARY KEY,
+  el         NUMERIC(6,2) NOT NULL DEFAULT 0,
+  cl         NUMERIC(6,2) NOT NULL DEFAULT 0,
+  sl         NUMERIC(6,2) NOT NULL DEFAULT 0,
+  el_accum   NUMERIC(6,2) NOT NULL DEFAULT 0,
+  cl_accum   NUMERIC(6,2) NOT NULL DEFAULT 0,
+  sl_accum   NUMERIC(6,2) NOT NULL DEFAULT 0
+);
+INSERT INTO leave_entitlements (state, el, cl, sl, el_accum, cl_accum, sl_accum) VALUES
+  ('Maharashtra',    18,  8,  0, 45, 0,  0),
+  ('Gujarat',        21,  7,  7, 63, 0,  0),
+  ('Andhra Pradesh', 15, 12, 12, 60, 0,  0),
+  ('Telangana',      15, 12, 12, 60, 0,  0),
+  ('Karnataka',      18,  0, 12, 30, 0,  0),
+  ('Uttar Pradesh',  15, 10, 15, 45, 0,  0),
+  ('Haryana',        18,  7,  7, 30, 0,  0),
+  ('Delhi',          15, 12,  0, 45, 0,  0),   -- 12 days combined CL/SL, kept under CL
+  ('West Bengal',    14, 10, 14, 28, 0, 56),   -- SL = half pay for 14 days
+  ('Bihar',          18, 12, 12, 45, 0,  0),   -- SL = half pay for 12 days
+  ('Tamil Nadu',     12, 12, 12, 24, 0,  0),
+  ('Uttarakhand',    18,  8,  0, 45, 0,  0),
+  ('Goa',            15,  6,  9, 45, 0,  0),
+  ('Jharkhand',      18,  6, 12, 45, 0,  0)    -- SL = half pay for 12 days
+ON CONFLICT (state) DO NOTHING;
+
 -- NOTE: the unique index on lower(official_email) is created in migrate.js (guarded),
 -- so pre-existing duplicate test data can't abort the whole migration.
 -- NOTE: the SUPER_ADMIN enum value is added separately in migrate.js

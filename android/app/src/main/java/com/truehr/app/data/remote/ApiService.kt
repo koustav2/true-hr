@@ -89,4 +89,23 @@ interface ApiService {
 
   @POST("onduty/{id}/review")
   suspend fun odReview(@Path("id") id: Long, @Body body: OdReviewRequest)
+
+  // Leave management
+  @GET("leave/types")
+  suspend fun leaveTypes(): List<com.truehr.app.data.remote.dto.LeaveTypeDto>
+
+  @GET("leave/balances")
+  suspend fun leaveBalances(): List<com.truehr.app.data.remote.dto.LeaveBalanceDto>
+
+  @POST("leave")
+  suspend fun leaveApply(@Body body: com.truehr.app.data.remote.dto.ApplyLeaveRequest)
+
+  @GET("leave")
+  suspend fun leaveList(@Query("status") status: String): List<com.truehr.app.data.remote.dto.LeaveRequestDto>
+
+  @GET("leave/team")
+  suspend fun leaveTeam(@Query("status") status: String): List<com.truehr.app.data.remote.dto.LeaveRequestDto>
+
+  @POST("leave/{id}/review")
+  suspend fun leaveReview(@Path("id") id: Long, @Body body: OdReviewRequest)
 }

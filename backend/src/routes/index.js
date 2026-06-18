@@ -7,6 +7,7 @@ import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
 import * as missPunch from '../controllers/missPunchController.js';
 import * as onDuty from '../controllers/onDutyController.js';
+import * as leave from '../controllers/leaveController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -40,6 +41,14 @@ r.post('/onduty', authenticate, onDuty.apply);
 r.get('/onduty', authenticate, onDuty.listOwn);
 r.get('/onduty/team', authenticate, onDuty.team);
 r.post('/onduty/:id/review', authenticate, onDuty.review);
+
+// --- Employee: leave management ---
+r.get('/leave/types', authenticate, leave.types);
+r.get('/leave/balances', authenticate, leave.balances);
+r.post('/leave', authenticate, leave.apply);
+r.get('/leave', authenticate, leave.listOwn);
+r.get('/leave/team', authenticate, leave.team);
+r.post('/leave/:id/review', authenticate, leave.review);
 
 // --- Public onboarding (token-gated) ---
 r.get('/onboarding/accept', ob.getAccept);

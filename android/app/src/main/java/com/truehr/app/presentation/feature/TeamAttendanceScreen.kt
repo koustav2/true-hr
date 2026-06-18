@@ -1,6 +1,7 @@
 package com.truehr.app.presentation.feature
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -16,9 +17,12 @@ import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
 import com.truehr.app.domain.model.TeamMember
 import com.truehr.app.presentation.components.*
 import com.truehr.app.presentation.theme.*
@@ -85,14 +89,8 @@ private fun TeamCard(m: TeamMember, onOpenDaily: () -> Unit, onOpenMonthly: () -
       }
       HorizontalDivider(color = Line)
       Row(Modifier.fillMaxWidth().padding(14.dp)) {
-        Column(Modifier.weight(1f)) {
-          Text("Punch In", color = InkFaint, style = MaterialTheme.typography.labelSmall)
-          Text(m.punchIn ?: "—", color = Ink, fontWeight = FontWeight.SemiBold)
-        }
-        Column(Modifier.weight(1f)) {
-          Text("Punch Out", color = InkFaint, style = MaterialTheme.typography.labelSmall)
-          Text(m.punchOut ?: "—", color = Ink, fontWeight = FontWeight.SemiBold)
-        }
+        PunchCell(Modifier.weight(1f), "Punch In", m.punchIn, m.inPhotoUrl, Green)
+        PunchCell(Modifier.weight(1f), "Punch Out", m.punchOut, m.outPhotoUrl, Rose)
       }
       HorizontalDivider(color = Line)
       Row(Modifier.fillMaxWidth().padding(12.dp), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -111,6 +109,23 @@ private fun TeamCard(m: TeamMember, onOpenDaily: () -> Unit, onOpenMonthly: () -
           Text("Monthly", fontWeight = FontWeight.SemiBold)
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun PunchCell(modifier: Modifier, label: String, time: String?, photoUrl: String?, tint: Color) {
+  Row(modifier, verticalAlignment = Alignment.CenterVertically) {
+    if (!photoUrl.isNullOrBlank()) {
+      AsyncImage(
+        model = photoUrl, contentDescription = "$label photo", contentScale = ContentScale.Crop,
+        modifier = Modifier.size(40.dp).clip(CircleShape).border(2.dp, tint.copy(alpha = 0.5f), CircleShape),
+      )
+      Spacer(Modifier.width(10.dp))
+    }
+    Column {
+      Text(label, color = InkFaint, style = MaterialTheme.typography.labelSmall)
+      Text(time ?: "—", color = Ink, fontWeight = FontWeight.SemiBold)
     }
   }
 }

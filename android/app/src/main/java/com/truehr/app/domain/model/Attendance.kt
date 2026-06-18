@@ -14,4 +14,6 @@ data class AttendanceDay(
   val outLocation: String?,
   val present: Boolean,
   val workHours: String? = null,   // e.g. "8h 12m" (in-to-out span)
+  val inPhotoUrl: String? = null,  // captured selfie at punch-in
+  val outPhotoUrl: String? = null, // captured selfie at punch-out
 )

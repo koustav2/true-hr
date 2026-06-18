@@ -4,7 +4,12 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.foundation.border
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
@@ -75,23 +80,30 @@ private fun AttendanceDayCard(day: AttendanceDay) {
       HorizontalDivider(color = Line)
       // In / Out rows
       Row(Modifier.fillMaxWidth().padding(14.dp)) {
-        PunchColumn(Modifier.weight(1f), Icons.AutoMirrored.Filled.Login, "In Time", day.inTime, day.inLocation, Teal)
+        PunchColumn(Modifier.weight(1f), Icons.AutoMirrored.Filled.Login, "In Time", day.inTime, day.inLocation, Teal, day.inPhotoUrl)
         VerticalDivider(modifier = Modifier.height(64.dp), color = Line)
-        PunchColumn(Modifier.weight(1f).padding(start = 12.dp), Icons.AutoMirrored.Filled.Logout, "Out Time", day.outTime, day.outLocation, Rose)
+        PunchColumn(Modifier.weight(1f).padding(start = 12.dp), Icons.AutoMirrored.Filled.Logout, "Out Time", day.outTime, day.outLocation, Rose, day.outPhotoUrl)
       }
     }
   }
 }
 
 @Composable
-private fun PunchColumn(modifier: Modifier, icon: ImageVector, label: String, time: String?, location: String?, tint: Color) {
+private fun PunchColumn(modifier: Modifier, icon: ImageVector, label: String, time: String?, location: String?, tint: Color, photoUrl: String? = null) {
   Column(modifier) {
     Row(verticalAlignment = Alignment.CenterVertically) {
       Icon(icon, null, tint = tint, modifier = Modifier.size(16.dp))
       Spacer(Modifier.width(6.dp))
       Text(label, color = InkFaint, style = MaterialTheme.typography.labelSmall)
     }
-    Spacer(Modifier.height(2.dp))
+    if (!photoUrl.isNullOrBlank()) {
+      Spacer(Modifier.height(8.dp))
+      AsyncImage(
+        model = photoUrl, contentDescription = "$label photo", contentScale = ContentScale.Crop,
+        modifier = Modifier.size(56.dp).clip(CircleShape).border(2.dp, tint.copy(alpha = 0.5f), CircleShape),
+      )
+    }
+    Spacer(Modifier.height(8.dp))
     Text(time ?: "—", fontWeight = FontWeight.Bold, color = Ink)
     if (!location.isNullOrBlank()) {
       Spacer(Modifier.height(6.dp))

@@ -13,6 +13,8 @@ data class TeamMember(
   val punchOut: String?,
   val status: String,
   val held: Boolean,
+  val inPhotoUrl: String? = null,
+  val outPhotoUrl: String? = null,
 )
 
 data class MissPunch(

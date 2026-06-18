@@ -16,6 +16,8 @@ data class TeamMemberDto(
   val designation: String? = null,
   val punchIn: String? = null,
   val punchOut: String? = null,
+  val inPhotoId: Long? = null,
+  val outPhotoId: Long? = null,
   val status: String? = null,
   val held: Boolean = false,
 )

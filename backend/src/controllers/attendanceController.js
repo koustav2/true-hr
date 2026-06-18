@@ -126,7 +126,7 @@ export async function team(req, res, next) {
     const out = [];
     for (const r of reports) {
       const punches = (await query(
-        `SELECT type, captured_at FROM attendance
+        `SELECT id, type, captured_at, (photo IS NOT NULL) AS has_photo FROM attendance
          WHERE employee_id=$1 AND captured_at::date = now()::date ORDER BY captured_at ASC`, [r.id])).rows;
       const firstIn = punches.find((p) => p.type === 'IN');
       const lastOut = [...punches].reverse().find((p) => p.type === 'OUT');
@@ -136,6 +136,8 @@ export async function team(req, res, next) {
         employeeId: r.id,
         employeeCode: r.employee_code, name: `${r.first_name} ${r.last_name}`, designation: r.designation,
         punchIn: firstIn?.captured_at || null, punchOut: lastOut?.captured_at || null,
+        inPhotoId: firstIn?.has_photo ? firstIn.id : null,
+        outPhotoId: lastOut?.has_photo ? lastOut.id : null,
         status: firstIn ? 'Present' : 'N/A',
         held,
       });
@@ -182,13 +184,16 @@ export async function releaseTeam(req, res, next) {
   } catch (e) { next(e); }
 }
 
-// GET /attendance/:id/photo -> the captured selfie (self only)
+// GET /attendance/:id/photo -> the captured selfie (self, or a manager viewing a report)
 export async function photo(req, res, next) {
   try {
     const empId = req.user.employeeId;
-    const row = (await query(`SELECT photo FROM attendance WHERE id=$1 AND employee_id=$2`, [req.params.id, empId])).rows[0];
+    const row = (await query(`SELECT photo, employee_id FROM attendance WHERE id=$1`, [req.params.id])).rows[0];
     if (!row?.photo) return res.status(404).json({ error: 'No photo' });
+    const allowed = row.employee_id === empId || (await isMyReport(empId, row.employee_id));
+    if (!allowed) return res.status(403).json({ error: 'Not allowed to view this photo' });
     res.setHeader('Content-Type', 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
     res.send(Buffer.from(row.photo, 'base64'));
   } catch (e) { next(e); }
 }

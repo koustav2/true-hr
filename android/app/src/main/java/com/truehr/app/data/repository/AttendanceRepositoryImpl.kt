@@ -1,5 +1,6 @@
 package com.truehr.app.data.repository
 
+import com.truehr.app.BuildConfig
 import com.truehr.app.core.Formats
 import com.truehr.app.data.remote.ApiService
 import com.truehr.app.data.remote.dto.AttendanceRecordDto
@@ -13,6 +14,8 @@ import com.truehr.app.domain.repository.AttendanceRepository
 import java.text.DateFormatSymbols
 import java.util.Date
 import javax.inject.Inject
+
+private fun photoUrl(id: Long) = "${BuildConfig.BASE_URL}attendance/$id/photo"
 
 class AttendanceRepositoryImpl @Inject constructor(
   private val api: ApiService,
@@ -56,6 +59,8 @@ class AttendanceRepositoryImpl @Inject constructor(
           outLocation = lastOut?.dto?.address,
           present = ins.isNotEmpty(),
           workHours = workHours,
+          inPhotoUrl = firstIn?.dto?.takeIf { it.has_photo }?.let { photoUrl(it.id) },
+          outPhotoUrl = lastOut?.dto?.takeIf { it.has_photo }?.let { photoUrl(it.id) },
         )
       }
       .sortedByDescending { it.dateLabel }
@@ -80,6 +85,8 @@ class AttendanceRepositoryImpl @Inject constructor(
       punchOut = it.punchOut?.let { iso -> Formats.parse(iso)?.let { d -> Formats.time(d) } },
       status = it.status ?: "N/A",
       held = it.held,
+      inPhotoUrl = it.inPhotoId?.let { id -> photoUrl(id) },
+      outPhotoUrl = it.outPhotoId?.let { id -> photoUrl(id) },
     )
   }
 

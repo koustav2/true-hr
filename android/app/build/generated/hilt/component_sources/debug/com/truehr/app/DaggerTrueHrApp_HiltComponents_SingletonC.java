@@ -423,27 +423,27 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
+      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
 
-      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
+      static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
 
       static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
       static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
 
+      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
+
       static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
-      static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
-
-      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
 
       static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
 
       @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
 
       @KeepFieldType
-      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
 
       @KeepFieldType
       OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
@@ -452,13 +452,13 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
       SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
 
       @KeepFieldType
+      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+
+      @KeepFieldType
       ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
 
       @KeepFieldType
-      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
-
-      @KeepFieldType
-      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
 
       @KeepFieldType
       AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
@@ -525,43 +525,43 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
     private static final class LazyClassKeyProvider {
       static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
 
-      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
-
       static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
 
-      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
-
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
-
-      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
+      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
 
       static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
-      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
+      static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
+
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
+
+      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
+
+      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
       @KeepFieldType
       DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
 
       @KeepFieldType
-      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
-
-      @KeepFieldType
       MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
 
       @KeepFieldType
-      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
-
-      @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
-
-      @KeepFieldType
-      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
+      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
 
       @KeepFieldType
       ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
 
       @KeepFieldType
-      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+      SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
+
+      @KeepFieldType
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+
+      @KeepFieldType
+      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+
+      @KeepFieldType
+      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
     }
 
     private static final class SwitchingProvider<T> implements Provider<T> {
@@ -749,7 +749,7 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
     }
 
     @Override
-    public void injectTrueHrApp(TrueHrApp arg0) {
+    public void injectTrueHrApp(TrueHrApp trueHrApp) {
     }
 
     @Override

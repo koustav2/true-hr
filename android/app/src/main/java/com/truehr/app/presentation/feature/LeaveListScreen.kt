@@ -75,6 +75,7 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
         items(s.data!!) { lr ->
           LeaveCard(
             lr,
+            teamView = teamView,
             showActions = teamView && lr.status == "PENDING",
             showCancel = !teamView && lr.status == "PENDING",
             busy = reviewBusy == lr.id,
@@ -89,39 +90,45 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
 }
 
 @Composable
-private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, showCancel: Boolean, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit, onCancel: () -> Unit) {
+private fun LeaveCard(lr: LeaveRequest, teamView: Boolean, showActions: Boolean, showCancel: Boolean, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit, onCancel: () -> Unit) {
   val statusColor = when (lr.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
+  val days = fmtDaysOnly(lr.days)
   Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
     Column(Modifier.padding(16.dp)) {
-      Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-        Column(Modifier.weight(1f)) {
-          Text(lr.name.ifBlank { lr.employeeCode }, fontWeight = FontWeight.Bold, color = Green)
-          Text(lr.leaveType, color = Grape, style = MaterialTheme.typography.bodyMedium)
+      if (teamView) {
+        // ---- Team Leave layout ----
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+          Text(lr.name.ifBlank { lr.employeeCode }, fontWeight = FontWeight.Bold, color = Sky, modifier = Modifier.weight(1f))
+          lr.appliedAt?.let { Text("Applied: ${dmy(it)}", color = InkFaint, style = MaterialTheme.typography.labelSmall) }
         }
-        lr.appliedAt?.let { Text("Applied: $it", color = InkFaint, style = MaterialTheme.typography.labelSmall) }
-      }
-      HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
-      KVL("Duration", "${lr.fromDate} → ${lr.toDate}")
-      KVL("Total Days", fmtDays(lr.days) + if (lr.halfDay) " · Half Day" else "")
-      if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
-      if (lr.hasCertificate && lr.certificateUrl != null) {
-        Spacer(Modifier.height(8.dp))
-        Text("Medical certificate", color = InkFaint, style = MaterialTheme.typography.labelSmall)
-        Spacer(Modifier.height(4.dp))
-        AsyncImage(
-          model = lr.certificateUrl, contentDescription = "Medical certificate", contentScale = ContentScale.Crop,
-          modifier = Modifier.size(width = 120.dp, height = 90.dp).clip(RoundedCornerShape(10.dp)),
-        )
-      }
-      Spacer(Modifier.height(8.dp))
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        Text("R.M. Status: ", color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
-        Surface(color = statusColor.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-          Text(lr.status.lowercase().replaceFirstChar { it.uppercase() }, color = statusColor,
-            style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+        Text(lr.leaveType, color = Grape, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+        HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
+        KVL("Duration", "($days) ${dmy(lr.fromDate)} - ${dmy(lr.toDate)}")
+        KVL("Total Days", "$days day(s)" + if (lr.halfDay) " · Half Day" else "")
+        if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
+        Certificate(lr)
+        Spacer(Modifier.height(10.dp))
+        Text("Approvals:", color = Ink, fontWeight = FontWeight.Bold)
+        Spacer(Modifier.height(6.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Text("R.M. Status: ", color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+          StatusPill(lr.status, statusColor)
         }
+        if (!lr.reviewNote.isNullOrBlank()) { Spacer(Modifier.height(6.dp)); KVL("R.M. Remark", lr.reviewNote) }
+      } else {
+        // ---- View Leave (own) layout ----
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
+          Text("Employee: ${lr.employeeCode}", fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+          StatusPill(lr.status, statusColor)
+        }
+        HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
+        KVL("Leave Type", lr.leaveType)
+        KVL("Duration", "${dmy(lr.fromDate)} - ${dmy(lr.toDate)} ($days day${if (days == "1") "" else "s"})" + if (lr.halfDay) " · Half Day" else "")
+        KVL("Applied Date", lr.appliedAt?.let { dmy(it) } ?: "—")
+        if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
+        KVL("Reporting Remark", lr.reviewNote?.takeIf { it.isNotBlank() } ?: if (lr.status == "PENDING") "Awaiting review" else "—")
+        Certificate(lr)
       }
-      if (!lr.reviewNote.isNullOrBlank()) { Spacer(Modifier.height(6.dp)); KVL("R.M. Remark", lr.reviewNote) }
 
       if (showActions) {
         Spacer(Modifier.height(12.dp))
@@ -137,7 +144,6 @@ private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, showCancel: Boolea
           }
         }
       }
-
       if (showCancel) {
         Spacer(Modifier.height(12.dp))
         OutlinedButton(onClick = onCancel, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
@@ -150,15 +156,37 @@ private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, showCancel: Boolea
   }
 }
 
-private fun fmtDays(d: Double): String {
-  val n = if (d == d.toLong().toDouble()) d.toLong().toString() else "%.1f".format(d)
-  return "$n day(s)"
+@Composable
+private fun Certificate(lr: LeaveRequest) {
+  if (lr.hasCertificate && lr.certificateUrl != null) {
+    Spacer(Modifier.height(8.dp))
+    Text("Medical certificate", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+    Spacer(Modifier.height(4.dp))
+    AsyncImage(model = lr.certificateUrl, contentDescription = "Medical certificate", contentScale = ContentScale.Crop,
+      modifier = Modifier.size(width = 120.dp, height = 90.dp).clip(RoundedCornerShape(10.dp)))
+  }
+}
+
+@Composable
+private fun StatusPill(status: String, color: androidx.compose.ui.graphics.Color) {
+  Surface(color = color.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
+    Text(status.lowercase().replaceFirstChar { it.uppercase() }, color = color,
+      style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+  }
+}
+
+private fun fmtDaysOnly(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else "%.1f".format(d)
+
+// yyyy-MM-dd -> dd/MM/yyyy
+private fun dmy(iso: String): String {
+  val p = iso.take(10).split("-")
+  return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
 }
 
 @Composable
 private fun KVL(k: String, v: String) {
   Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
-    Text(k, color = InkFaint, modifier = Modifier.width(110.dp), style = MaterialTheme.typography.bodyMedium)
+    Text("$k:", color = InkFaint, modifier = Modifier.width(120.dp), style = MaterialTheme.typography.bodyMedium)
     Text(v, color = Ink, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
   }
 }

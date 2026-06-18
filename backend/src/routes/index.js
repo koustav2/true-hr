@@ -9,6 +9,7 @@ import * as missPunch from '../controllers/missPunchController.js';
 import * as onDuty from '../controllers/onDutyController.js';
 import * as leave from '../controllers/leaveController.js';
 import * as compOff from '../controllers/compOffController.js';
+import * as leaveAdmin from '../controllers/leaveAdminController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -93,5 +94,14 @@ r.get('/admin/users', authenticate, requireAdmin, users.listUsers);
 r.post('/admin/users', authenticate, requireAdmin, users.createUser);
 r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatus);
 r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
+
+// --- Leave configuration (HR) ---
+r.get('/admin/holidays', authenticate, requireStaff, leaveAdmin.listHolidays);
+r.post('/admin/holidays', authenticate, requireStaff, leaveAdmin.createHoliday);
+r.delete('/admin/holidays/:id', authenticate, requireStaff, leaveAdmin.deleteHoliday);
+r.get('/admin/entitlements', authenticate, requireStaff, leaveAdmin.listEntitlements);
+r.put('/admin/entitlements', authenticate, requireStaff, leaveAdmin.upsertEntitlement);
+r.get('/admin/leave-types', authenticate, requireStaff, leaveAdmin.listLeaveTypes);
+r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateLeaveType);
 
 export default r;

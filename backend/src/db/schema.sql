@@ -342,11 +342,26 @@ CREATE TABLE IF NOT EXISTS comp_off_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_compoff_emp ON comp_off_requests(employee_id, status);
 
--- Public/declared holidays (HR-managed). Leave day-counts skip these + Sundays.
+-- Public/declared holidays (HR-managed, per state). Leave day-counts skip these + Sundays.
+-- state NULL/'' => national holiday (applies to everyone).
 CREATE TABLE IF NOT EXISTS holidays (
-  holiday_date DATE PRIMARY KEY,
-  name         TEXT NOT NULL
+  id           BIGSERIAL PRIMARY KEY,
+  holiday_date DATE NOT NULL,
+  name         TEXT NOT NULL,
+  state        TEXT
 );
+CREATE INDEX IF NOT EXISTS idx_holidays_date ON holidays(holiday_date);
+-- Migrate an older single-date-PK version of this table, if present:
+ALTER TABLE holidays ADD COLUMN IF NOT EXISTS state TEXT;
+DO $$ BEGIN
+  IF EXISTS (SELECT 1 FROM pg_constraint WHERE conname='holidays_pkey'
+             AND conrelid='holidays'::regclass
+             AND (SELECT array_agg(attname) FROM pg_attribute
+                  WHERE attrelid='holidays'::regclass AND attnum = ANY(conkey)) = ARRAY['holiday_date']) THEN
+    ALTER TABLE holidays DROP CONSTRAINT holidays_pkey;
+    ALTER TABLE holidays ADD COLUMN id BIGSERIAL PRIMARY KEY;
+  END IF;
+EXCEPTION WHEN others THEN NULL; END $$;
 
 -- HR can set the place-of-posting state that drives statutory EL/CL/SL entitlement.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS posting_state TEXT;

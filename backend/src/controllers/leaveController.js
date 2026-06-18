@@ -1,11 +1,22 @@
 import { query, pool } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
-// Working-day count between two ISO dates (inclusive), skipping Sundays + holidays.
-async function workingDays(from, to) {
+// Resolve an employee's state (posting_state, else CURRENT address state).
+async function employeeState(empId) {
+  return (await query(
+    `SELECT COALESCE(NULLIF(e.posting_state,''),
+              (SELECT state FROM employee_addresses
+                 WHERE employee_id=e.id ORDER BY CASE WHEN type='CURRENT' THEN 0 ELSE 1 END LIMIT 1)) AS state
+     FROM employees e WHERE e.id=$1`, [empId])).rows[0]?.state || null;
+}
+
+// Working-day count (inclusive), skipping Sundays + holidays (national + the given state).
+async function workingDays(from, to, state) {
   const hol = new Set((await query(
-    `SELECT to_char(holiday_date,'YYYY-MM-DD') AS d FROM holidays WHERE holiday_date BETWEEN $1 AND $2`,
-    [from, to])).rows.map((r) => r.d));
+    `SELECT to_char(holiday_date,'YYYY-MM-DD') AS d FROM holidays
+      WHERE holiday_date BETWEEN $1 AND $2
+        AND (state IS NULL OR state='' OR lower(state)=lower($3))`,
+    [from, to, state || ''])).rows.map((r) => r.d));
   let count = 0;
   const d = new Date(`${from}T00:00:00Z`);
   const end = new Date(`${to}T00:00:00Z`);
@@ -17,16 +28,18 @@ async function workingDays(from, to) {
   return count;
 }
 
-// Is a single date a working day (not Sunday / holiday)?
-async function isWorkingDay(iso) {
-  return (await workingDays(iso, iso)) === 1;
+async function isWorkingDay(iso, state) {
+  return (await workingDays(iso, iso, state)) === 1;
 }
 
-// GET /leave/holidays — declared holidays (most recent first)
+// GET /leave/holidays — declared holidays relevant to the caller (national + their state)
 export async function holidays(req, res, next) {
   try {
+    const state = req.user.employeeId ? await employeeState(req.user.employeeId) : null;
     const rows = (await query(
-      `SELECT to_char(holiday_date,'YYYY-MM-DD') AS date, name FROM holidays ORDER BY holiday_date DESC`)).rows;
+      `SELECT to_char(holiday_date,'YYYY-MM-DD') AS date, name, state FROM holidays
+        WHERE state IS NULL OR state='' OR lower(state)=lower($1)
+        ORDER BY holiday_date DESC`, [state || ''])).rows;
     res.json(rows);
   } catch (e) { next(e); }
 }
@@ -134,13 +147,14 @@ export async function apply(req, res, next) {
     const lt = (await query(`SELECT id, requires_balance, allow_half_day FROM leave_types WHERE code=$1`, [leaveCode])).rows[0];
     if (!lt) return res.status(400).json({ error: 'Unknown leave type' });
 
+    const empSt = await employeeState(empId);
     const isHalf = !!halfDay && lt.allow_half_day;
     let days;
     if (isHalf) {
-      if (!(await isWorkingDay(fromDate))) return res.status(400).json({ error: 'Half day must fall on a working day (not a Sunday or holiday)' });
+      if (!(await isWorkingDay(fromDate, empSt))) return res.status(400).json({ error: 'Half day must fall on a working day (not a Sunday or holiday)' });
       days = 0.5;
     } else {
-      days = await workingDays(fromDate, toDate);
+      days = await workingDays(fromDate, toDate, empSt);
       if (days < 1) return res.status(400).json({ error: 'Selected dates are all non-working days (Sundays/holidays)' });
     }
 

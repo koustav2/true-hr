@@ -16,6 +16,7 @@ r.post('/auth/login', auth.login);
 r.post('/auth/change-password', authenticate, auth.changePassword);
 r.get('/me', authenticate, auth.me);
 r.get('/me/profile', authenticate, auth.meProfile);
+r.get('/me/team', authenticate, auth.myTeam);
 
 // --- Employee: attendance ---
 r.post('/attendance/punch', authenticate, attendance.punch);

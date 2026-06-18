@@ -20,6 +20,7 @@ import com.truehr.app.presentation.feature.MarkAttendanceScreen
 import com.truehr.app.presentation.feature.MissPunchListScreen
 import com.truehr.app.presentation.feature.MonthlyAttendanceScreen
 import com.truehr.app.presentation.feature.OdListScreen
+import com.truehr.app.presentation.feature.TeamListScreen
 import com.truehr.app.presentation.feature.TeamAttendanceScreen
 import com.truehr.app.presentation.profile.PfScreen
 import com.truehr.app.presentation.profile.ProfileScreen
@@ -97,7 +98,7 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
 
     composable(Routes.LEAVE) { FeatureScreen("Leave Management", onBack = { nav.popBackStack() }) }
     composable(Routes.SALARY) { FeatureScreen("Salary Slip", onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM) { FeatureScreen("Team List", onBack = { nav.popBackStack() }) }
+    composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ADDRESS_BOOK) { FeatureScreen("Address Book", onBack = { nav.popBackStack() }) }
     composable(Routes.POLICIES) { FeatureScreen("Policies", onBack = { nav.popBackStack() }) }
     composable(Routes.SUPPORT) { FeatureScreen("Support Desk", onBack = { nav.popBackStack() }) }

@@ -33,6 +33,9 @@ interface ApiService {
   @GET("me/profile")
   suspend fun profile(): ProfileDto
 
+  @GET("me/team")
+  suspend fun myTeam(): List<com.truehr.app.data.remote.dto.TeamMateDto>
+
   @POST("auth/change-password")
   suspend fun changePassword(@Body body: ChangePasswordRequest)
 

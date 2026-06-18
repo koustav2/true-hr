@@ -31,6 +31,15 @@ data class MissPunch(
   val reviewedAt: String?,
 )
 
+data class TeamMate(
+  val employeeCode: String,
+  val name: String,
+  val designation: String?,
+  val department: String?,
+  val email: String?,
+  val phone: String?,
+)
+
 data class OnDuty(
   val id: Long,
   val employeeCode: String,

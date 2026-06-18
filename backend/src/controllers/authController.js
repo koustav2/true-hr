@@ -54,6 +54,30 @@ export async function me(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// GET /me/team — the logged-in manager's direct reports (ESS team list)
+export async function myTeam(req, res, next) {
+  try {
+    const empId = req.user.employeeId;
+    if (!empId) return res.json([]);
+    const rows = (await query(
+      `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
+              d.title AS designation, dep.name AS department
+       FROM employees e
+       LEFT JOIN designations d ON d.id=e.designation_id
+       LEFT JOIN departments dep ON dep.id=e.department_id
+       WHERE e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1
+       ORDER BY e.first_name, e.last_name`, [empId])).rows;
+    res.json(rows.map((r) => ({
+      employeeCode: r.employee_code,
+      name: `${r.first_name} ${r.last_name}`.trim(),
+      designation: r.designation,
+      department: r.department,
+      email: r.official_email,
+      phone: r.phone,
+    })));
+  } catch (e) { next(e); }
+}
+
 // GET /me/profile — the logged-in employee's own full profile (for the mobile ESS app)
 export async function meProfile(req, res, next) {
   try {

@@ -13,4 +13,5 @@ data class AttendanceDay(
   val outTime: String?,    // 03:06:47 PM
   val outLocation: String?,
   val present: Boolean,
+  val workHours: String? = null,   // e.g. "8h 12m" (in-to-out span)
 )

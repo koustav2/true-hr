@@ -243,10 +243,14 @@ CREATE TABLE IF NOT EXISTS on_duty (
   status       TEXT NOT NULL DEFAULT 'PENDING', -- PENDING | APPROVED | REJECTED
   reviewed_by  BIGINT,
   review_note  TEXT,
+  photo        TEXT,                            -- base64 JPEG captured on apply
   applied_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   reviewed_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_onduty_emp ON on_duty(employee_id, status);
+-- additive columns for already-created tables
+ALTER TABLE on_duty ADD COLUMN IF NOT EXISTS photo TEXT;
+ALTER TABLE miss_punch ADD COLUMN IF NOT EXISTS review_note TEXT;
 
 -- A manager can "hold" a team member's attendance for the current day (until they punch out)
 CREATE TABLE IF NOT EXISTS attendance_hold (

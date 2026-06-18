@@ -19,8 +19,8 @@ private fun OdDto.toModel() = OnDuty(
 class OnDutyRepositoryImpl @Inject constructor(
   private val api: ApiService,
 ) : OnDutyRepository {
-  override suspend fun apply(fromDate: String, toDate: String, dayType: String, place: String?, reason: String?) {
-    api.odApply(ApplyOdRequest(fromDate = fromDate, toDate = toDate, dayType = dayType, place = place, reason = reason))
+  override suspend fun apply(fromDate: String, toDate: String, dayType: String, place: String?, reason: String?, photo: String?) {
+    api.odApply(ApplyOdRequest(fromDate = fromDate, toDate = toDate, dayType = dayType, place = place, reason = reason, photo = photo))
   }
   override suspend fun list(status: String): List<OnDuty> = api.odList(status).map { it.toModel() }
   override suspend fun team(status: String): List<OnDuty> = api.odTeam(status).map { it.toModel() }

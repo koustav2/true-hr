@@ -31,10 +31,22 @@ class MissPunchViewModel @Inject constructor(
   }
 
   // list (own or team)
+  private var lastStatus = "PENDING"
+  private var lastTeam = false
   val list = MutableStateFlow(UiState<List<MissPunch>>())
   fun load(status: String, teamView: Boolean = false) = viewModelScope.launch {
+    lastStatus = status; lastTeam = teamView
     list.update { it.copy(loading = true, error = null) }
     try { list.value = UiState(data = if (teamView) repo.team(status) else repo.list(status)) }
     catch (e: Exception) { list.value = UiState(error = e.apiMessage("Failed to load")) }
+  }
+
+  // manager approve / reject
+  val reviewBusy = MutableStateFlow<Long?>(null)
+  fun review(id: Long, decision: String, note: String?) = viewModelScope.launch {
+    reviewBusy.value = id
+    try { repo.review(id, decision, note); load(lastStatus, lastTeam) }
+    catch (e: Exception) { list.update { it.copy(error = e.apiMessage("Could not update request")) } }
+    finally { reviewBusy.value = null }
   }
 }

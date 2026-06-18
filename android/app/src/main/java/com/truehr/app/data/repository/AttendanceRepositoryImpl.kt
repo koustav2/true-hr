@@ -42,6 +42,10 @@ class AttendanceRepositoryImpl @Inject constructor(
         val firstIn = ins.firstOrNull()
         val lastOut = outs.lastOrNull()
         val any = sorted.first()
+        val workHours = if (firstIn != null && lastOut != null && lastOut.at.time > firstIn.at.time) {
+          val mins = ((lastOut.at.time - firstIn.at.time) / 60000L).toInt()
+          "${mins / 60}h ${mins % 60}m"
+        } else null
         AttendanceDay(
           dateLabel = dateLabel,
           dayName = Formats.dayName(any.at),
@@ -51,6 +55,7 @@ class AttendanceRepositoryImpl @Inject constructor(
           outTime = lastOut?.let { Formats.time(it.at) },
           outLocation = lastOut?.dto?.address,
           present = ins.isNotEmpty(),
+          workHours = workHours,
         )
       }
       .sortedByDescending { it.dateLabel }

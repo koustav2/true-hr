@@ -10,7 +10,7 @@ import javax.inject.Inject
 private fun MissPunchDto.toModel() = MissPunch(
   id = id, employeeCode = employeeCode.orEmpty(), name = name.orEmpty(),
   days = days.orEmpty(), month = month.orEmpty(), year = year ?: 0,
-  remarks = remarks, status = status.orEmpty(),
+  remarks = remarks, status = status.orEmpty(), reviewNote = reviewNote,
   appliedAt = appliedAt?.take(10), reviewedAt = reviewedAt?.take(10),
 )
 
@@ -22,4 +22,7 @@ class MissPunchRepositoryImpl @Inject constructor(
   }
   override suspend fun list(status: String): List<MissPunch> = api.missPunchList(status).map { it.toModel() }
   override suspend fun team(status: String): List<MissPunch> = api.missPunchTeam(status).map { it.toModel() }
+  override suspend fun review(id: Long, decision: String, note: String?) {
+    api.missPunchReview(id, com.truehr.app.data.remote.dto.OdReviewRequest(decision = decision, note = note))
+  }
 }

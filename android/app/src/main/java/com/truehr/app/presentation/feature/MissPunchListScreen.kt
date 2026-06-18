@@ -7,6 +7,8 @@ import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.Check
+import androidx.compose.material.icons.filled.Close
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,7 +29,28 @@ private val TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJ
 fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: MissPunchViewModel = hiltViewModel()) {
   var tab by remember { mutableStateOf(0) }
   val s by vm.list.collectAsState()
+  val reviewBusy by vm.reviewBusy.collectAsState()
+  var rejectId by remember { mutableStateOf<Long?>(null) }
   LaunchedEffect(tab) { vm.load(TABS[tab].first, teamView) }
+
+  rejectId?.let { id ->
+    var note by remember { mutableStateOf("") }
+    AlertDialog(
+      onDismissRequest = { rejectId = null },
+      title = { Text("Reject request") },
+      text = {
+        Column {
+          Text("Add a note for the employee (optional).", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+          Spacer(Modifier.height(10.dp))
+          OutlinedTextField(note, { note = it }, label = { Text("Note") }, minLines = 2,
+            shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
+            modifier = Modifier.fillMaxWidth())
+        }
+      },
+      confirmButton = { TextButton(onClick = { vm.review(id, "REJECTED", note.ifBlank { null }); rejectId = null }) { Text("Reject", color = Rose) } },
+      dismissButton = { TextButton(onClick = { rejectId = null }) { Text("Cancel") } },
+    )
+  }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -48,14 +71,22 @@ fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm
         Text("No ${TABS[tab].second.lowercase()} requests.", color = InkSoft)
       }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(s.data!!) { MissPunchCard(it) }
+        items(s.data!!) { m ->
+          MissPunchCard(
+            m,
+            showActions = teamView && m.status == "PENDING",
+            busy = reviewBusy == m.id,
+            onApprove = { vm.review(m.id, "APPROVED", null) },
+            onReject = { rejectId = m.id },
+          )
+        }
       }
     }
   }
 }
 
 @Composable
-private fun MissPunchCard(m: MissPunch) {
+private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Boolean = false, onApprove: () -> Unit = {}, onReject: () -> Unit = {}) {
   val statusColor = when (m.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
   Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
     Column(Modifier.padding(16.dp)) {
@@ -76,6 +107,26 @@ private fun MissPunchCard(m: MissPunch) {
       KV("Apply Date", m.appliedAt ?: "—")
       if (m.reviewedAt != null) KV("Reviewed On", m.reviewedAt)
       if (!m.remarks.isNullOrBlank()) KV("Remarks", m.remarks)
+      if (!m.reviewNote.isNullOrBlank()) KV("Review Note", m.reviewNote)
+
+      if (showActions) {
+        Spacer(Modifier.height(12.dp))
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+          OutlinedButton(
+            onClick = onReject, enabled = !busy, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.outlinedButtonColors(contentColor = Rose),
+          ) {
+            Icon(Icons.Filled.Close, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Reject", fontWeight = FontWeight.SemiBold)
+          }
+          Button(
+            onClick = onApprove, enabled = !busy, modifier = Modifier.weight(1f), shape = RoundedCornerShape(10.dp),
+            colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Surface),
+          ) {
+            if (busy) CircularProgressIndicator(color = Surface, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+            else { Icon(Icons.Filled.Check, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Approve", fontWeight = FontWeight.SemiBold) }
+          }
+        }
+      }
     }
   }
 }

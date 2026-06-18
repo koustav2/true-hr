@@ -36,6 +36,7 @@ data class MissPunchDto(
   val year: Int? = null,
   val remarks: String? = null,
   val status: String? = null,
+  val reviewNote: String? = null,
   val appliedAt: String? = null,
   val reviewedAt: String? = null,
 )
@@ -47,6 +48,7 @@ data class ApplyOdRequest(
   val dayType: String,
   val place: String? = null,
   val reason: String? = null,
+  val photo: String? = null,
 )
 
 @Serializable

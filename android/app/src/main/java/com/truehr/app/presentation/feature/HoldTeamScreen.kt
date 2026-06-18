@@ -99,8 +99,16 @@ private fun HoldCard(m: TeamMember, busy: Boolean, onToggle: () -> Unit) {
         Column(Modifier.weight(1f)) { Text("Punch Out", color = InkFaint, style = MaterialTheme.typography.labelSmall); Text(m.punchOut ?: "—", fontWeight = FontWeight.SemiBold, color = Ink) }
       }
       Spacer(Modifier.height(12.dp))
+      val punchedIn = !m.punchIn.isNullOrBlank()
       val punchedOut = !m.punchOut.isNullOrBlank()
-      val canAct = m.held || !punchedOut   // cannot place a new hold once they've punched out
+      // Hold is only possible while the employee is currently punched in (not before, not after).
+      val canAct = m.held || (punchedIn && !punchedOut)
+      val label = when {
+        m.held -> "Release Hold"
+        !punchedIn -> "Not punched in yet"
+        punchedOut -> "Punched Out"
+        else -> "Hold Attendance"
+      }
       Button(
         onClick = onToggle, enabled = !busy && canAct,
         shape = RoundedCornerShape(10.dp),
@@ -111,10 +119,11 @@ private fun HoldCard(m: TeamMember, busy: Boolean, onToggle: () -> Unit) {
         modifier = Modifier.fillMaxWidth(),
       ) {
         if (busy) CircularProgressIndicator(color = Surface, strokeWidth = 2.dp, modifier = Modifier.size(18.dp))
-        else Text(if (m.held) "Release Hold" else if (punchedOut) "Punched Out" else "Hold Attendance", fontWeight = FontWeight.SemiBold)
+        else Text(label, fontWeight = FontWeight.SemiBold)
       }
-      if (punchedOut && !m.held) Text(
-        "Already punched out — attendance can no longer be held.",
+      if (!m.held && !canAct) Text(
+        if (!punchedIn) "Hold becomes available once the employee punches in for today."
+        else "Already punched out — attendance can no longer be held.",
         color = InkFaint, style = MaterialTheme.typography.labelSmall,
         modifier = Modifier.padding(top = 6.dp),
       )

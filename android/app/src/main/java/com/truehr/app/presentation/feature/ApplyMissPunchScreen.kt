@@ -36,6 +36,9 @@ fun ApplyMissPunchScreen(onBack: () -> Unit, vm: MissPunchViewModel = hiltViewMo
   val applyError by vm.applyError.collectAsState()
   val applied by vm.applied.collectAsState()
 
+  // Close the screen shortly after a successful submit.
+  LaunchedEffect(applied) { if (applied) { kotlinx.coroutines.delay(700); onBack() } }
+
   val now = remember { Calendar.getInstance() }
   var days by remember { mutableStateOf("") }
   var monthIdx by remember { mutableStateOf(now.get(Calendar.MONTH)) }

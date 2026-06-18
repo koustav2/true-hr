@@ -31,6 +31,7 @@ r.get('/attendance/:id/photo', authenticate, attendance.photo);
 r.post('/misspunch', authenticate, missPunch.apply);
 r.get('/misspunch', authenticate, missPunch.listOwn);
 r.get('/misspunch/team', authenticate, missPunch.team);
+r.post('/misspunch/:id/review', authenticate, missPunch.review);
 
 // --- Employee: on-duty (OD) ---
 r.post('/onduty', authenticate, onDuty.apply);

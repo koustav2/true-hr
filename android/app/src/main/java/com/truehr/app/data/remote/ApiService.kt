@@ -68,6 +68,9 @@ interface ApiService {
   @GET("misspunch/team")
   suspend fun missPunchTeam(@Query("status") status: String): List<MissPunchDto>
 
+  @POST("misspunch/{id}/review")
+  suspend fun missPunchReview(@Path("id") id: Long, @Body body: OdReviewRequest)
+
   // On-duty (OD)
   @POST("onduty")
   suspend fun odApply(@Body body: ApplyOdRequest)

@@ -66,7 +66,10 @@ private fun AttendanceDayCard(day: AttendanceDay) {
           Text(day.dayNum, color = Green, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
         }
         Spacer(Modifier.width(14.dp))
-        Text(day.dateLabel, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+        Column(modifier = Modifier.weight(1f)) {
+          Text(day.dateLabel, fontWeight = FontWeight.Bold, color = Ink)
+          if (!day.workHours.isNullOrBlank()) Text("Worked ${day.workHours}", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+        }
         StatusPill(if (day.present) "Present" else "Absent", if (day.present) Green else Amber)
       }
       HorizontalDivider(color = Line)

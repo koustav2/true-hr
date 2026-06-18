@@ -24,6 +24,7 @@ data class MissPunch(
   val year: Int,
   val remarks: String?,
   val status: String,
+  val reviewNote: String? = null,
   val appliedAt: String?,
   val reviewedAt: String?,
 )

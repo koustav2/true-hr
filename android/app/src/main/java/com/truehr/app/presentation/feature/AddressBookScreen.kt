@@ -28,7 +28,6 @@ import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.initials
 import com.truehr.app.presentation.theme.*
 
-@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewModel()) {
   val s by vm.list.collectAsState()
@@ -44,7 +43,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
     }
     OutlinedTextField(
       value = q, onValueChange = { q = it },
-      placeholder = { Text("Search name, ID, state, city…") },
+      placeholder = { Text("Search e.g. mumbai, sharma  (comma = AND)") },
       leadingIcon = { Icon(Icons.Filled.Search, null, tint = Green) },
       singleLine = true, shape = RoundedCornerShape(14.dp),
       colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
@@ -55,7 +54,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       else -> {
         val filtered = (s.data ?: emptyList()).filter {
-          q.isBlank() || "${it.name} ${it.employeeCode} ${it.designation} ${it.state} ${it.city}".contains(q, ignoreCase = true)
+          matchesQuery("${it.name} ${it.employeeCode} ${it.designation} ${it.department} ${it.state} ${it.city}", q)
         }
         if (filtered.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
           Text("No employees found.", color = InkSoft)
@@ -65,7 +64,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
             .toSortedMap(compareBy { if (it == "Other") "~" else it.lowercase() })
           LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             groups.forEach { (state, people) ->
-              stickyHeader {
+              item {
                 Row(
                   Modifier.fillMaxWidth().background(Canvas).padding(vertical = 6.dp),
                   verticalAlignment = Alignment.CenterVertically,
@@ -119,4 +118,44 @@ private fun ContactLine(icon: ImageVector, value: String) {
     Spacer(Modifier.width(8.dp))
     Text(value, color = InkSoft, style = MaterialTheme.typography.bodyMedium)
   }
+}
+
+/**
+ * Comma-separated, fuzzy search. The query is split on commas into terms; an entry
+ * matches only if EVERY term matches somewhere in its text. Each term matches by
+ * substring OR a typo-tolerant (edit-distance) match against any word.
+ * e.g. "mumbai, sharma" → people named Sharma located in Mumbai; "mumbi" still hits "mumbai".
+ */
+private fun matchesQuery(haystack: String, query: String): Boolean {
+  val terms = query.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
+  if (terms.isEmpty()) return true
+  val hay = haystack.lowercase()
+  val tokens = hay.split(' ', ',', '·', '.', '-', '/').filter { it.isNotBlank() }
+  return terms.all { term ->
+    hay.contains(term) || tokens.any { fuzzyWord(it, term) }
+  }
+}
+
+private fun fuzzyWord(token: String, term: String): Boolean {
+  if (token.contains(term) || term.contains(token)) return true
+  if (term.length < 3) return token.startsWith(term)
+  val maxDist = if (term.length <= 5) 1 else 2
+  return levenshtein(token, term) <= maxDist
+}
+
+private fun levenshtein(a: String, b: String): Int {
+  if (a == b) return 0
+  if (a.isEmpty()) return b.length
+  if (b.isEmpty()) return a.length
+  var prev = IntArray(b.length + 1) { it }
+  var curr = IntArray(b.length + 1)
+  for (i in 1..a.length) {
+    curr[0] = i
+    for (j in 1..b.length) {
+      val cost = if (a[i - 1] == b[j - 1]) 0 else 1
+      curr[j] = minOf(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
+    }
+    val tmp = prev; prev = curr; curr = tmp
+  }
+  return prev[b.length]
 }

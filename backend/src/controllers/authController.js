@@ -61,12 +61,17 @@ export async function myTeam(req, res, next) {
     if (!empId) return res.json([]);
     const rows = (await query(
       `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
-              d.title AS designation, dep.name AS department
+              d.title AS designation, dep.name AS department,
+              rm.first_name AS rm_first, rm.last_name AS rm_last, rm.employee_code AS rm_code,
+              fm.first_name AS fm_first, fm.last_name AS fm_last, fm.employee_code AS fm_code
        FROM employees e
        LEFT JOIN designations d ON d.id=e.designation_id
        LEFT JOIN departments dep ON dep.id=e.department_id
+       LEFT JOIN employees rm ON rm.id=e.reporting_manager_id
+       LEFT JOIN employees fm ON fm.id=e.function_manager_id
        WHERE e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1
        ORDER BY e.first_name, e.last_name`, [empId])).rows;
+    const nameOf = (f, l, c) => (f ? `${f} ${l}${c ? ` · ${c}` : ''}`.trim() : null);
     res.json(rows.map((r) => ({
       employeeCode: r.employee_code,
       name: `${r.first_name} ${r.last_name}`.trim(),
@@ -74,6 +79,8 @@ export async function myTeam(req, res, next) {
       department: r.department,
       email: r.official_email,
       phone: r.phone,
+      reportingManager: nameOf(r.rm_first, r.rm_last, r.rm_code),
+      functionalManager: nameOf(r.fm_first, r.fm_last, r.fm_code),
     })));
   } catch (e) { next(e); }
 }

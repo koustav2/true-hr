@@ -8,6 +8,7 @@ import com.truehr.app.presentation.dashboard.DashboardViewModel_HiltModules;
 import com.truehr.app.presentation.feature.AttendanceViewModel_HiltModules;
 import com.truehr.app.presentation.feature.MissPunchViewModel_HiltModules;
 import com.truehr.app.presentation.feature.OnDutyViewModel_HiltModules;
+import com.truehr.app.presentation.feature.TeamListViewModel_HiltModules;
 import com.truehr.app.presentation.profile.ProfileViewModel_HiltModules;
 import com.truehr.app.presentation.splash.SplashViewModel_HiltModules;
 import dagger.Binds;
@@ -172,6 +173,7 @@ public final class TrueHrApp_HiltComponents {
           OnDutyViewModel_HiltModules.KeyModule.class,
           ProfileViewModel_HiltModules.KeyModule.class,
           SplashViewModel_HiltModules.KeyModule.class,
+          TeamListViewModel_HiltModules.KeyModule.class,
           ActivityCBuilderModule.class,
           ViewModelCBuilderModule.class
       }
@@ -217,7 +219,8 @@ public final class TrueHrApp_HiltComponents {
           MissPunchViewModel_HiltModules.BindsModule.class,
           OnDutyViewModel_HiltModules.BindsModule.class,
           ProfileViewModel_HiltModules.BindsModule.class,
-          SplashViewModel_HiltModules.BindsModule.class
+          SplashViewModel_HiltModules.BindsModule.class,
+          TeamListViewModel_HiltModules.BindsModule.class
       }
   )
   @ViewModelScoped

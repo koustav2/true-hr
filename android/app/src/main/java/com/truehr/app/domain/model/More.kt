@@ -38,6 +38,8 @@ data class TeamMate(
   val department: String?,
   val email: String?,
   val phone: String?,
+  val reportingManager: String? = null,
+  val functionalManager: String? = null,
 )
 
 data class OnDuty(

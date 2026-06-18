@@ -33,6 +33,8 @@ data class TeamMateDto(
   val department: String? = null,
   val email: String? = null,
   val phone: String? = null,
+  val reportingManager: String? = null,
+  val functionalManager: String? = null,
 )
 
 @Serializable

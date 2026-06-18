@@ -50,6 +50,8 @@ class ProfileRepositoryImpl @Inject constructor(
       department = it.department,
       email = it.email,
       phone = it.phone,
+      reportingManager = it.reportingManager,
+      functionalManager = it.functionalManager,
     )
   }
 }

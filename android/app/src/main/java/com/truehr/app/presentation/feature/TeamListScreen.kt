@@ -1,6 +1,7 @@
 package com.truehr.app.presentation.feature
 
 import androidx.compose.foundation.background
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -31,7 +32,10 @@ import com.truehr.app.presentation.theme.*
 fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) {
   val s by vm.list.collectAsState()
   var q by remember { mutableStateOf("") }
+  var selected by remember { mutableStateOf<TeamMate?>(null) }
   LaunchedEffect(Unit) { vm.load() }
+
+  selected?.let { TeamMateDialog(it) { selected = null } }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -62,7 +66,7 @@ fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) 
         if (list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
           Text("No team members under you.", color = InkSoft)
         } else LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          items(list) { TeamMateCard(it) }
+          items(list) { TeamMateCard(it, onClick = { selected = it }) }
         }
       }
     }
@@ -70,8 +74,9 @@ fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) 
 }
 
 @Composable
-private fun TeamMateCard(m: TeamMate) {
-  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp, border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+private fun TeamMateCard(m: TeamMate, onClick: () -> Unit) {
+  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp, border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+    modifier = Modifier.clickable(onClick = onClick)) {
     Column(Modifier.padding(16.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(46.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
@@ -101,5 +106,41 @@ private fun ContactRow(icon: ImageVector, value: String) {
     Icon(icon, null, tint = InkFaint, modifier = Modifier.size(15.dp))
     Spacer(Modifier.width(8.dp))
     Text(value, color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+  }
+}
+
+@Composable
+private fun TeamMateDialog(m: TeamMate, onDismiss: () -> Unit) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = Green) } },
+    title = {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Box(Modifier.size(44.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
+          Text(initials(m.name), color = Green, fontWeight = FontWeight.Bold)
+        }
+        Spacer(Modifier.width(12.dp))
+        Text(m.name, fontWeight = FontWeight.Bold, color = Ink)
+      }
+    },
+    text = {
+      Column {
+        DetailRow("Name", m.name)
+        DetailRow("Official email", m.email)
+        DetailRow("Employee code", m.employeeCode)
+        DetailRow("Designation", m.designation)
+        DetailRow("Mobile", m.phone)
+        DetailRow("Reporting manager", m.reportingManager)
+        DetailRow("Functional manager", m.functionalManager)
+      }
+    },
+  )
+}
+
+@Composable
+private fun DetailRow(label: String, value: String?) {
+  Row(Modifier.fillMaxWidth().padding(vertical = 5.dp)) {
+    Text(label, color = InkFaint, modifier = Modifier.width(140.dp), style = MaterialTheme.typography.bodyMedium)
+    Text(value?.takeIf { it.isNotBlank() } ?: "—", color = Ink, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
   }
 }

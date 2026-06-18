@@ -314,6 +314,18 @@ INSERT INTO leave_types (code, name, annual_quota, requires_balance, sort_order)
   ('WFH', 'Work From Home',       0, false, 9)
 ON CONFLICT (code) DO NOTHING;
 
+-- Per-type UI/behaviour flags (mirrors the Apply Leave screen rules)
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS allow_half_day    BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS single_date       BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS allow_certificate BOOLEAN NOT NULL DEFAULT false;
+UPDATE leave_types SET allow_half_day=true    WHERE code IN ('CL','SL','MSL');
+UPDATE leave_types SET allow_certificate=true WHERE code='SL';
+UPDATE leave_types SET single_date=true       WHERE code='MH';
+
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day    BOOLEAN NOT NULL DEFAULT false;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS certificate TEXT;
+ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS certificate_mime TEXT;
+
 -- HR can set the place-of-posting state that drives statutory EL/CL/SL entitlement.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS posting_state TEXT;
 

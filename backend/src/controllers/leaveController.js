@@ -54,20 +54,30 @@ function shapeReq(r) {
     fromDate: r.from_date,
     toDate: r.to_date,
     days: Number(r.days),
+    halfDay: r.half_day,
     reason: r.reason,
     status: r.status,
     reviewNote: r.review_note,
+    hasCertificate: r.has_certificate === true,
     appliedAt: r.applied_at,
     reviewedAt: r.reviewed_at,
   };
 }
 
+const LIST_COLS = `lr.id, lr.from_date, lr.to_date, lr.days, lr.half_day, lr.reason, lr.status,
+  lr.review_note, lr.applied_at, lr.reviewed_at, (lr.certificate IS NOT NULL) AS has_certificate,
+  lt.name AS type_name, lt.code AS type_code, e.employee_code, e.first_name, e.last_name`;
+
 // GET /leave/types
 export async function types(req, res, next) {
   try {
     const rows = (await query(
-      `SELECT code, name, annual_quota, requires_balance FROM leave_types ORDER BY sort_order`)).rows;
-    res.json(rows.map((r) => ({ code: r.code, name: r.name, annualQuota: Number(r.annual_quota), requiresBalance: r.requires_balance })));
+      `SELECT code, name, annual_quota, requires_balance, allow_half_day, single_date, allow_certificate
+       FROM leave_types ORDER BY sort_order`)).rows;
+    res.json(rows.map((r) => ({
+      code: r.code, name: r.name, annualQuota: Number(r.annual_quota), requiresBalance: r.requires_balance,
+      allowHalfDay: r.allow_half_day, singleDate: r.single_date, allowCertificate: r.allow_certificate,
+    })));
   } catch (e) { next(e); }
 }
 
@@ -94,31 +104,74 @@ export async function apply(req, res, next) {
   try {
     const empId = req.user.employeeId;
     if (!empId) return res.status(404).json({ error: 'No employee linked to this account' });
-    const { leaveCode, fromDate, toDate, reason } = req.body;
+    const { leaveCode, fromDate, toDate, reason, halfDay, certificate, certificateMime } = req.body;
     if (!leaveCode || !fromDate || !toDate) return res.status(400).json({ error: 'leaveCode, fromDate and toDate are required' });
     if (new Date(fromDate) > new Date(toDate)) return res.status(400).json({ error: 'From date cannot be after To date' });
 
-    const lt = (await query(`SELECT id, requires_balance FROM leave_types WHERE code=$1`, [leaveCode])).rows[0];
+    const lt = (await query(`SELECT id, requires_balance, allow_half_day FROM leave_types WHERE code=$1`, [leaveCode])).rows[0];
     if (!lt) return res.status(400).json({ error: 'Unknown leave type' });
 
-    const days = dayCount(fromDate, toDate);
-    if (days < 1) return res.status(400).json({ error: 'Invalid date range' });
+    const isHalf = !!halfDay && lt.allow_half_day;
+    const days = isHalf ? 0.5 : dayCount(fromDate, toDate);
+    if (days < 0.5) return res.status(400).json({ error: 'Invalid date range' });
+
+    // Block overlapping AND back-to-back leaves — there must be at least one clear day
+    // between two leaves, so widen the new window by a day on each side.
+    const conflict = (await query(
+      `SELECT 1 FROM leave_requests
+        WHERE employee_id=$1 AND status IN ('PENDING','APPROVED')
+          AND from_date <= ($3::date + 1) AND to_date >= ($2::date - 1) LIMIT 1`, [empId, fromDate, toDate])).rowCount > 0;
+    if (conflict) return res.status(409).json({ error: 'You must keep at least one day gap between leaves — this overlaps or is adjacent to an existing leave.' });
 
     await ensureBalances(empId);
     if (lt.requires_balance) {
       const bal = (await query(
         `SELECT allocated - used AS remaining FROM leave_balances WHERE employee_id=$1 AND leave_type_id=$2`,
         [empId, lt.id])).rows[0];
-      const remaining = bal ? Number(bal.remaining) : 0;
-      if (days > remaining) return res.status(409).json({ error: `Insufficient balance — ${remaining} day(s) left for this leave type` });
+      // Reserve days already sitting in PENDING requests so balance can't be over-spent.
+      const pending = Number((await query(
+        `SELECT COALESCE(SUM(days),0) AS d FROM leave_requests
+          WHERE employee_id=$1 AND leave_type_id=$2 AND status='PENDING'`, [empId, lt.id])).rows[0].d);
+      const remaining = (bal ? Number(bal.remaining) : 0) - pending;
+      if (days > remaining) return res.status(409).json({ error: `Insufficient balance — ${remaining < 0 ? 0 : remaining} day(s) available (pending requests reserved)` });
     }
 
     const row = (await query(
-      `INSERT INTO leave_requests (employee_id, leave_type_id, from_date, to_date, days, reason)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [empId, lt.id, fromDate, toDate, days, reason || null])).rows[0];
-    await audit(req.user.id, 'LEAVE_APPLY', 'leave_request', row.id, { leaveCode, fromDate, toDate, days });
+      `INSERT INTO leave_requests (employee_id, leave_type_id, from_date, to_date, days, reason, half_day, certificate, certificate_mime)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
+      [empId, lt.id, fromDate, toDate, days, reason || null, isHalf, certificate || null, certificateMime || null])).rows[0];
+    await audit(req.user.id, 'LEAVE_APPLY', 'leave_request', row.id, { leaveCode, fromDate, toDate, days, halfDay: isHalf });
     res.status(201).json({ ok: true, id: row.id, days });
+  } catch (e) { next(e); }
+}
+
+// POST /leave/:id/cancel  (employee withdraws own PENDING request)
+export async function cancel(req, res, next) {
+  try {
+    const empId = req.user.employeeId;
+    const id = parseInt(req.params.id, 10);
+    const lr = (await query(`SELECT employee_id, status FROM leave_requests WHERE id=$1`, [id])).rows[0];
+    if (!lr) return res.status(404).json({ error: 'Leave request not found' });
+    if (lr.employee_id !== empId) return res.status(403).json({ error: 'Not allowed' });
+    if (lr.status !== 'PENDING') return res.status(409).json({ error: 'Only pending requests can be cancelled' });
+    await query(`UPDATE leave_requests SET status='CANCELLED', reviewed_at=now() WHERE id=$1`, [id]);
+    await audit(req.user.id, 'LEAVE_CANCEL', 'leave_request', id, {});
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// GET /leave/:id/certificate  (self, or the employee's manager)
+export async function certificate(req, res, next) {
+  try {
+    const empId = req.user.employeeId;
+    const id = parseInt(req.params.id, 10);
+    const row = (await query(`SELECT employee_id, certificate, certificate_mime FROM leave_requests WHERE id=$1`, [id])).rows[0];
+    if (!row?.certificate) return res.status(404).json({ error: 'No certificate' });
+    const allowed = row.employee_id === empId || (await isMyReport(empId, row.employee_id));
+    if (!allowed) return res.status(403).json({ error: 'Not allowed' });
+    res.setHeader('Content-Type', row.certificate_mime || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(Buffer.from(row.certificate, 'base64'));
   } catch (e) { next(e); }
 }
 
@@ -129,7 +182,7 @@ export async function listOwn(req, res, next) {
     if (!empId) return res.json([]);
     const status = (req.query.status || 'PENDING').toUpperCase();
     const rows = (await query(
-      `SELECT lr.*, lt.name AS type_name, lt.code AS type_code, e.employee_code, e.first_name, e.last_name
+      `SELECT ${LIST_COLS}
        FROM leave_requests lr
        JOIN leave_types lt ON lt.id=lr.leave_type_id
        JOIN employees e ON e.id=lr.employee_id
@@ -145,7 +198,7 @@ export async function team(req, res, next) {
     if (!empId) return res.json([]);
     const status = (req.query.status || 'PENDING').toUpperCase();
     const rows = (await query(
-      `SELECT lr.*, lt.name AS type_name, lt.code AS type_code, e.employee_code, e.first_name, e.last_name
+      `SELECT ${LIST_COLS}
        FROM leave_requests lr
        JOIN leave_types lt ON lt.id=lr.leave_type_id
        JOIN employees e ON e.id=lr.employee_id

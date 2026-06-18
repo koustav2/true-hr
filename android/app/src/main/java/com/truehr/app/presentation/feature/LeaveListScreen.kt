@@ -9,7 +9,11 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.DeleteOutline
 import androidx.compose.material3.*
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.layout.ContentScale
+import coil.compose.AsyncImage
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -72,9 +76,11 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
           LeaveCard(
             lr,
             showActions = teamView && lr.status == "PENDING",
+            showCancel = !teamView && lr.status == "PENDING",
             busy = reviewBusy == lr.id,
             onApprove = { vm.review(lr.id, "APPROVED", null) },
             onReject = { rejectId = lr.id },
+            onCancel = { vm.cancel(lr.id) },
           )
         }
       }
@@ -83,7 +89,7 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
 }
 
 @Composable
-private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit) {
+private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, showCancel: Boolean, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit, onCancel: () -> Unit) {
   val statusColor = when (lr.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
   Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
     Column(Modifier.padding(16.dp)) {
@@ -96,8 +102,17 @@ private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, busy: Boolean, onA
       }
       HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
       KVL("Duration", "${lr.fromDate} → ${lr.toDate}")
-      KVL("Total Days", fmtDays(lr.days))
+      KVL("Total Days", fmtDays(lr.days) + if (lr.halfDay) " · Half Day" else "")
       if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
+      if (lr.hasCertificate && lr.certificateUrl != null) {
+        Spacer(Modifier.height(8.dp))
+        Text("Medical certificate", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+        Spacer(Modifier.height(4.dp))
+        AsyncImage(
+          model = lr.certificateUrl, contentDescription = "Medical certificate", contentScale = ContentScale.Crop,
+          modifier = Modifier.size(width = 120.dp, height = 90.dp).clip(RoundedCornerShape(10.dp)),
+        )
+      }
       Spacer(Modifier.height(8.dp))
       Row(verticalAlignment = Alignment.CenterVertically) {
         Text("R.M. Status: ", color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
@@ -120,6 +135,15 @@ private fun LeaveCard(lr: LeaveRequest, showActions: Boolean, busy: Boolean, onA
             if (busy) CircularProgressIndicator(color = Surface, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
             else { Icon(Icons.Filled.Check, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Approve", fontWeight = FontWeight.SemiBold) }
           }
+        }
+      }
+
+      if (showCancel) {
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onCancel, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Rose)) {
+          if (busy) CircularProgressIndicator(color = Rose, strokeWidth = 2.dp, modifier = Modifier.size(16.dp))
+          else { Icon(Icons.Filled.DeleteOutline, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Cancel Request", fontWeight = FontWeight.SemiBold) }
         }
       }
     }

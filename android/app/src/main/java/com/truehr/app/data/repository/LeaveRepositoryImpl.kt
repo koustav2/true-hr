@@ -14,7 +14,10 @@ class LeaveRepositoryImpl @Inject constructor(
 ) : LeaveRepository {
 
   override suspend fun types(): List<LeaveType> = api.leaveTypes().map {
-    LeaveType(code = it.code, name = it.name, requiresBalance = it.requiresBalance)
+    LeaveType(
+      code = it.code, name = it.name, requiresBalance = it.requiresBalance,
+      allowHalfDay = it.allowHalfDay, singleDate = it.singleDate, allowCertificate = it.allowCertificate,
+    )
   }
 
   override suspend fun balances(): List<LeaveBalance> = api.leaveBalances().map {
@@ -24,8 +27,8 @@ class LeaveRepositoryImpl @Inject constructor(
     )
   }
 
-  override suspend fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String?) {
-    api.leaveApply(ApplyLeaveRequest(leaveCode = leaveCode, fromDate = fromDate, toDate = toDate, reason = reason))
+  override suspend fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String?, halfDay: Boolean, certificate: String?, certificateMime: String?) {
+    api.leaveApply(ApplyLeaveRequest(leaveCode = leaveCode, fromDate = fromDate, toDate = toDate, reason = reason, halfDay = halfDay, certificate = certificate, certificateMime = certificateMime))
   }
 
   override suspend fun list(status: String): List<LeaveRequest> = api.leaveList(status).map { it.toModel() }
@@ -34,6 +37,7 @@ class LeaveRepositoryImpl @Inject constructor(
   override suspend fun review(id: Long, decision: String, note: String?) {
     api.leaveReview(id, OdReviewRequest(decision = decision, note = note))
   }
+  override suspend fun cancel(id: Long) = api.leaveCancel(id)
 }
 
 private fun com.truehr.app.data.remote.dto.LeaveRequestDto.toModel() = LeaveRequest(
@@ -45,9 +49,12 @@ private fun com.truehr.app.data.remote.dto.LeaveRequestDto.toModel() = LeaveRequ
   fromDate = fromDate?.take(10).orEmpty(),
   toDate = toDate?.take(10).orEmpty(),
   days = days,
+  halfDay = halfDay,
   reason = reason,
   status = status.orEmpty(),
   reviewNote = reviewNote,
+  hasCertificate = hasCertificate,
+  certificateUrl = if (hasCertificate) "${com.truehr.app.BuildConfig.BASE_URL}leave/$id/certificate" else null,
   appliedAt = appliedAt?.take(10),
   reviewedAt = reviewedAt?.take(10),
 )

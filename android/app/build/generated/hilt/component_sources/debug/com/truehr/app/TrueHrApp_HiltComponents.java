@@ -5,7 +5,9 @@ import com.truehr.app.di.RepositoryModule;
 import com.truehr.app.presentation.auth.ChangePasswordViewModel_HiltModules;
 import com.truehr.app.presentation.auth.LoginViewModel_HiltModules;
 import com.truehr.app.presentation.dashboard.DashboardViewModel_HiltModules;
+import com.truehr.app.presentation.feature.AddressBookViewModel_HiltModules;
 import com.truehr.app.presentation.feature.AttendanceViewModel_HiltModules;
+import com.truehr.app.presentation.feature.LeaveViewModel_HiltModules;
 import com.truehr.app.presentation.feature.MissPunchViewModel_HiltModules;
 import com.truehr.app.presentation.feature.OnDutyViewModel_HiltModules;
 import com.truehr.app.presentation.feature.TeamListViewModel_HiltModules;
@@ -163,11 +165,13 @@ public final class TrueHrApp_HiltComponents {
 
   @Subcomponent(
       modules = {
+          AddressBookViewModel_HiltModules.KeyModule.class,
           AttendanceViewModel_HiltModules.KeyModule.class,
           ChangePasswordViewModel_HiltModules.KeyModule.class,
           DashboardViewModel_HiltModules.KeyModule.class,
           HiltWrapper_ActivityRetainedComponentManager_LifecycleModule.class,
           HiltWrapper_SavedStateHandleModule.class,
+          LeaveViewModel_HiltModules.KeyModule.class,
           LoginViewModel_HiltModules.KeyModule.class,
           MissPunchViewModel_HiltModules.KeyModule.class,
           OnDutyViewModel_HiltModules.KeyModule.class,
@@ -211,10 +215,12 @@ public final class TrueHrApp_HiltComponents {
 
   @Subcomponent(
       modules = {
+          AddressBookViewModel_HiltModules.BindsModule.class,
           AttendanceViewModel_HiltModules.BindsModule.class,
           ChangePasswordViewModel_HiltModules.BindsModule.class,
           DashboardViewModel_HiltModules.BindsModule.class,
           HiltWrapper_HiltViewModelFactory_ViewModelModule.class,
+          LeaveViewModel_HiltModules.BindsModule.class,
           LoginViewModel_HiltModules.BindsModule.class,
           MissPunchViewModel_HiltModules.BindsModule.class,
           OnDutyViewModel_HiltModules.BindsModule.class,

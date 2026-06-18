@@ -1,7 +1,0 @@
-#Wed Jun 17 20:20:39 IST 2026
-base.0=/Users/koustav_nira/dev/Freelencing-june-kp/True-HR/android/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/0/classes.dex
-base.1=/Users/koustav_nira/dev/Freelencing-june-kp/True-HR/android/app/build/intermediates/dex/debugAndroidTest/mergeProjectDexDebugAndroidTest/14/classes.dex
-path.0=0/classes.dex
-path.1=14/classes.dex
-renamed.0=classes.dex
-renamed.1=classes2.dex

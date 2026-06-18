@@ -108,4 +108,7 @@ interface ApiService {
 
   @POST("leave/{id}/review")
   suspend fun leaveReview(@Path("id") id: Long, @Body body: OdReviewRequest)
+
+  @POST("leave/{id}/cancel")
+  suspend fun leaveCancel(@Path("id") id: Long)
 }

@@ -1,6 +1,13 @@
 package com.truehr.app.domain.model
 
-data class LeaveType(val code: String, val name: String, val requiresBalance: Boolean)
+data class LeaveType(
+  val code: String,
+  val name: String,
+  val requiresBalance: Boolean,
+  val allowHalfDay: Boolean = false,
+  val singleDate: Boolean = false,
+  val allowCertificate: Boolean = false,
+)
 
 data class LeaveBalance(
   val code: String,
@@ -20,9 +27,12 @@ data class LeaveRequest(
   val fromDate: String,
   val toDate: String,
   val days: Double,
+  val halfDay: Boolean,
   val reason: String?,
   val status: String,
   val reviewNote: String?,
+  val hasCertificate: Boolean,
+  val certificateUrl: String?,
   val appliedAt: String?,
   val reviewedAt: String?,
 )

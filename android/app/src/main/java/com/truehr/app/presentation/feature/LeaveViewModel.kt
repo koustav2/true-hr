@@ -34,12 +34,12 @@ class LeaveViewModel @Inject constructor(
     } catch (e: Exception) { balances.value = UiState(error = e.apiMessage("Failed to load leave data")) }
   }
 
-  fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String) = viewModelScope.launch {
+  fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String, halfDay: Boolean, certificate: String?, certificateMime: String?) = viewModelScope.launch {
     if (leaveCode.isBlank()) { applyError.value = "Select a leave type."; return@launch }
-    if (fromDate.isBlank() || toDate.isBlank()) { applyError.value = "Select both dates."; return@launch }
-    if (fromDate > toDate) { applyError.value = "From date cannot be after To date."; return@launch }
+    if (fromDate.isBlank() || toDate.isBlank()) { applyError.value = "Select date(s)."; return@launch }
+    if (fromDate > toDate) { applyError.value = "Start date cannot be after End date."; return@launch }
     submitting.value = true; applyError.value = null
-    try { repo.apply(leaveCode, fromDate, toDate, reason.ifBlank { null }); applied.value = true }
+    try { repo.apply(leaveCode, fromDate, toDate, reason.ifBlank { null }, halfDay, certificate, certificateMime); applied.value = true }
     catch (e: Exception) { applyError.value = e.apiMessage("Failed to submit leave") }
     finally { submitting.value = false }
   }
@@ -55,12 +55,19 @@ class LeaveViewModel @Inject constructor(
     catch (e: Exception) { list.value = UiState(error = e.apiMessage("Failed to load")) }
   }
 
-  // ---- Manager approve / reject ----
+  // ---- Manager approve / reject + employee cancel ----
   val reviewBusy = MutableStateFlow<Long?>(null)
   fun review(id: Long, decision: String, note: String?) = viewModelScope.launch {
     reviewBusy.value = id
     try { repo.review(id, decision, note); load(lastStatus, lastTeam) }
     catch (e: Exception) { list.update { it.copy(error = e.apiMessage("Could not update request")) } }
+    finally { reviewBusy.value = null }
+  }
+
+  fun cancel(id: Long) = viewModelScope.launch {
+    reviewBusy.value = id
+    try { repo.cancel(id); load(lastStatus, lastTeam) }
+    catch (e: Exception) { list.update { it.copy(error = e.apiMessage("Could not cancel request")) } }
     finally { reviewBusy.value = null }
   }
 }

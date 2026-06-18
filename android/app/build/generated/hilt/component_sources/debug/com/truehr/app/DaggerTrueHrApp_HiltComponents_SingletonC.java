@@ -11,6 +11,7 @@ import com.truehr.app.data.remote.ApiService;
 import com.truehr.app.data.remote.AuthInterceptor;
 import com.truehr.app.data.repository.AttendanceRepositoryImpl;
 import com.truehr.app.data.repository.AuthRepositoryImpl;
+import com.truehr.app.data.repository.LeaveRepositoryImpl;
 import com.truehr.app.data.repository.MissPunchRepositoryImpl;
 import com.truehr.app.data.repository.OnDutyRepositoryImpl;
 import com.truehr.app.data.repository.ProfileRepositoryImpl;
@@ -20,6 +21,7 @@ import com.truehr.app.di.NetworkModule_OkHttpFactory;
 import com.truehr.app.di.NetworkModule_RetrofitFactory;
 import com.truehr.app.domain.repository.AttendanceRepository;
 import com.truehr.app.domain.repository.AuthRepository;
+import com.truehr.app.domain.repository.LeaveRepository;
 import com.truehr.app.domain.repository.MissPunchRepository;
 import com.truehr.app.domain.repository.OnDutyRepository;
 import com.truehr.app.domain.repository.ProfileRepository;
@@ -29,8 +31,12 @@ import com.truehr.app.presentation.auth.LoginViewModel;
 import com.truehr.app.presentation.auth.LoginViewModel_HiltModules;
 import com.truehr.app.presentation.dashboard.DashboardViewModel;
 import com.truehr.app.presentation.dashboard.DashboardViewModel_HiltModules;
+import com.truehr.app.presentation.feature.AddressBookViewModel;
+import com.truehr.app.presentation.feature.AddressBookViewModel_HiltModules;
 import com.truehr.app.presentation.feature.AttendanceViewModel;
 import com.truehr.app.presentation.feature.AttendanceViewModel_HiltModules;
+import com.truehr.app.presentation.feature.LeaveViewModel;
+import com.truehr.app.presentation.feature.LeaveViewModel_HiltModules;
 import com.truehr.app.presentation.feature.MissPunchViewModel;
 import com.truehr.app.presentation.feature.MissPunchViewModel_HiltModules;
 import com.truehr.app.presentation.feature.OnDutyViewModel;
@@ -405,7 +411,7 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     @Override
     public Map<Class<?>, Boolean> getViewModelKeys() {
-      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(9).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AttendanceViewModel, AttendanceViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_ChangePasswordViewModel, ChangePasswordViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_dashboard_DashboardViewModel, DashboardViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_LoginViewModel, LoginViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_MissPunchViewModel, MissPunchViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_OnDutyViewModel, OnDutyViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_profile_ProfileViewModel, ProfileViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_splash_SplashViewModel, SplashViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_TeamListViewModel, TeamListViewModel_HiltModules.KeyModule.provide()).build());
+      return LazyClassKeyMap.<Boolean>of(MapBuilder.<String, Boolean>newMapBuilder(11).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AddressBookViewModel, AddressBookViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AttendanceViewModel, AttendanceViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_ChangePasswordViewModel, ChangePasswordViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_dashboard_DashboardViewModel, DashboardViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_LeaveViewModel, LeaveViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_LoginViewModel, LoginViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_MissPunchViewModel, MissPunchViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_OnDutyViewModel, OnDutyViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_profile_ProfileViewModel, ProfileViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_splash_SplashViewModel, SplashViewModel_HiltModules.KeyModule.provide()).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_TeamListViewModel, TeamListViewModel_HiltModules.KeyModule.provide()).build());
     }
 
     @Override
@@ -425,50 +431,60 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     @IdentifierNameString
     private static final class LazyClassKeyProvider {
-      static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
-
-      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
+      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
       static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
 
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
-
-      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
-
-      static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
+      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
 
       static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
 
-      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
+
+      static String com_truehr_app_presentation_feature_LeaveViewModel = "com.truehr.app.presentation.feature.LeaveViewModel";
 
       static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
 
-      @KeepFieldType
-      TeamListViewModel com_truehr_app_presentation_feature_TeamListViewModel2;
+      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
 
-      @KeepFieldType
-      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+      static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
 
-      @KeepFieldType
-      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
+      static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
 
-      @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+      static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
 
       @KeepFieldType
       OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
 
       @KeepFieldType
-      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
+      ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
+
+      @KeepFieldType
+      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
 
       @KeepFieldType
       LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
 
       @KeepFieldType
-      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
+
+      @KeepFieldType
+      LeaveViewModel com_truehr_app_presentation_feature_LeaveViewModel2;
 
       @KeepFieldType
       SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
+
+      @KeepFieldType
+      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+
+      @KeepFieldType
+      MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
+
+      @KeepFieldType
+      TeamListViewModel com_truehr_app_presentation_feature_TeamListViewModel2;
+
+      @KeepFieldType
+      DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
     }
   }
 
@@ -479,11 +495,15 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     private final ViewModelCImpl viewModelCImpl = this;
 
+    private Provider<AddressBookViewModel> addressBookViewModelProvider;
+
     private Provider<AttendanceViewModel> attendanceViewModelProvider;
 
     private Provider<ChangePasswordViewModel> changePasswordViewModelProvider;
 
     private Provider<DashboardViewModel> dashboardViewModelProvider;
+
+    private Provider<LeaveViewModel> leaveViewModelProvider;
 
     private Provider<LoginViewModel> loginViewModelProvider;
 
@@ -510,20 +530,22 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
     @SuppressWarnings("unchecked")
     private void initialize(final SavedStateHandle savedStateHandleParam,
         final ViewModelLifecycle viewModelLifecycleParam) {
-      this.attendanceViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
-      this.changePasswordViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
-      this.dashboardViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
-      this.loginViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
-      this.missPunchViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 4);
-      this.onDutyViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 5);
-      this.profileViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 6);
-      this.splashViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 7);
-      this.teamListViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 8);
+      this.addressBookViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 0);
+      this.attendanceViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 1);
+      this.changePasswordViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 2);
+      this.dashboardViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 3);
+      this.leaveViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 4);
+      this.loginViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 5);
+      this.missPunchViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 6);
+      this.onDutyViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 7);
+      this.profileViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 8);
+      this.splashViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 9);
+      this.teamListViewModelProvider = new SwitchingProvider<>(singletonCImpl, activityRetainedCImpl, viewModelCImpl, 10);
     }
 
     @Override
     public Map<Class<?>, javax.inject.Provider<ViewModel>> getHiltViewModelMap() {
-      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(9).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AttendanceViewModel, ((Provider) attendanceViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_ChangePasswordViewModel, ((Provider) changePasswordViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_dashboard_DashboardViewModel, ((Provider) dashboardViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_LoginViewModel, ((Provider) loginViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_MissPunchViewModel, ((Provider) missPunchViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_OnDutyViewModel, ((Provider) onDutyViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_profile_ProfileViewModel, ((Provider) profileViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_splash_SplashViewModel, ((Provider) splashViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_TeamListViewModel, ((Provider) teamListViewModelProvider)).build());
+      return LazyClassKeyMap.<javax.inject.Provider<ViewModel>>of(MapBuilder.<String, javax.inject.Provider<ViewModel>>newMapBuilder(11).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AddressBookViewModel, ((Provider) addressBookViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_AttendanceViewModel, ((Provider) attendanceViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_ChangePasswordViewModel, ((Provider) changePasswordViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_dashboard_DashboardViewModel, ((Provider) dashboardViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_LeaveViewModel, ((Provider) leaveViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_auth_LoginViewModel, ((Provider) loginViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_MissPunchViewModel, ((Provider) missPunchViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_OnDutyViewModel, ((Provider) onDutyViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_profile_ProfileViewModel, ((Provider) profileViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_splash_SplashViewModel, ((Provider) splashViewModelProvider)).put(LazyClassKeyProvider.com_truehr_app_presentation_feature_TeamListViewModel, ((Provider) teamListViewModelProvider)).build());
     }
 
     @Override
@@ -535,19 +557,23 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
     private static final class LazyClassKeyProvider {
       static String com_truehr_app_presentation_feature_MissPunchViewModel = "com.truehr.app.presentation.feature.MissPunchViewModel";
 
+      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
+
       static String com_truehr_app_presentation_dashboard_DashboardViewModel = "com.truehr.app.presentation.dashboard.DashboardViewModel";
-
-      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
-
-      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
 
       static String com_truehr_app_presentation_splash_SplashViewModel = "com.truehr.app.presentation.splash.SplashViewModel";
 
-      static String com_truehr_app_presentation_feature_AttendanceViewModel = "com.truehr.app.presentation.feature.AttendanceViewModel";
+      static String com_truehr_app_presentation_profile_ProfileViewModel = "com.truehr.app.presentation.profile.ProfileViewModel";
 
-      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
+      static String com_truehr_app_presentation_feature_AddressBookViewModel = "com.truehr.app.presentation.feature.AddressBookViewModel";
 
       static String com_truehr_app_presentation_auth_ChangePasswordViewModel = "com.truehr.app.presentation.auth.ChangePasswordViewModel";
+
+      static String com_truehr_app_presentation_feature_LeaveViewModel = "com.truehr.app.presentation.feature.LeaveViewModel";
+
+      static String com_truehr_app_presentation_feature_OnDutyViewModel = "com.truehr.app.presentation.feature.OnDutyViewModel";
+
+      static String com_truehr_app_presentation_auth_LoginViewModel = "com.truehr.app.presentation.auth.LoginViewModel";
 
       static String com_truehr_app_presentation_feature_TeamListViewModel = "com.truehr.app.presentation.feature.TeamListViewModel";
 
@@ -555,25 +581,31 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
       MissPunchViewModel com_truehr_app_presentation_feature_MissPunchViewModel2;
 
       @KeepFieldType
+      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+
+      @KeepFieldType
       DashboardViewModel com_truehr_app_presentation_dashboard_DashboardViewModel2;
-
-      @KeepFieldType
-      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
-
-      @KeepFieldType
-      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
 
       @KeepFieldType
       SplashViewModel com_truehr_app_presentation_splash_SplashViewModel2;
 
       @KeepFieldType
-      AttendanceViewModel com_truehr_app_presentation_feature_AttendanceViewModel2;
+      ProfileViewModel com_truehr_app_presentation_profile_ProfileViewModel2;
 
       @KeepFieldType
-      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
+      AddressBookViewModel com_truehr_app_presentation_feature_AddressBookViewModel2;
 
       @KeepFieldType
       ChangePasswordViewModel com_truehr_app_presentation_auth_ChangePasswordViewModel2;
+
+      @KeepFieldType
+      LeaveViewModel com_truehr_app_presentation_feature_LeaveViewModel2;
+
+      @KeepFieldType
+      OnDutyViewModel com_truehr_app_presentation_feature_OnDutyViewModel2;
+
+      @KeepFieldType
+      LoginViewModel com_truehr_app_presentation_auth_LoginViewModel2;
 
       @KeepFieldType
       TeamListViewModel com_truehr_app_presentation_feature_TeamListViewModel2;
@@ -600,31 +632,37 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
       @Override
       public T get() {
         switch (id) {
-          case 0: // com.truehr.app.presentation.feature.AttendanceViewModel 
+          case 0: // com.truehr.app.presentation.feature.AddressBookViewModel 
+          return (T) new AddressBookViewModel(singletonCImpl.bindProfileRepositoryProvider.get());
+
+          case 1: // com.truehr.app.presentation.feature.AttendanceViewModel 
           return (T) new AttendanceViewModel(singletonCImpl.bindAttendanceRepositoryProvider.get());
 
-          case 1: // com.truehr.app.presentation.auth.ChangePasswordViewModel 
+          case 2: // com.truehr.app.presentation.auth.ChangePasswordViewModel 
           return (T) new ChangePasswordViewModel(singletonCImpl.bindAuthRepositoryProvider.get());
 
-          case 2: // com.truehr.app.presentation.dashboard.DashboardViewModel 
+          case 3: // com.truehr.app.presentation.dashboard.DashboardViewModel 
           return (T) new DashboardViewModel(singletonCImpl.bindProfileRepositoryProvider.get(), singletonCImpl.bindAuthRepositoryProvider.get());
 
-          case 3: // com.truehr.app.presentation.auth.LoginViewModel 
+          case 4: // com.truehr.app.presentation.feature.LeaveViewModel 
+          return (T) new LeaveViewModel(singletonCImpl.bindLeaveRepositoryProvider.get());
+
+          case 5: // com.truehr.app.presentation.auth.LoginViewModel 
           return (T) new LoginViewModel(singletonCImpl.bindAuthRepositoryProvider.get());
 
-          case 4: // com.truehr.app.presentation.feature.MissPunchViewModel 
+          case 6: // com.truehr.app.presentation.feature.MissPunchViewModel 
           return (T) new MissPunchViewModel(singletonCImpl.bindMissPunchRepositoryProvider.get());
 
-          case 5: // com.truehr.app.presentation.feature.OnDutyViewModel 
+          case 7: // com.truehr.app.presentation.feature.OnDutyViewModel 
           return (T) new OnDutyViewModel(singletonCImpl.bindOnDutyRepositoryProvider.get());
 
-          case 6: // com.truehr.app.presentation.profile.ProfileViewModel 
+          case 8: // com.truehr.app.presentation.profile.ProfileViewModel 
           return (T) new ProfileViewModel(singletonCImpl.bindProfileRepositoryProvider.get());
 
-          case 7: // com.truehr.app.presentation.splash.SplashViewModel 
+          case 9: // com.truehr.app.presentation.splash.SplashViewModel 
           return (T) new SplashViewModel(singletonCImpl.bindAuthRepositoryProvider.get());
 
-          case 8: // com.truehr.app.presentation.feature.TeamListViewModel 
+          case 10: // com.truehr.app.presentation.feature.TeamListViewModel 
           return (T) new TeamListViewModel(singletonCImpl.bindProfileRepositoryProvider.get());
 
           default: throw new AssertionError(id);
@@ -717,6 +755,10 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     private Provider<ApiService> apiServiceProvider;
 
+    private Provider<ProfileRepositoryImpl> profileRepositoryImplProvider;
+
+    private Provider<ProfileRepository> bindProfileRepositoryProvider;
+
     private Provider<AttendanceRepositoryImpl> attendanceRepositoryImplProvider;
 
     private Provider<AttendanceRepository> bindAttendanceRepositoryProvider;
@@ -725,9 +767,9 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
 
     private Provider<AuthRepository> bindAuthRepositoryProvider;
 
-    private Provider<ProfileRepositoryImpl> profileRepositoryImplProvider;
+    private Provider<LeaveRepositoryImpl> leaveRepositoryImplProvider;
 
-    private Provider<ProfileRepository> bindProfileRepositoryProvider;
+    private Provider<LeaveRepository> bindLeaveRepositoryProvider;
 
     private Provider<MissPunchRepositoryImpl> missPunchRepositoryImplProvider;
 
@@ -754,15 +796,17 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
       this.jsonProvider = DoubleCheck.provider(new SwitchingProvider<Json>(singletonCImpl, 5));
       this.retrofitProvider = DoubleCheck.provider(new SwitchingProvider<Retrofit>(singletonCImpl, 4));
       this.apiServiceProvider = DoubleCheck.provider(new SwitchingProvider<ApiService>(singletonCImpl, 3));
-      this.attendanceRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 2);
-      this.bindAttendanceRepositoryProvider = DoubleCheck.provider((Provider) attendanceRepositoryImplProvider);
-      this.authRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 6);
-      this.bindAuthRepositoryProvider = DoubleCheck.provider((Provider) authRepositoryImplProvider);
-      this.profileRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 7);
+      this.profileRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 2);
       this.bindProfileRepositoryProvider = DoubleCheck.provider((Provider) profileRepositoryImplProvider);
-      this.missPunchRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 8);
+      this.attendanceRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 6);
+      this.bindAttendanceRepositoryProvider = DoubleCheck.provider((Provider) attendanceRepositoryImplProvider);
+      this.authRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 7);
+      this.bindAuthRepositoryProvider = DoubleCheck.provider((Provider) authRepositoryImplProvider);
+      this.leaveRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 8);
+      this.bindLeaveRepositoryProvider = DoubleCheck.provider((Provider) leaveRepositoryImplProvider);
+      this.missPunchRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 9);
       this.bindMissPunchRepositoryProvider = DoubleCheck.provider((Provider) missPunchRepositoryImplProvider);
-      this.onDutyRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 9);
+      this.onDutyRepositoryImplProvider = new SwitchingProvider<>(singletonCImpl, 10);
       this.bindOnDutyRepositoryProvider = DoubleCheck.provider((Provider) onDutyRepositoryImplProvider);
     }
 
@@ -811,8 +855,8 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
           case 1: // com.truehr.app.data.local.TokenStore 
           return (T) new TokenStore(ApplicationContextModule_ProvideContextFactory.provideContext(singletonCImpl.applicationContextModule));
 
-          case 2: // com.truehr.app.data.repository.AttendanceRepositoryImpl 
-          return (T) new AttendanceRepositoryImpl(singletonCImpl.apiServiceProvider.get());
+          case 2: // com.truehr.app.data.repository.ProfileRepositoryImpl 
+          return (T) new ProfileRepositoryImpl(singletonCImpl.apiServiceProvider.get());
 
           case 3: // com.truehr.app.data.remote.ApiService 
           return (T) NetworkModule_ApiServiceFactory.apiService(singletonCImpl.retrofitProvider.get());
@@ -823,16 +867,19 @@ public final class DaggerTrueHrApp_HiltComponents_SingletonC {
           case 5: // kotlinx.serialization.json.Json 
           return (T) NetworkModule_JsonFactory.json();
 
-          case 6: // com.truehr.app.data.repository.AuthRepositoryImpl 
+          case 6: // com.truehr.app.data.repository.AttendanceRepositoryImpl 
+          return (T) new AttendanceRepositoryImpl(singletonCImpl.apiServiceProvider.get());
+
+          case 7: // com.truehr.app.data.repository.AuthRepositoryImpl 
           return (T) new AuthRepositoryImpl(singletonCImpl.apiServiceProvider.get(), singletonCImpl.tokenStoreProvider.get());
 
-          case 7: // com.truehr.app.data.repository.ProfileRepositoryImpl 
-          return (T) new ProfileRepositoryImpl(singletonCImpl.apiServiceProvider.get());
+          case 8: // com.truehr.app.data.repository.LeaveRepositoryImpl 
+          return (T) new LeaveRepositoryImpl(singletonCImpl.apiServiceProvider.get());
 
-          case 8: // com.truehr.app.data.repository.MissPunchRepositoryImpl 
+          case 9: // com.truehr.app.data.repository.MissPunchRepositoryImpl 
           return (T) new MissPunchRepositoryImpl(singletonCImpl.apiServiceProvider.get());
 
-          case 9: // com.truehr.app.data.repository.OnDutyRepositoryImpl 
+          case 10: // com.truehr.app.data.repository.OnDutyRepositoryImpl 
           return (T) new OnDutyRepositoryImpl(singletonCImpl.apiServiceProvider.get());
 
           default: throw new AssertionError(id);

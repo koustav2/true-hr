@@ -41,6 +41,11 @@ import java.util.TimeZone
 private val ISO = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
 @OptIn(ExperimentalMaterial3Api::class)
+private class FutureOnlyDates(private val minMillis: Long) : SelectableDates {
+  override fun isSelectableDate(utcTimeMillis: Long): Boolean = utcTimeMillis >= minMillis
+}
+
+@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   val p by profileVm.state.collectAsState()
@@ -71,12 +76,7 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), pro
         add(java.util.Calendar.DAY_OF_YEAR, 1); set(java.util.Calendar.HOUR_OF_DAY, 0); set(java.util.Calendar.MINUTE, 0); set(java.util.Calendar.SECOND, 0); set(java.util.Calendar.MILLISECOND, 0)
       }.timeInMillis
     }
-    val state = rememberDatePickerState(
-      selectableDates = object : SelectableDates {
-        override fun isSelectableDate(utcTimeMillis: Long) = utcTimeMillis >= tomorrowStart
-        override fun isSelectableYear(year: Int) = year >= java.util.Calendar.getInstance().get(java.util.Calendar.YEAR)
-      },
-    )
+    val state = rememberDatePickerState(selectableDates = FutureOnlyDates(tomorrowStart))
     DatePickerDialog(
       onDismissRequest = { picker = null },
       confirmButton = {

@@ -49,6 +49,8 @@ r.post('/leave', authenticate, leave.apply);
 r.get('/leave', authenticate, leave.listOwn);
 r.get('/leave/team', authenticate, leave.team);
 r.post('/leave/:id/review', authenticate, leave.review);
+r.post('/leave/:id/cancel', authenticate, leave.cancel);
+r.get('/leave/:id/certificate', authenticate, leave.certificate);
 
 // --- Public onboarding (token-gated) ---
 r.get('/onboarding/accept', ob.getAccept);

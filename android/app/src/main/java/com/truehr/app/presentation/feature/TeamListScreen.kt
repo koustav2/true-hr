@@ -113,6 +113,8 @@ private fun ContactRow(icon: ImageVector, value: String) {
 private fun TeamMateDialog(m: TeamMate, onDismiss: () -> Unit) {
   AlertDialog(
     onDismissRequest = onDismiss,
+    modifier = Modifier.fillMaxWidth(0.95f),
+    properties = androidx.compose.ui.window.DialogProperties(usePlatformDefaultWidth = false),
     confirmButton = { TextButton(onClick = onDismiss) { Text("Close", color = Green) } },
     title = {
       Row(verticalAlignment = Alignment.CenterVertically) {

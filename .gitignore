@@ -1,7 +1,29 @@
+# Node / web
 node_modules/
 .nm_trash_*/
 dist/
 .next/
-.env
 *.log
+
+# Env & secrets
+.env
+.env.production
+
+# OS
 .DS_Store
+
+# --- Android build artifacts (never commit) ---
+android/.gradle/
+android/build/
+android/app/build/
+android/captures/
+android/.idea/
+android/local.properties
+*.apk
+*.aab
+*.class
+*.iml
+
+# Gradle caches anywhere
+.gradle/
+build/

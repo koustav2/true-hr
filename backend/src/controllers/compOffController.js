@@ -70,6 +70,8 @@ export async function apply(req, res, next) {
     if (od.status !== 'APPROVED') return res.status(409).json({ error: 'Comp-off can only be claimed against an approved OD' });
 
     const expiry = od.expiry_date; // Date
+    const today = new Date(); today.setHours(0, 0, 0, 0);
+    if (new Date(leaveDate) < today) return res.status(400).json({ error: 'Leave date cannot be in the past' });
     if (new Date(leaveDate) > new Date(expiry)) return res.status(409).json({ error: 'Leave date is past the comp-off expiry' });
 
     const claimed = (await query(

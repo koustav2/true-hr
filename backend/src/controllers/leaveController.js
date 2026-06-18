@@ -1,11 +1,34 @@
 import { query, pool } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
-// Inclusive whole-day count between two ISO dates.
-function dayCount(from, to) {
-  const a = new Date(from); a.setHours(0, 0, 0, 0);
-  const b = new Date(to); b.setHours(0, 0, 0, 0);
-  return Math.floor((b - a) / 86400000) + 1;
+// Working-day count between two ISO dates (inclusive), skipping Sundays + holidays.
+async function workingDays(from, to) {
+  const hol = new Set((await query(
+    `SELECT to_char(holiday_date,'YYYY-MM-DD') AS d FROM holidays WHERE holiday_date BETWEEN $1 AND $2`,
+    [from, to])).rows.map((r) => r.d));
+  let count = 0;
+  const d = new Date(`${from}T00:00:00Z`);
+  const end = new Date(`${to}T00:00:00Z`);
+  while (d <= end) {
+    const iso = d.toISOString().slice(0, 10);
+    if (d.getUTCDay() !== 0 && !hol.has(iso)) count++; // 0 = Sunday
+    d.setUTCDate(d.getUTCDate() + 1);
+  }
+  return count;
+}
+
+// Is a single date a working day (not Sunday / holiday)?
+async function isWorkingDay(iso) {
+  return (await workingDays(iso, iso)) === 1;
+}
+
+// GET /leave/holidays — declared holidays (most recent first)
+export async function holidays(req, res, next) {
+  try {
+    const rows = (await query(
+      `SELECT to_char(holiday_date,'YYYY-MM-DD') AS date, name FROM holidays ORDER BY holiday_date DESC`)).rows;
+    res.json(rows);
+  } catch (e) { next(e); }
 }
 
 // Make sure the employee has a balance row for every leave type, with EL/CL/SL
@@ -112,8 +135,14 @@ export async function apply(req, res, next) {
     if (!lt) return res.status(400).json({ error: 'Unknown leave type' });
 
     const isHalf = !!halfDay && lt.allow_half_day;
-    const days = isHalf ? 0.5 : dayCount(fromDate, toDate);
-    if (days < 0.5) return res.status(400).json({ error: 'Invalid date range' });
+    let days;
+    if (isHalf) {
+      if (!(await isWorkingDay(fromDate))) return res.status(400).json({ error: 'Half day must fall on a working day (not a Sunday or holiday)' });
+      days = 0.5;
+    } else {
+      days = await workingDays(fromDate, toDate);
+      if (days < 1) return res.status(400).json({ error: 'Selected dates are all non-working days (Sundays/holidays)' });
+    }
 
     // Block overlapping AND back-to-back leaves — there must be at least one clear day
     // between two leaves, so widen the new window by a day on each side.

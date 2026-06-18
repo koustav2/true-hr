@@ -342,6 +342,12 @@ CREATE TABLE IF NOT EXISTS comp_off_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_compoff_emp ON comp_off_requests(employee_id, status);
 
+-- Public/declared holidays (HR-managed). Leave day-counts skip these + Sundays.
+CREATE TABLE IF NOT EXISTS holidays (
+  holiday_date DATE PRIMARY KEY,
+  name         TEXT NOT NULL
+);
+
 -- HR can set the place-of-posting state that drives statutory EL/CL/SL entitlement.
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS posting_state TEXT;
 

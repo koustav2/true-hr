@@ -45,6 +45,7 @@ r.post('/onduty/:id/review', authenticate, onDuty.review);
 
 // --- Employee: leave management ---
 r.get('/leave/types', authenticate, leave.types);
+r.get('/leave/holidays', authenticate, leave.holidays);
 r.get('/leave/balances', authenticate, leave.balances);
 r.post('/leave', authenticate, leave.apply);
 r.get('/leave', authenticate, leave.listOwn);

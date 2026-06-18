@@ -1,7 +1,9 @@
 package com.truehr.app.presentation.auth
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
@@ -11,12 +13,15 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.text.input.PasswordVisualTransformation
 import androidx.compose.ui.text.input.VisualTransformation
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.truehr.app.R
 import com.truehr.app.presentation.components.AppTextField
 import com.truehr.app.presentation.components.PrimaryButton
 import com.truehr.app.presentation.theme.*
@@ -38,7 +43,9 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewM
     Modifier.fillMaxSize().background(Canvas).statusBarsPadding().padding(24.dp),
     horizontalAlignment = Alignment.CenterHorizontally,
   ) {
-    Spacer(Modifier.height(40.dp))
+    Spacer(Modifier.height(36.dp))
+    Image(painterResource(R.drawable.tkf_logo), contentDescription = "True Kind Foundation", modifier = Modifier.size(96.dp).clip(CircleShape))
+    Spacer(Modifier.height(16.dp))
     Row {
       Text("TRUE ", style = MaterialTheme.typography.headlineSmall, color = Green, fontWeight = FontWeight.Black)
       Text("KIND", style = MaterialTheme.typography.headlineSmall, color = Teal, fontWeight = FontWeight.Black)

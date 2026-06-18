@@ -2,7 +2,10 @@ R_DEF: Internal format may change without notice
 local
 color ic_launcher_background
 drawable ic_launcher_foreground
+drawable tkf_logo
+drawable whatsapp_image_2026_06_17_at_9_45_19_pm__1_
 mipmap ic_launcher
+mipmap ic_launcher_foreground
 mipmap ic_launcher_round
 string app_name
 style Theme.TrueHR

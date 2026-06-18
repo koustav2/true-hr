@@ -1,8 +1,11 @@
 package com.truehr.app.presentation.splash
 
+import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
+import androidx.compose.ui.res.painterResource
+import com.truehr.app.R
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowForward
 import androidx.compose.material3.*
@@ -26,9 +29,7 @@ fun SplashScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit, vm: SplashViewMode
   }
   Box(Modifier.fillMaxSize().background(Canvas), contentAlignment = Alignment.Center) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
-      Box(Modifier.size(86.dp).clip(CircleShape).background(Brush.linearGradient(listOf(Green, Teal))), contentAlignment = Alignment.Center) {
-        Text("T", color = Surface, style = MaterialTheme.typography.headlineSmall, fontWeight = FontWeight.Black)
-      }
+      Image(painterResource(R.drawable.tkf_logo), contentDescription = "True Kind Foundation", modifier = Modifier.size(110.dp).clip(CircleShape))
       Spacer(Modifier.height(18.dp))
       Row {
         Text("TRUE ", style = MaterialTheme.typography.headlineSmall, color = Green, fontWeight = FontWeight.Black)

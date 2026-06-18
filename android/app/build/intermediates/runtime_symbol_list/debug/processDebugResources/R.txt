@@ -134,6 +134,8 @@ int drawable notification_template_icon_bg 0x7f060026
 int drawable notification_template_icon_low_bg 0x7f060027
 int drawable notification_tile_bg 0x7f060028
 int drawable notify_panel_notification_icon_bg 0x7f060029
+int drawable tkf_logo 0x7f06002a
+int drawable whatsapp_image_2026_06_17_at_9_45_19_pm__1_ 0x7f06002b
 int id accessibility_action_clickable_span 0x7f070000
 int id accessibility_custom_action_0 0x7f070001
 int id accessibility_custom_action_1 0x7f070002
@@ -249,6 +251,7 @@ int layout notification_template_icon_group 0x7f090006
 int layout notification_template_part_chronometer 0x7f090007
 int layout notification_template_part_time 0x7f090008
 int mipmap ic_launcher 0x7f0a0000
+int mipmap ic_launcher_foreground 0x7f0a0002
 int mipmap ic_launcher_round 0x7f0a0001
 int string androidx_startup 0x7f0b0000
 int string app_name 0x7f0b0001

@@ -244,12 +244,18 @@ CREATE TABLE IF NOT EXISTS on_duty (
   reviewed_by  BIGINT,
   review_note  TEXT,
   photo        TEXT,                            -- base64 JPEG captured on apply
+  lat          DOUBLE PRECISION,
+  lng          DOUBLE PRECISION,
+  address      TEXT,                            -- reverse-geocoded place of duty
   applied_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
   reviewed_at  TIMESTAMPTZ
 );
 CREATE INDEX IF NOT EXISTS idx_onduty_emp ON on_duty(employee_id, status);
 -- additive columns for already-created tables
 ALTER TABLE on_duty ADD COLUMN IF NOT EXISTS photo TEXT;
+ALTER TABLE on_duty ADD COLUMN IF NOT EXISTS lat DOUBLE PRECISION;
+ALTER TABLE on_duty ADD COLUMN IF NOT EXISTS lng DOUBLE PRECISION;
+ALTER TABLE on_duty ADD COLUMN IF NOT EXISTS address TEXT;
 ALTER TABLE miss_punch ADD COLUMN IF NOT EXISTS review_note TEXT;
 
 -- A manager can "hold" a team member's attendance for the current day (until they punch out)

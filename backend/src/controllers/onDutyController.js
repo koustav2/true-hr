@@ -31,7 +31,7 @@ export async function apply(req, res, next) {
   try {
     const empId = req.user.employeeId;
     if (!empId) return res.status(404).json({ error: 'No employee linked to this account' });
-    const { fromDate, toDate, place, reason, photo } = req.body;
+    const { fromDate, toDate, place, reason, photo, lat, lng, address } = req.body;
     let dayType = String(req.body.dayType || 'FULL').toUpperCase();
     if (!fromDate || !toDate) return res.status(400).json({ error: 'fromDate and toDate are required' });
     if (new Date(fromDate) > new Date(toDate)) return res.status(400).json({ error: 'fromDate cannot be after toDate' });
@@ -39,10 +39,11 @@ export async function apply(req, res, next) {
     const today = new Date(); today.setHours(0, 0, 0, 0);
     if (new Date(fromDate) <= today) return res.status(400).json({ error: 'OD can only be applied for future dates' });
     if (!['FULL', 'HALF'].includes(dayType)) dayType = 'FULL';
+    const placeFinal = (place && place.trim()) ? place.trim() : (address || null);
     const row = (await query(
-      `INSERT INTO on_duty (employee_id, from_date, to_date, day_type, place, reason, photo)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [empId, fromDate, toDate, dayType, place || null, reason || null, photo || null])).rows[0];
+      `INSERT INTO on_duty (employee_id, from_date, to_date, day_type, place, reason, photo, lat, lng, address)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10) RETURNING id`,
+      [empId, fromDate, toDate, dayType, placeFinal, reason || null, photo || null, lat ?? null, lng ?? null, address || null])).rows[0];
     await audit(req.user.id, 'OD_APPLY', 'on_duty', row.id, { fromDate, toDate, dayType });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }

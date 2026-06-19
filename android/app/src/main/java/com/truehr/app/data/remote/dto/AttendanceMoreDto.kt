@@ -75,6 +75,9 @@ data class ApplyOdRequest(
   val place: String? = null,
   val reason: String? = null,
   val photo: String? = null,
+  val lat: Double? = null,
+  val lng: Double? = null,
+  val address: String? = null,
 )
 
 @Serializable

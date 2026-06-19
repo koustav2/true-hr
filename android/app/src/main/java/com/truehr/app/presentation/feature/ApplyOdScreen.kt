@@ -1,8 +1,12 @@
 package com.truehr.app.presentation.feature
 
+import android.Manifest
+import android.content.pm.PackageManager
 import android.graphics.Bitmap
+import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
@@ -17,6 +21,7 @@ import androidx.compose.material.icons.filled.Badge
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.EditCalendar
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -25,14 +30,20 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.asImageBitmap
 import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.layout.ContentScale
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.google.android.gms.location.LocationServices
+import com.google.android.gms.location.Priority
+import com.google.android.gms.tasks.CancellationTokenSource
+import com.truehr.app.core.reverseGeocode
 import com.truehr.app.core.toJpegBase64
 import com.truehr.app.presentation.components.*
 import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 import kotlinx.coroutines.delay
+import kotlinx.coroutines.launch
 import java.text.SimpleDateFormat
 import java.util.Date
 import java.util.Locale
@@ -52,6 +63,9 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), pro
   val submitting by vm.submitting.collectAsState()
   val applyError by vm.applyError.collectAsState()
   val applied by vm.applied.collectAsState()
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
   var fromDate by remember { mutableStateOf("") }
   var toDate by remember { mutableStateOf("") }
@@ -59,9 +73,40 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), pro
   var place by remember { mutableStateOf("") }
   var reason by remember { mutableStateOf("") }
   var photo by remember { mutableStateOf<Bitmap?>(null) }
+  var loc by remember { mutableStateOf<Location?>(null) }
+  var address by remember { mutableStateOf<String?>(null) }
+  var capStatus by remember { mutableStateOf<String?>(null) }
 
+  // Same flow as Mark Attendance: get location -> open camera -> reverse-geocode -> fill place.
   val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bmp ->
-    if (bmp != null) photo = bmp
+    if (bmp != null) {
+      photo = bmp
+      capStatus = "Reading location…"
+      scope.launch {
+        val addr = loc?.let { reverseGeocode(context, it.latitude, it.longitude) }
+        address = addr
+        if (!addr.isNullOrBlank() && place.isBlank()) place = addr
+        capStatus = if (addr != null) "Captured" else "Photo captured (no address)"
+      }
+    } else capStatus = "Capture cancelled"
+  }
+
+  fun fetchLocationThenCamera() {
+    capStatus = "Getting your location…"
+    try {
+      fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
+        .addOnSuccessListener { l -> loc = l; cameraLauncher.launch(null) }
+        .addOnFailureListener { loc = null; cameraLauncher.launch(null) }
+    } catch (e: SecurityException) { capStatus = "Location permission is required." }
+  }
+
+  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
+    if (granted) fetchLocationThenCamera() else capStatus = "Location permission denied."
+  }
+
+  fun startCapture() {
+    val ok = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
+    if (ok) fetchLocationThenCamera() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
   }
 
   // Close the screen shortly after a successful submit.
@@ -129,7 +174,7 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), pro
           shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
           modifier = Modifier.fillMaxWidth())
         Spacer(Modifier.height(14.dp))
-        Text("Photo", color = InkFaint, style = MaterialTheme.typography.labelMedium)
+        Text("Location + Photo", color = InkFaint, style = MaterialTheme.typography.labelMedium)
         Spacer(Modifier.height(6.dp))
         Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(12.dp)) {
           val pic = photo
@@ -137,17 +182,25 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), pro
             Image(pic.asImageBitmap(), contentDescription = "OD photo", contentScale = ContentScale.Crop,
               modifier = Modifier.size(64.dp).clip(RoundedCornerShape(12.dp)))
           }
-          OutlinedButton(onClick = { cameraLauncher.launch(null) }, shape = RoundedCornerShape(10.dp),
+          OutlinedButton(onClick = { startCapture() }, shape = RoundedCornerShape(10.dp),
             colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)) {
             Icon(Icons.Filled.CameraAlt, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp))
-            Text(if (pic == null) "Capture photo" else "Retake")
+            Text(if (pic == null) "Capture location + photo" else "Retake")
+          }
+        }
+        capStatus?.let { Spacer(Modifier.height(6.dp)); Text(it, color = if (photo != null) Green else InkFaint, style = MaterialTheme.typography.labelSmall) }
+        if (!address.isNullOrBlank()) {
+          Spacer(Modifier.height(4.dp))
+          Row(verticalAlignment = Alignment.Top) {
+            Icon(Icons.Filled.Place, null, tint = InkFaint, modifier = Modifier.size(14.dp)); Spacer(Modifier.width(4.dp))
+            Text(address!!, color = InkSoft, style = MaterialTheme.typography.labelSmall, maxLines = 3)
           }
         }
       }
       applyError?.let { Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium) }
       if (applied) Text("Your on-duty request has been submitted.", color = Green, fontWeight = FontWeight.SemiBold)
       PrimaryButton(if (submitting) "" else "Submit", loading = submitting, onClick = {
-        vm.apply(fromDate, toDate, dayType, place, reason, photo?.toJpegBase64())
+        vm.apply(fromDate, toDate, dayType, place, reason, photo?.toJpegBase64(), loc?.latitude, loc?.longitude, address)
       }, modifier = Modifier.fillMaxWidth())
       Spacer(Modifier.height(8.dp))
     }

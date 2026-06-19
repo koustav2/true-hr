@@ -22,12 +22,13 @@ class OnDutyViewModel @Inject constructor(
   val applyError = MutableStateFlow<String?>(null)
   val applied = MutableStateFlow(false)
 
-  fun apply(fromDate: String, toDate: String, dayType: String, place: String, reason: String, photo: String?) = viewModelScope.launch {
+  fun apply(fromDate: String, toDate: String, dayType: String, place: String, reason: String, photo: String?, lat: Double?, lng: Double?, address: String?) = viewModelScope.launch {
     if (fromDate.isBlank() || toDate.isBlank()) { applyError.value = "Select both From and To dates."; return@launch }
     if (fromDate > toDate) { applyError.value = "From date cannot be after To date."; return@launch }
+    if (photo == null) { applyError.value = "Capture a photo with your location to apply."; return@launch }
     submitting.value = true; applyError.value = null
     try {
-      repo.apply(fromDate, toDate, dayType, place.ifBlank { null }, reason.ifBlank { null }, photo)
+      repo.apply(fromDate, toDate, dayType, place.ifBlank { null }, reason.ifBlank { null }, photo, lat, lng, address)
       applied.value = true
     } catch (e: Exception) { applyError.value = e.apiMessage("Failed to submit request") }
     finally { submitting.value = false }

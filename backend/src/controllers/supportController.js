@@ -47,6 +47,7 @@ function shape(r) {
     status: r.status,
     hasAttachment: r.has_attachment === true,
     appliedAt: r.applied_at,
+    resolvedAt: r.resolved_at,
     resolutionNote: r.resolution_note,
     name: `${r.first_name} ${r.last_name}`.trim(),
     employeeCode: r.employee_code,
@@ -89,12 +90,66 @@ export async function list(req, res, next) {
     if (req.query.from) { params.push(req.query.from); where += ` AND s.applied_at::date >= $${params.length}`; }
     if (req.query.to) { params.push(req.query.to); where += ` AND s.applied_at::date <= $${params.length}`; }
     const rows = (await query(
-      `SELECT s.id, s.category, s.issue_type, s.issue_detail, s.description, s.status, s.applied_at, s.resolution_note,
+      `SELECT s.id, s.category, s.issue_type, s.issue_detail, s.description, s.status, s.applied_at, s.resolved_at, s.resolution_note,
               (s.attachment IS NOT NULL) AS has_attachment,
               e.employee_code, e.first_name, e.last_name, e.official_email, e.phone
        FROM support_tickets s JOIN employees e ON e.id=s.employee_id
        WHERE ${where} ORDER BY s.applied_at DESC`, params)).rows;
     res.json(rows.map(shape));
+  } catch (e) { next(e); }
+}
+
+// ---------------- HR/IT/Admin portal (staff) ----------------
+
+// GET /admin/support?category=&status=&from=&to=&q=
+export async function adminList(req, res, next) {
+  try {
+    const params = [];
+    const conds = [];
+    const cat = String(req.query.category || '').toUpperCase();
+    if (cat && CATALOG[cat]) { params.push(cat); conds.push(`s.category=$${params.length}`); }
+    const status = String(req.query.status || '').toUpperCase();
+    if (['PENDING', 'RESOLVED'].includes(status)) { params.push(status); conds.push(`s.status=$${params.length}`); }
+    if (req.query.from) { params.push(req.query.from); conds.push(`s.applied_at::date >= $${params.length}`); }
+    if (req.query.to) { params.push(req.query.to); conds.push(`s.applied_at::date <= $${params.length}`); }
+    if (req.query.q) {
+      params.push(`%${req.query.q}%`);
+      conds.push(`(e.first_name ILIKE $${params.length} OR e.last_name ILIKE $${params.length} OR e.employee_code ILIKE $${params.length} OR s.issue_type ILIKE $${params.length} OR s.description ILIKE $${params.length})`);
+    }
+    const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
+    const rows = (await query(
+      `SELECT s.id, s.category, s.issue_type, s.issue_detail, s.description, s.status, s.applied_at, s.resolved_at, s.resolution_note,
+              (s.attachment IS NOT NULL) AS has_attachment,
+              e.employee_code, e.first_name, e.last_name, e.official_email, e.phone
+       FROM support_tickets s JOIN employees e ON e.id=s.employee_id
+       ${where} ORDER BY (s.status='PENDING') DESC, s.applied_at DESC LIMIT 500`, params)).rows;
+    res.json(rows.map(shape));
+  } catch (e) { next(e); }
+}
+
+// POST /admin/support/:id/resolve { status, note }
+export async function resolve(req, res, next) {
+  try {
+    const status = String(req.body.status || 'RESOLVED').toUpperCase();
+    if (!['PENDING', 'RESOLVED'].includes(status)) return res.status(400).json({ error: 'status must be PENDING or RESOLVED' });
+    const r = (await query(
+      `UPDATE support_tickets SET status=$1, resolution_note=$2,
+         resolved_at = CASE WHEN $1='RESOLVED' THEN now() ELSE NULL END
+       WHERE id=$3 RETURNING id`, [status, req.body.note || null, req.params.id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Ticket not found' });
+    await audit(req.user.id, `SUPPORT_${status}`, 'support_ticket', req.params.id, { note: req.body.note || null });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// GET /admin/support/:id/attachment  (staff can view any)
+export async function adminAttachment(req, res, next) {
+  try {
+    const row = (await query(`SELECT attachment, attachment_mime FROM support_tickets WHERE id=$1`, [req.params.id])).rows[0];
+    if (!row?.attachment) return res.status(404).json({ error: 'No attachment' });
+    res.setHeader('Content-Type', row.attachment_mime || 'application/octet-stream');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(Buffer.from(row.attachment, 'base64'));
   } catch (e) { next(e); }
 }
 

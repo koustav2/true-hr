@@ -11,6 +11,7 @@ import com.truehr.app.presentation.feature.CompOffViewModel_HiltModules;
 import com.truehr.app.presentation.feature.LeaveViewModel_HiltModules;
 import com.truehr.app.presentation.feature.MissPunchViewModel_HiltModules;
 import com.truehr.app.presentation.feature.OnDutyViewModel_HiltModules;
+import com.truehr.app.presentation.feature.SupportViewModel_HiltModules;
 import com.truehr.app.presentation.feature.TeamListViewModel_HiltModules;
 import com.truehr.app.presentation.profile.ProfileViewModel_HiltModules;
 import com.truehr.app.presentation.splash.SplashViewModel_HiltModules;
@@ -179,6 +180,7 @@ public final class TrueHrApp_HiltComponents {
           OnDutyViewModel_HiltModules.KeyModule.class,
           ProfileViewModel_HiltModules.KeyModule.class,
           SplashViewModel_HiltModules.KeyModule.class,
+          SupportViewModel_HiltModules.KeyModule.class,
           TeamListViewModel_HiltModules.KeyModule.class,
           ActivityCBuilderModule.class,
           ViewModelCBuilderModule.class
@@ -229,6 +231,7 @@ public final class TrueHrApp_HiltComponents {
           OnDutyViewModel_HiltModules.BindsModule.class,
           ProfileViewModel_HiltModules.BindsModule.class,
           SplashViewModel_HiltModules.BindsModule.class,
+          SupportViewModel_HiltModules.BindsModule.class,
           TeamListViewModel_HiltModules.BindsModule.class
       }
   )

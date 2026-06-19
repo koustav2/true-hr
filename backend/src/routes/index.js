@@ -111,4 +111,9 @@ r.put('/admin/entitlements', authenticate, requireStaff, leaveAdmin.upsertEntitl
 r.get('/admin/leave-types', authenticate, requireStaff, leaveAdmin.listLeaveTypes);
 r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateLeaveType);
 
+// --- Support Desk portal (HR/IT/Admin agents) ---
+r.get('/admin/support', authenticate, requireStaff, support.adminList);
+r.post('/admin/support/:id/resolve', authenticate, requireStaff, support.resolve);
+r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.adminAttachment);
+
 export default r;

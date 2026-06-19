@@ -25,9 +25,28 @@ export async function apply(req, res, next) {
     if (!empId) return res.status(404).json({ error: 'No employee linked to this account' });
     const { days, month, year, remarks } = req.body;
     if (!days || !month || !year) return res.status(400).json({ error: 'days, month and year are required' });
+
+    // A day with BOTH punch-in and punch-out is complete → miss-punch not allowed for it.
+    // (A punch-in without punch-out is treated as absent, so miss-punch IS allowed there.)
+    const m = parseInt(month, 10), y = parseInt(year, 10);
+    const pad = (n) => String(n).padStart(2, '0');
+    const dates = String(days).split(',')
+      .map((s) => parseInt(s.trim(), 10))
+      .filter((n) => Number.isFinite(n) && n >= 1 && n <= 31)
+      .map((d) => `${y}-${pad(m)}-${pad(d)}`);
+    if (dates.length) {
+      const complete = (await query(
+        `SELECT 1 FROM (
+           SELECT captured_at::date d, bool_or(type='IN') hi, bool_or(type='OUT') ho
+           FROM attendance WHERE employee_id=$1 AND captured_at::date = ANY($2::date[])
+           GROUP BY captured_at::date
+         ) t WHERE hi AND ho LIMIT 1`, [empId, dates])).rowCount > 0;
+      if (complete) return res.status(409).json({ error: 'Attendance is already complete (punched in & out) for one of the selected days — miss-punch is not allowed for completed days.' });
+    }
+
     const row = (await query(
       `INSERT INTO miss_punch (employee_id, days, month, year, remarks) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-      [empId, String(days), parseInt(month, 10), parseInt(year, 10), remarks || null])).rows[0];
+      [empId, String(days), m, y, remarks || null])).rows[0];
     await audit(req.user.id, 'MISS_PUNCH_APPLY', 'miss_punch', row.id, { days, month, year });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }

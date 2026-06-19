@@ -35,10 +35,17 @@ export async function apply(req, res, next) {
     let dayType = String(req.body.dayType || 'FULL').toUpperCase();
     if (!fromDate || !toDate) return res.status(400).json({ error: 'fromDate and toDate are required' });
     if (new Date(fromDate) > new Date(toDate)) return res.status(400).json({ error: 'fromDate cannot be after toDate' });
-    // OD can only be applied for FUTURE dates (not today or past — those are handled by attendance).
-    const today = new Date(); today.setHours(0, 0, 0, 0);
-    if (new Date(fromDate) <= today) return res.status(400).json({ error: 'OD can only be applied for future dates' });
     if (!['FULL', 'HALF'].includes(dayType)) dayType = 'FULL';
+
+    // Block OD if attendance is already COMPLETE (punched in AND out) on any day in the range.
+    const complete = (await query(
+      `SELECT 1 FROM (
+         SELECT captured_at::date d, bool_or(type='IN') hi, bool_or(type='OUT') ho
+         FROM attendance WHERE employee_id=$1 AND captured_at::date BETWEEN $2 AND $3
+         GROUP BY captured_at::date
+       ) t WHERE hi AND ho LIMIT 1`, [empId, fromDate, toDate])).rowCount > 0;
+    if (complete) return res.status(409).json({ error: 'Attendance is already complete (punched in & out) for that day — OD is not allowed.' });
+
     const placeFinal = (place && place.trim()) ? place.trim() : (address || null);
     const row = (await query(
       `INSERT INTO on_duty (employee_id, from_date, to_date, day_type, place, reason, photo, lat, lng, address)

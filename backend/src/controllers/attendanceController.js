@@ -83,6 +83,26 @@ async function resolveTarget(req) {
   return { empId: self };
 }
 
+// GET /attendance/regularized?year=&month=&employeeId= -> day numbers regularised by an APPROVED miss-punch
+export async function regularized(req, res, next) {
+  try {
+    const t = await resolveTarget(req);
+    if (t.error) return res.status(403).json({ error: t.error });
+    const empId = t.empId;
+    if (!empId) return res.json([]);
+    const year = parseInt(req.query.year, 10) || new Date().getFullYear();
+    const month = parseInt(req.query.month, 10) || (new Date().getMonth() + 1);
+    const rows = (await query(
+      `SELECT days FROM miss_punch WHERE employee_id=$1 AND month=$2 AND year=$3 AND status='APPROVED'`,
+      [empId, year, month])).rows;
+    const set = new Set();
+    rows.forEach((r) => String(r.days || '').split(',').forEach((s) => {
+      const n = parseInt(s.trim(), 10); if (Number.isFinite(n)) set.add(n);
+    }));
+    res.json([...set]);
+  } catch (e) { next(e); }
+}
+
 // GET /attendance/monthly?year=&month=&employeeId= -> per-day status map for the calendar
 export async function monthly(req, res, next) {
   try {

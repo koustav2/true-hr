@@ -27,6 +27,7 @@ r.get('/me/directory', authenticate, auth.directory);
 r.post('/attendance/punch', authenticate, attendance.punch);
 r.get('/attendance/today', authenticate, attendance.today);
 r.get('/attendance/daily', authenticate, attendance.daily);
+r.get('/attendance/regularized', authenticate, attendance.regularized);
 r.get('/attendance/monthly', authenticate, attendance.monthly);
 r.get('/attendance/team', authenticate, attendance.team);
 r.post('/attendance/team/hold', authenticate, attendance.holdTeam);

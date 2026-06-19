@@ -36,6 +36,8 @@ class AttendanceRepositoryImpl @Inject constructor(
     val parsed = api.attendanceDaily(year, month, employeeId).mapNotNull { dto ->
       Formats.parse(dto.captured_at)?.let { P(dto, it) }
     }
+    // Days regularised by an approved miss-punch count as present even if a punch is missing.
+    val regularised = runCatching { api.attendanceRegularized(year, month, employeeId).toSet() }.getOrDefault(emptySet())
     return parsed
       .groupBy { Formats.date(it.at) }
       .map { (dateLabel, items) ->

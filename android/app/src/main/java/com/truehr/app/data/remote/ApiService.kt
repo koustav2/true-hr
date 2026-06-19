@@ -52,6 +52,9 @@ interface ApiService {
   @GET("attendance/daily")
   suspend fun attendanceDaily(@Query("year") year: Int, @Query("month") month: Int, @Query("employeeId") employeeId: Long? = null): List<AttendanceRecordDto>
 
+  @GET("attendance/regularized")
+  suspend fun attendanceRegularized(@Query("year") year: Int, @Query("month") month: Int, @Query("employeeId") employeeId: Long? = null): List<Int>
+
   @GET("attendance/monthly")
   suspend fun attendanceMonthly(@Query("year") year: Int, @Query("month") month: Int, @Query("employeeId") employeeId: Long? = null): MonthlyDto
 

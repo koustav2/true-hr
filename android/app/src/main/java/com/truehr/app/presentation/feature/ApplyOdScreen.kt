@@ -107,10 +107,10 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
       }
       Spacer(Modifier.height(40.dp))
       Button(
-        onClick = { if (!submitting) start() },
-        enabled = !submitting,
+        onClick = { if (!submitting && canApply) start() },
+        enabled = !submitting && canApply,
         shape = RoundedCornerShape(30.dp),
-        colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Surface, disabledContainerColor = Green.copy(alpha = 0.4f), disabledContentColor = Surface),
+        colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Surface, disabledContainerColor = InkFaint.copy(alpha = 0.4f), disabledContentColor = Surface),
         modifier = Modifier.height(54.dp).widthIn(min = 210.dp),
       ) {
         if (submitting) CircularProgressIndicator(color = Surface, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))

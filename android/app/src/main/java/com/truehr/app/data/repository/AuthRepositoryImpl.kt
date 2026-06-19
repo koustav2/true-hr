@@ -28,8 +28,8 @@ class AuthRepositoryImpl @Inject constructor(
     )
   }
 
-  override suspend fun changePassword(current: String, new: String) {
-    api.changePassword(ChangePasswordRequest(current, new))
+  override suspend fun changePassword(new: String) {
+    api.changePassword(ChangePasswordRequest(new))
   }
 
   override suspend fun logout() = tokenStore.clear()

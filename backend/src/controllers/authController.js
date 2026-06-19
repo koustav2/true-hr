@@ -31,14 +31,10 @@ export async function login(req, res, next) {
 
 export async function changePassword(req, res, next) {
   try {
-    const { currentPassword, newPassword } = req.body;
-    const { rows } = await query(`SELECT * FROM user_accounts WHERE id=$1`, [req.user.id]);
-    const user = rows[0];
-    const ok = await verifyPassword(currentPassword || '', user.password_hash);
-    if (!ok) return res.status(400).json({ error: 'Current password is incorrect' });
+    const { newPassword } = req.body;
     if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
     const hash = await hashPassword(newPassword);
-    await query(`UPDATE user_accounts SET password_hash=$1, must_change_password=false WHERE id=$2`, [hash, user.id]);
+    await query(`UPDATE user_accounts SET password_hash=$1, must_change_password=false WHERE id=$2`, [hash, req.user.id]);
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

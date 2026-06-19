@@ -17,7 +17,7 @@ data class UserDto(
 data class LoginResponse(val token: String, val user: UserDto)
 
 @Serializable
-data class ChangePasswordRequest(val currentPassword: String, val newPassword: String)
+data class ChangePasswordRequest(val newPassword: String)
 
 @Serializable
 data class MeDto(

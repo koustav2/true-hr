@@ -10,7 +10,6 @@ import kotlinx.coroutines.launch
 import javax.inject.Inject
 
 data class ChangePwState(
-  val current: String = "",
   val next: String = "",
   val confirm: String = "",
   val loading: Boolean = false,
@@ -23,7 +22,6 @@ class ChangePasswordViewModel @Inject constructor(
   private val authRepository: AuthRepository,
 ) : ViewModel() {
   val state = MutableStateFlow(ChangePwState())
-  fun onCurrent(v: String) = state.update { it.copy(current = v, error = null) }
   fun onNext(v: String) = state.update { it.copy(next = v, error = null) }
   fun onConfirm(v: String) = state.update { it.copy(confirm = v, error = null) }
 
@@ -34,7 +32,7 @@ class ChangePasswordViewModel @Inject constructor(
     state.update { it.copy(loading = true, error = null) }
     viewModelScope.launch {
       try {
-        authRepository.changePassword(s.current, s.next)
+        authRepository.changePassword(s.next)
         state.update { it.copy(loading = false, done = true) }
       } catch (e: Exception) {
         state.update { it.copy(loading = false, error = friendly(e)) }

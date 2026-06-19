@@ -29,7 +29,7 @@ import com.truehr.app.presentation.theme.*
 
 private data class AttItem(val label: String, val icon: ImageVector, val route: String)
 
-private val TEAM_ROUTES = setOf(Routes.TEAM_ATTENDANCE, Routes.TEAM_MISS_PUNCH, Routes.TEAM_OD)
+private val TEAM_ROUTES = setOf(Routes.TEAM_ATTENDANCE, Routes.TEAM_MISS_PUNCH)
 
 @Composable
 fun AttendanceMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, profileVm: ProfileViewModel = hiltViewModel()) {
@@ -43,7 +43,6 @@ fun AttendanceMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, profileVm
     AttItem("Hold Team Attendance", Icons.Filled.PauseCircle, Routes.HOLD_TEAM_ATTENDANCE),
     AttItem("Apply OD", Icons.Filled.EditCalendar, Routes.APPLY_OD),
     AttItem("View OD", Icons.Filled.EventAvailable, Routes.VIEW_OD),
-    AttItem("Team OD", Icons.Filled.FactCheck, Routes.TEAM_OD),
     AttItem("Apply Miss Punch", Icons.Filled.MoreTime, Routes.APPLY_MISS_PUNCH),
     AttItem("View Miss Punch", Icons.Filled.EventNote, Routes.VIEW_MISS_PUNCH),
     AttItem("Team Miss Punch", Icons.Filled.Groups, Routes.TEAM_MISS_PUNCH),

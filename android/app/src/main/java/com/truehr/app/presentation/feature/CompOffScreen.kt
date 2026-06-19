@@ -11,6 +11,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Add
 import androidx.compose.material.icons.filled.Check
 import androidx.compose.material.icons.filled.Close
+import androidx.compose.material.icons.filled.EventAvailable
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -18,6 +19,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.truehr.app.domain.model.CompOffCredit
 import com.truehr.app.domain.model.CompOffRequest
 import com.truehr.app.presentation.components.CenterLoader
 import com.truehr.app.presentation.components.ErrorState
@@ -29,19 +31,27 @@ import java.util.Locale
 import java.util.TimeZone
 
 private val ISO_CO = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
-private val CO_TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
 
-@OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: CompOffViewModel = hiltViewModel()) {
+  // Employee: tab0 = available OD credits (apply from here), tab1 = approved comp-off.
+  // Manager: Pending / Approved / Rejected of requests.
+  val tabs = if (teamView) listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
+  else listOf("CREDITS" to "Pending", "APPROVED" to "Approved")
+
   var tab by remember { mutableStateOf(0) }
+  val credits by vm.credits.collectAsState()
   val s by vm.list.collectAsState()
   val reviewBusy by vm.reviewBusy.collectAsState()
   var rejectId by remember { mutableStateOf<Long?>(null) }
-  var showApply by remember { mutableStateOf(false) }
+  var availCredit by remember { mutableStateOf<CompOffCredit?>(null) }
 
-  LaunchedEffect(tab) { vm.load(CO_TABS[tab].first, teamView) }
-  LaunchedEffect(Unit) { if (!teamView) vm.loadCredits() }
+  val creditsTab = !teamView && tab == 0
+  LaunchedEffect(tab, teamView) {
+    if (creditsTab) vm.loadCredits() else vm.load(tabs[tab].first, teamView)
+  }
+
+  availCredit?.let { c -> ApplyCompOffDialog(vm, c) { availCredit = null } }
 
   rejectId?.let { id ->
     var note by remember { mutableStateOf("") }
@@ -57,35 +67,66 @@ fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Comp
     )
   }
 
-  if (showApply) ApplyCompOffDialog(vm) { showApply = false }
-
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
       Row(verticalAlignment = Alignment.CenterVertically) {
         IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Surface) }
-        Text(title, color = Surface, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
-        if (!teamView) Surface(color = Surface.copy(alpha = 0.18f), shape = RoundedCornerShape(10.dp), modifier = Modifier.clickable { showApply = true }) {
-          Row(Modifier.padding(horizontal = 12.dp, vertical = 8.dp), verticalAlignment = Alignment.CenterVertically) {
-            Icon(Icons.Filled.Add, null, tint = Surface, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(4.dp))
-            Text("Avail", color = Surface, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium)
+        Text(title, color = Surface, style = MaterialTheme.typography.titleLarge)
+      }
+    }
+    TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
+      tabs.forEachIndexed { i, (_, label) -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }) }
+    }
+
+    if (creditsTab) {
+      // ---- Available OD credits (apply per item) ----
+      if (credits.isEmpty()) {
+        Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          Text("No comp-off credits available.\nGet an OD approved first to earn one.", color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+      } else {
+        LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          items(credits) { c -> CreditCard(c, onApply = { availCredit = c }) }
+        }
+      }
+    } else {
+      when {
+        s.loading -> CenterLoader()
+        s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(tabs[tab].first, teamView) })
+        s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          Text("No ${tabs[tab].second.lowercase()} comp-off requests.", color = InkSoft)
+        }
+        else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          items(s.data!!) { co ->
+            CompOffCard(co, showActions = teamView && co.status == "PENDING", busy = reviewBusy == co.id,
+              onApprove = { vm.review(co.id, "APPROVED", null) }, onReject = { rejectId = co.id })
           }
         }
       }
     }
-    TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
-      CO_TABS.forEachIndexed { i, (_, label) -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }) }
-    }
-    when {
-      s.loading -> CenterLoader()
-      s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(CO_TABS[tab].first, teamView) })
-      s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("No ${CO_TABS[tab].second.lowercase()} comp-off requests.", color = InkSoft)
-      }
-      else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(s.data!!) { co ->
-          CompOffCard(co, showActions = teamView && co.status == "PENDING", busy = reviewBusy == co.id,
-            onApprove = { vm.review(co.id, "APPROVED", null) }, onReject = { rejectId = co.id })
+  }
+}
+
+@Composable
+private fun CreditCard(c: CompOffCredit, onApply: () -> Unit) {
+  Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp, border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
+    Column(Modifier.padding(16.dp)) {
+      Row(verticalAlignment = Alignment.CenterVertically) {
+        Icon(Icons.Filled.EventAvailable, null, tint = Green, modifier = Modifier.size(20.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Comp-off credit", fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
+        Surface(color = Green.copy(alpha = 0.12f), shape = RoundedCornerShape(20.dp)) {
+          Text("Balance 1", color = Green, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
         }
+      }
+      HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
+      KVc("OD Worked", if (c.workedFrom == c.workedTo) dmyCo(c.workedFrom) else "${dmyCo(c.workedFrom)} - ${dmyCo(c.workedTo)}")
+      if (!c.location.isNullOrBlank()) KVc("Location", c.location)
+      KVc("Use Before", dmyCo(c.expiryDate))
+      Spacer(Modifier.height(12.dp))
+      Button(onClick = onApply, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+        colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Surface)) {
+        Icon(Icons.Filled.Add, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text("Apply Comp-Off", fontWeight = FontWeight.SemiBold)
       }
     }
   }
@@ -93,20 +134,15 @@ fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Comp
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-private fun ApplyCompOffDialog(vm: CompOffViewModel, onClose: () -> Unit) {
-  val credits by vm.credits.collectAsState()
+private fun ApplyCompOffDialog(vm: CompOffViewModel, credit: CompOffCredit, onClose: () -> Unit) {
   val submitting by vm.submitting.collectAsState()
   val applyError by vm.applyError.collectAsState()
   val applied by vm.applied.collectAsState()
-  var creditOpen by remember { mutableStateOf(false) }
-  var selectedOd by remember { mutableStateOf<Long?>(null) }
   var leaveDate by remember { mutableStateOf("") }
   var remark by remember { mutableStateOf("") }
   var datePicker by remember { mutableStateOf(false) }
 
   LaunchedEffect(applied) { if (applied) { vm.resetApplied(); onClose() } }
-
-  val chosen = credits.firstOrNull { it.onDutyId == selectedOd }
 
   if (datePicker) {
     val state = rememberDatePickerState()
@@ -119,39 +155,23 @@ private fun ApplyCompOffDialog(vm: CompOffViewModel, onClose: () -> Unit) {
 
   AlertDialog(
     onDismissRequest = onClose,
-    title = { Text("Avail Comp-Off") },
+    title = { Text("Apply Comp-Off") },
     text = {
       Column {
-        if (credits.isEmpty()) {
-          Text("No comp-off credits available. Get an OD approved first to earn a comp-off.", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
-        } else {
-          ExposedDropdownMenuBox(expanded = creditOpen, onExpandedChange = { creditOpen = it }) {
-            OutlinedTextField(
-              value = chosen?.let { "OD ${it.workedFrom} · exp ${it.expiryDate}" } ?: "", onValueChange = {}, readOnly = true,
-              label = { Text("OD credit") }, trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(creditOpen) },
-              shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
-              modifier = Modifier.menuAnchor().fillMaxWidth())
-            ExposedDropdownMenu(expanded = creditOpen, onDismissRequest = { creditOpen = false }) {
-              credits.forEach { c -> DropdownMenuItem(text = { Text("OD ${c.workedFrom}  (expires ${c.expiryDate})") }, onClick = { selectedOd = c.onDutyId; creditOpen = false }) }
-            }
-          }
-          Spacer(Modifier.height(10.dp))
-          OutlinedTextField(value = leaveDate, onValueChange = {}, readOnly = true, enabled = false, label = { Text("Leave Date") },
-            shape = RoundedCornerShape(12.dp),
-            colors = OutlinedTextFieldDefaults.colors(disabledBorderColor = Line, disabledLabelColor = InkFaint, disabledTextColor = Ink),
-            modifier = Modifier.fillMaxWidth().clickable { datePicker = true })
-          Spacer(Modifier.height(10.dp))
-          OutlinedTextField(remark, { remark = it }, label = { Text("Remark") }, minLines = 2,
-            shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green), modifier = Modifier.fillMaxWidth())
-          applyError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium) }
-        }
+        Text("Against OD worked on ${dmyCo(credit.workedFrom)} (use before ${dmyCo(credit.expiryDate)}).", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(value = leaveDate, onValueChange = {}, readOnly = true, enabled = false, label = { Text("Leave Date") },
+          shape = RoundedCornerShape(12.dp),
+          colors = OutlinedTextFieldDefaults.colors(disabledBorderColor = Line, disabledLabelColor = InkFaint, disabledTextColor = Ink),
+          modifier = Modifier.fillMaxWidth().clickable { datePicker = true })
+        Spacer(Modifier.height(10.dp))
+        OutlinedTextField(remark, { remark = it }, label = { Text("Remark") }, minLines = 2,
+          shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green), modifier = Modifier.fillMaxWidth())
+        applyError?.let { Spacer(Modifier.height(8.dp)); Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium) }
       }
     },
-    confirmButton = {
-      if (credits.isNotEmpty()) TextButton(enabled = !submitting, onClick = { vm.apply(selectedOd ?: 0L, leaveDate, remark) }) { Text("Submit", color = Green, fontWeight = FontWeight.Bold) }
-      else TextButton(onClick = onClose) { Text("Close") }
-    },
-    dismissButton = { if (credits.isNotEmpty()) TextButton(onClick = onClose) { Text("Cancel") } },
+    confirmButton = { TextButton(enabled = !submitting, onClick = { vm.apply(credit.onDutyId, leaveDate, remark) }) { Text("Submit", color = Green, fontWeight = FontWeight.Bold) } },
+    dismissButton = { TextButton(onClick = onClose) { Text("Cancel") } },
   )
 }
 
@@ -171,11 +191,11 @@ private fun CompOffCard(co: CompOffRequest, showActions: Boolean, busy: Boolean,
         }
       }
       HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
-      KVc("Dates", "${co.workedFrom} to ${co.workedTo}")
+      KVc("Dates", "${dmyCo(co.workedFrom)} to ${dmyCo(co.workedTo)}")
       if (!co.location.isNullOrBlank()) KVc("Location", co.location)
       KVc("OD Balance", co.odBalance.toString())
-      KVc("Leave Date", co.leaveDate)
-      KVc("Expiry Date", co.expiryDate)
+      KVc("Leave Date", dmyCo(co.leaveDate))
+      KVc("Expiry Date", dmyCo(co.expiryDate))
       if (!co.remark.isNullOrBlank()) KVc("Remark", co.remark)
       if (!co.reviewNote.isNullOrBlank()) KVc("Remark (RM)", co.reviewNote)
 
@@ -195,6 +215,11 @@ private fun CompOffCard(co: CompOffRequest, showActions: Boolean, busy: Boolean,
       }
     }
   }
+}
+
+private fun dmyCo(iso: String): String {
+  val p = iso.take(10).split("-")
+  return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
 }
 
 @Composable

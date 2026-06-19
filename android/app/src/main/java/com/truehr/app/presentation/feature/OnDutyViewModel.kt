@@ -22,6 +22,13 @@ class OnDutyViewModel @Inject constructor(
   val applyError = MutableStateFlow<String?>(null)
   val applied = MutableStateFlow(false)
 
+  // today's eligibility (canApply, reason)
+  val canApply = MutableStateFlow(true)
+  val eligibilityReason = MutableStateFlow<String?>(null)
+  fun loadEligibility() = viewModelScope.launch {
+    runCatching { repo.eligibility() }.onSuccess { (ok, reason) -> canApply.value = ok; eligibilityReason.value = reason }
+  }
+
   fun apply(fromDate: String, toDate: String, dayType: String, place: String, reason: String, photo: String?, lat: Double?, lng: Double?, address: String?) = viewModelScope.launch {
     if (fromDate.isBlank() || toDate.isBlank()) { applyError.value = "Select both From and To dates."; return@launch }
     if (fromDate > toDate) { applyError.value = "From date cannot be after To date."; return@launch }

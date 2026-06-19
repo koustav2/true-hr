@@ -41,6 +41,7 @@ r.get('/misspunch/team', authenticate, missPunch.team);
 r.post('/misspunch/:id/review', authenticate, missPunch.review);
 
 // --- Employee: on-duty (OD) ---
+r.get('/onduty/eligibility', authenticate, onDuty.eligibility);
 r.post('/onduty', authenticate, onDuty.apply);
 r.get('/onduty', authenticate, onDuty.listOwn);
 r.get('/onduty/team', authenticate, onDuty.team);

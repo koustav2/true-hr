@@ -45,10 +45,14 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
   val submitting by vm.submitting.collectAsState()
   val applyError by vm.applyError.collectAsState()
   val applied by vm.applied.collectAsState()
+  val canApply by vm.canApply.collectAsState()
+  val eligibilityReason by vm.eligibilityReason.collectAsState()
 
   var location by remember { mutableStateOf<Location?>(null) }
   var status by remember { mutableStateOf("Tap \"Apply OD\" to capture your on-duty location & photo.") }
 
+  LaunchedEffect(Unit) { vm.loadEligibility() }
+  LaunchedEffect(eligibilityReason) { eligibilityReason?.let { status = it } }
   LaunchedEffect(applyError) { applyError?.let { status = it } }
   LaunchedEffect(applied) { if (applied) { status = "On-duty submitted successfully."; delay(900); onBack() } }
 

@@ -62,6 +62,25 @@ export async function apply(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// GET /onduty/eligibility -> can the employee apply OD for TODAY?
+export async function eligibility(req, res, next) {
+  try {
+    const empId = req.user.employeeId;
+    if (!empId) return res.json({ canApply: false, reason: 'No employee linked to this account' });
+    const complete = (await query(
+      `SELECT 1 FROM (
+         SELECT bool_or(type='IN') hi, bool_or(type='OUT') ho
+         FROM attendance WHERE employee_id=$1 AND captured_at::date=now()::date
+       ) t WHERE hi AND ho`, [empId])).rowCount > 0;
+    if (complete) return res.json({ canApply: false, reason: 'Attendance is already complete for today — OD is not allowed.' });
+    const dup = (await query(
+      `SELECT 1 FROM on_duty WHERE employee_id=$1 AND status IN ('PENDING','APPROVED')
+         AND from_date<=now()::date AND to_date>=now()::date LIMIT 1`, [empId])).rowCount > 0;
+    if (dup) return res.json({ canApply: false, reason: 'You have already applied OD for today.' });
+    res.json({ canApply: true, reason: null });
+  } catch (e) { next(e); }
+}
+
 // GET /onduty?status=PENDING|APPROVED|REJECTED  (own)
 export async function listOwn(req, res, next) {
   try {

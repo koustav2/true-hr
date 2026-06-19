@@ -81,6 +81,9 @@ interface ApiService {
   suspend fun missPunchReview(@Path("id") id: Long, @Body body: OdReviewRequest)
 
   // On-duty (OD)
+  @GET("onduty/eligibility")
+  suspend fun odEligibility(): com.truehr.app.data.remote.dto.OdEligibilityDto
+
   @POST("onduty")
   suspend fun odApply(@Body body: ApplyOdRequest)
 

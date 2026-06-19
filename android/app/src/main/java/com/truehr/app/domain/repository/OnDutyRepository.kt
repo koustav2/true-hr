@@ -3,6 +3,7 @@ package com.truehr.app.domain.repository
 import com.truehr.app.domain.model.OnDuty
 
 interface OnDutyRepository {
+  suspend fun eligibility(): Pair<Boolean, String?>
   suspend fun apply(fromDate: String, toDate: String, dayType: String, place: String?, reason: String?, photo: String?, lat: Double?, lng: Double?, address: String?)
   suspend fun list(status: String): List<OnDuty>
   suspend fun team(status: String): List<OnDuty>

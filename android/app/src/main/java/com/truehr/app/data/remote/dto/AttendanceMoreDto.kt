@@ -84,6 +84,9 @@ data class ApplyOdRequest(
 data class OdReviewRequest(val decision: String, val note: String? = null)
 
 @Serializable
+data class OdEligibilityDto(val canApply: Boolean = true, val reason: String? = null)
+
+@Serializable
 data class OdDto(
   val id: Long,
   val employeeCode: String? = null,

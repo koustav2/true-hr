@@ -19,6 +19,11 @@ private fun OdDto.toModel() = OnDuty(
 class OnDutyRepositoryImpl @Inject constructor(
   private val api: ApiService,
 ) : OnDutyRepository {
+  override suspend fun eligibility(): Pair<Boolean, String?> {
+    val e = api.odEligibility()
+    return e.canApply to e.reason
+  }
+
   override suspend fun apply(fromDate: String, toDate: String, dayType: String, place: String?, reason: String?, photo: String?, lat: Double?, lng: Double?, address: String?) {
     api.odApply(ApplyOdRequest(fromDate = fromDate, toDate = toDate, dayType = dayType, place = place, reason = reason, photo = photo, lat = lat, lng = lng, address = address))
   }

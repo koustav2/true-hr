@@ -37,6 +37,10 @@ object Routes {
   const val ADDRESS_BOOK = "address_book"
   const val POLICIES = "policies"
   const val SUPPORT = "support"
+  const val SUPPORT_CREATE = "support_create/{cat}"
+  fun supportCreate(cat: String) = "support_create/$cat"
+  const val SUPPORT_VIEW = "support_view/{cat}"
+  fun supportView(cat: String) = "support_view/$cat"
   const val TOUR = "tour"
   const val ESS = "ess"
 

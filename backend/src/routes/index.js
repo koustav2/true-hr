@@ -10,6 +10,7 @@ import * as onDuty from '../controllers/onDutyController.js';
 import * as leave from '../controllers/leaveController.js';
 import * as compOff from '../controllers/compOffController.js';
 import * as leaveAdmin from '../controllers/leaveAdminController.js';
+import * as support from '../controllers/supportController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -61,6 +62,12 @@ r.get('/compoff', authenticate, compOff.listOwn);
 r.get('/compoff/team', authenticate, compOff.team);
 r.post('/compoff', authenticate, compOff.apply);
 r.post('/compoff/:id/review', authenticate, compOff.review);
+
+// --- Support Desk (HR / IT / Admin) ---
+r.get('/support/catalog', authenticate, support.catalog);
+r.get('/support', authenticate, support.list);
+r.post('/support', authenticate, support.create);
+r.get('/support/:id/attachment', authenticate, support.attachment);
 
 // --- Public onboarding (token-gated) ---
 r.get('/onboarding/accept', ob.getAccept);

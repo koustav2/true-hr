@@ -342,6 +342,23 @@ CREATE TABLE IF NOT EXISTS comp_off_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_compoff_emp ON comp_off_requests(employee_id, status);
 
+-- Support Desk tickets (HR / IT / Admin self-service)
+CREATE TABLE IF NOT EXISTS support_tickets (
+  id              BIGSERIAL PRIMARY KEY,
+  employee_id     BIGINT NOT NULL REFERENCES employees(id),
+  category        TEXT NOT NULL,            -- HR | IT | ADMIN
+  issue_type      TEXT NOT NULL,
+  issue_detail    TEXT,
+  description     TEXT,
+  attachment      TEXT,
+  attachment_mime TEXT,
+  status          TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | RESOLVED
+  applied_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  resolved_at     TIMESTAMPTZ,
+  resolution_note TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_support_emp ON support_tickets(employee_id, category, applied_at DESC);
+
 -- Public/declared holidays (HR-managed, per state). Leave day-counts skip these + Sundays.
 -- state NULL/'' => national holiday (applies to everyone).
 CREATE TABLE IF NOT EXISTS holidays (

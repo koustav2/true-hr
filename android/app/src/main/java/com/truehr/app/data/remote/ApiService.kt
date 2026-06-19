@@ -127,4 +127,18 @@ interface ApiService {
 
   @POST("compoff/{id}/review")
   suspend fun compOffReview(@Path("id") id: Long, @Body body: OdReviewRequest)
+
+  // Support Desk
+  @GET("support/catalog")
+  suspend fun supportCatalog(): com.truehr.app.data.remote.dto.SupportCatalogDto
+
+  @POST("support")
+  suspend fun supportCreate(@Body body: com.truehr.app.data.remote.dto.CreateTicketRequest)
+
+  @GET("support")
+  suspend fun supportList(
+    @Query("category") category: String,
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.SupportTicketDto>
 }

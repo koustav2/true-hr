@@ -22,6 +22,9 @@ import com.truehr.app.presentation.feature.MonthlyAttendanceScreen
 import com.truehr.app.presentation.feature.AddressBookScreen
 import com.truehr.app.presentation.feature.ApplyLeaveScreen
 import com.truehr.app.presentation.feature.CompOffScreen
+import com.truehr.app.presentation.feature.CreateTicketScreen
+import com.truehr.app.presentation.feature.SupportDeskScreen
+import com.truehr.app.presentation.feature.ViewTicketsScreen
 import com.truehr.app.presentation.feature.LeaveListScreen
 import com.truehr.app.presentation.feature.LeaveMenuScreen
 import com.truehr.app.presentation.feature.OdListScreen
@@ -111,7 +114,15 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
     composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.POLICIES) { FeatureScreen("Policies", onBack = { nav.popBackStack() }) }
-    composable(Routes.SUPPORT) { FeatureScreen("Support Desk", onBack = { nav.popBackStack() }) }
+    composable(Routes.SUPPORT) { SupportDeskScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    composable(
+      route = Routes.SUPPORT_CREATE,
+      arguments = listOf(navArgument("cat") { type = NavType.StringType }),
+    ) { e -> CreateTicketScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
+    composable(
+      route = Routes.SUPPORT_VIEW,
+      arguments = listOf(navArgument("cat") { type = NavType.StringType }),
+    ) { e -> ViewTicketsScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
     composable(Routes.TOUR) { FeatureScreen("Tour Management", onBack = { nav.popBackStack() }) }
     composable(Routes.ESS) { FeatureScreen("My ESS", onBack = { nav.popBackStack() }) }
 

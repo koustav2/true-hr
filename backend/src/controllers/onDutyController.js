@@ -46,6 +46,12 @@ export async function apply(req, res, next) {
        ) t WHERE hi AND ho LIMIT 1`, [empId, fromDate, toDate])).rowCount > 0;
     if (complete) return res.status(409).json({ error: 'Attendance is already complete (punched in & out) for that day — OD is not allowed.' });
 
+    // Only one OD per day — reject if a pending/approved OD already covers any day in the range.
+    const dup = (await query(
+      `SELECT 1 FROM on_duty WHERE employee_id=$1 AND status IN ('PENDING','APPROVED')
+         AND from_date <= $3 AND to_date >= $2 LIMIT 1`, [empId, fromDate, toDate])).rowCount > 0;
+    if (dup) return res.status(409).json({ error: 'You have already applied OD for this day.' });
+
     const placeFinal = (place && place.trim()) ? place.trim() : (address || null);
     const row = (await query(
       `INSERT INTO on_duty (employee_id, from_date, to_date, day_type, place, reason, photo, lat, lng, address)

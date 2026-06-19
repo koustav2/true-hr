@@ -15,6 +15,7 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.automirrored.filled.Login
 import androidx.compose.material.icons.automirrored.filled.Logout
 import androidx.compose.material.icons.filled.Place
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -71,10 +72,7 @@ private fun AttendanceDayCard(day: AttendanceDay) {
           Text(day.dayNum, color = Green, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleLarge)
         }
         Spacer(Modifier.width(14.dp))
-        Column(modifier = Modifier.weight(1f)) {
-          Text(day.dateLabel, fontWeight = FontWeight.Bold, color = Ink)
-          if (!day.workHours.isNullOrBlank()) Text("Worked ${day.workHours}", color = InkFaint, style = MaterialTheme.typography.labelSmall)
-        }
+        Text(day.dateLabel, fontWeight = FontWeight.Bold, color = Ink, modifier = Modifier.weight(1f))
         StatusPill(if (day.present) "Present" else "Absent", if (day.present) Green else Amber)
       }
       HorizontalDivider(color = Line)
@@ -83,6 +81,17 @@ private fun AttendanceDayCard(day: AttendanceDay) {
         PunchColumn(Modifier.weight(1f), Icons.AutoMirrored.Filled.Login, "In Time", day.inTime, day.inLocation, Teal, day.inPhotoUrl)
         VerticalDivider(modifier = Modifier.height(64.dp), color = Line)
         PunchColumn(Modifier.weight(1f).padding(start = 12.dp), Icons.AutoMirrored.Filled.Logout, "Out Time", day.outTime, day.outLocation, Rose, day.outPhotoUrl)
+      }
+      // Total working hours (in → out)
+      HorizontalDivider(color = Line)
+      Row(
+        Modifier.fillMaxWidth().background(Green.copy(alpha = 0.04f)).padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        Icon(Icons.Filled.Schedule, null, tint = Green, modifier = Modifier.size(16.dp))
+        Spacer(Modifier.width(8.dp))
+        Text("Total Working Hours", color = InkSoft, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
+        Text(day.workHours ?: "—", color = Green, fontWeight = FontWeight.Bold)
       }
     }
   }

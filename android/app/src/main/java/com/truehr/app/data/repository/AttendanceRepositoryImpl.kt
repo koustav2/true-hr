@@ -51,6 +51,9 @@ class AttendanceRepositoryImpl @Inject constructor(
           val mins = ((lastOut.at.time - firstIn.at.time) / 60000L).toInt()
           "${mins / 60}h ${mins % 60}m"
         } else null
+        // Present only when the day is complete (in AND out) or regularised by an approved miss-punch.
+        val complete = ins.isNotEmpty() && outs.isNotEmpty()
+        val isRegularised = Formats.dayNum(any.at).toIntOrNull()?.let { regularised.contains(it) } == true
         AttendanceDay(
           dateLabel = dateLabel,
           dayName = Formats.dayName(any.at),
@@ -59,7 +62,7 @@ class AttendanceRepositoryImpl @Inject constructor(
           inLocation = firstIn?.dto?.address,
           outTime = lastOut?.let { Formats.time(it.at) },
           outLocation = lastOut?.dto?.address,
-          present = ins.isNotEmpty(),
+          present = complete || isRegularised,
           workHours = workHours,
           inPhotoUrl = firstIn?.dto?.takeIf { it.has_photo }?.let { photoUrl(it.id) },
           outPhotoUrl = lastOut?.dto?.takeIf { it.has_photo }?.let { photoUrl(it.id) },

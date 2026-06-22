@@ -18,6 +18,53 @@ function defaultStructure() {
   };
 }
 
+// Resolve the company the requesting HR belongs to (single-org fallback otherwise).
+async function resolveCompanyId(req, employeeId) {
+  if (employeeId) {
+    const r = (await query(`SELECT company_id FROM employees WHERE id=$1`, [employeeId])).rows[0];
+    if (r?.company_id) return r.company_id;
+  }
+  if (req?.user?.employeeId) {
+    const r = (await query(`SELECT company_id FROM employees WHERE id=$1`, [req.user.employeeId])).rows[0];
+    if (r?.company_id) return r.company_id;
+  }
+  return (await query(`SELECT id FROM companies ORDER BY id LIMIT 1`)).rows[0]?.id || null;
+}
+
+function shapeTemplate(row) {
+  if (!row) {
+    const d = defaultStructure();
+    return {
+      basicPct: d.basicPct, hraPctOfBasic: d.hraPctOfBasic, employeePfPct: d.employeePfPct,
+      professionalTax: d.professionalTax, welfareTrust: d.welfareTrust,
+      lta: d.lta, personalAllowance: d.personalAllowance, miscellaneous: d.miscellaneous,
+      cityAllowance: d.cityAllowance, performancePay: d.performancePay,
+    };
+  }
+  return {
+    basicPct: Number(row.basic_pct), hraPctOfBasic: Number(row.hra_pct_of_basic),
+    employeePfPct: Number(row.employee_pf_pct), professionalTax: Number(row.professional_tax),
+    welfareTrust: Number(row.welfare_trust), lta: Number(row.lta),
+    personalAllowance: Number(row.personal_allowance), miscellaneous: Number(row.miscellaneous),
+    cityAllowance: Number(row.city_allowance), performancePay: Number(row.performance_pay),
+  };
+}
+
+// Build an (unsaved) employee structure pre-filled from a company template.
+function structureFromTemplate(t) {
+  return { grade: null, monthlyCtc: 0, ...shapeTemplate(t) };
+}
+
+async function loadTemplate(companyId) {
+  if (!companyId) return null;
+  let row = (await query(`SELECT * FROM company_salary_templates WHERE company_id=$1`, [companyId])).rows[0];
+  if (!row) {
+    await query(`INSERT INTO company_salary_templates (company_id) VALUES ($1) ON CONFLICT (company_id) DO NOTHING`, [companyId]);
+    row = (await query(`SELECT * FROM company_salary_templates WHERE company_id=$1`, [companyId])).rows[0];
+  }
+  return row;
+}
+
 function shapeStructure(row) {
   if (!row) return defaultStructure();
   return {
@@ -156,10 +203,47 @@ export async function pdf(req, res, next) {
 // ── HR admin ─────────────────────────────────────────────────────────────────
 
 // GET /admin/salary-structure/:employeeId
+// Returns the saved per-employee structure, or — if none — one pre-filled from the
+// employee's company template so HR only needs to enter CTC.
 export async function getStructure(req, res, next) {
   try {
     const row = (await query(`SELECT * FROM salary_structures WHERE employee_id=$1`, [req.params.employeeId])).rows[0];
-    res.json(shapeStructure(row));
+    if (row) return res.json({ ...shapeStructure(row), saved: true });
+    const companyId = await resolveCompanyId(req, req.params.employeeId);
+    const t = await loadTemplate(companyId);
+    res.json({ ...structureFromTemplate(t), saved: false });
+  } catch (e) { next(e); }
+}
+
+// GET /admin/salary-template — the company-wide default
+export async function getTemplate(req, res, next) {
+  try {
+    const companyId = await resolveCompanyId(req);
+    res.json(shapeTemplate(await loadTemplate(companyId)));
+  } catch (e) { next(e); }
+}
+
+// PUT /admin/salary-template — update the company-wide default
+export async function setTemplate(req, res, next) {
+  try {
+    const companyId = await resolveCompanyId(req);
+    if (!companyId) return res.status(409).json({ error: 'No company found' });
+    const b = req.body || {};
+    await query(
+      `INSERT INTO company_salary_templates
+         (company_id, basic_pct, hra_pct_of_basic, employee_pf_pct, professional_tax, welfare_trust,
+          lta, personal_allowance, miscellaneous, city_allowance, performance_pay, updated_at)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11, now())
+       ON CONFLICT (company_id) DO UPDATE SET
+         basic_pct=EXCLUDED.basic_pct, hra_pct_of_basic=EXCLUDED.hra_pct_of_basic,
+         employee_pf_pct=EXCLUDED.employee_pf_pct, professional_tax=EXCLUDED.professional_tax,
+         welfare_trust=EXCLUDED.welfare_trust, lta=EXCLUDED.lta, personal_allowance=EXCLUDED.personal_allowance,
+         miscellaneous=EXCLUDED.miscellaneous, city_allowance=EXCLUDED.city_allowance,
+         performance_pay=EXCLUDED.performance_pay, updated_at=now()`,
+      [companyId, b.basicPct ?? 50, b.hraPctOfBasic ?? 50, b.employeePfPct ?? 12, b.professionalTax ?? 200,
+       b.welfareTrust ?? 0, b.lta ?? 0, b.personalAllowance ?? 0, b.miscellaneous ?? 0, b.cityAllowance ?? 0, b.performancePay ?? 0]);
+    await audit(req.user.id, 'SALARY_TEMPLATE_SET', 'company_salary_template', companyId, {});
+    res.json({ ok: true });
   } catch (e) { next(e); }
 }
 

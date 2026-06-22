@@ -13,6 +13,8 @@ const STRUCT_FIELDS = [
   ['lta', 'Leave Travel Allowance'], ['personalAllowance', 'Personal Allowance'], ['miscellaneous', 'Miscellaneous'],
   ['cityAllowance', 'City Allowance'], ['performancePay', 'Performance Pay'],
 ];
+// Company-wide default (no per-person Grade / CTC).
+const TEMPLATE_FIELDS = STRUCT_FIELDS.filter(([k]) => k !== 'monthlyCtc');
 
 export default function PayrollPage() {
   const now = new Date();
@@ -28,6 +30,20 @@ export default function PayrollPage() {
   const [genFor, setGenFor] = useState(null); // row
   const [gen, setGen] = useState({ daysPaid: '', arrears: 0, bonus: 0, tds: 0 });
   const [genBusy, setGenBusy] = useState(false);
+
+  const [tplOpen, setTplOpen] = useState(false);
+  const [tpl, setTpl] = useState(null);
+  const [tplBusy, setTplBusy] = useState(false);
+  async function openTemplate() {
+    setTplOpen(true); setTpl(null);
+    const t = await api.get('/admin/salary-template');
+    setTpl(Object.fromEntries(TEMPLATE_FIELDS.map(([k]) => [k, t[k] ?? 0])));
+  }
+  async function saveTemplate() {
+    setTplBusy(true);
+    try { await api.put('/admin/salary-template', tpl); setTplOpen(false); }
+    catch (e) { setMsg(e.message); } finally { setTplBusy(false); }
+  }
 
   const load = () => {
     setSheet(null);
@@ -77,9 +93,12 @@ export default function PayrollPage() {
 
   return (
     <div className="space-y-5">
-      <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">Payroll</h1>
-        <p className="text-ink-faint text-sm mt-0.5">Set each employee's salary structure, then generate and publish monthly payslips.</p>
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div>
+          <h1 className="text-[26px] font-bold text-ink tracking-tight">Payroll</h1>
+          <p className="text-ink-faint text-sm mt-0.5">Set each employee's salary structure, then generate and publish monthly payslips.</p>
+        </div>
+        <Button variant="outline" onClick={openTemplate}>Company default</Button>
       </div>
       {msg && <p className="text-sm text-rose-600">{msg}</p>}
 
@@ -137,6 +156,19 @@ export default function PayrollPage() {
               <Field key={k} label={label}><Input type="number" value={struct[k]} onChange={(e) => setStruct({ ...struct, [k]: e.target.value })} /></Field>
             ))}
             <p className="sm:col-span-2 text-xs text-ink-faint">Basic = CTC × Basic%. HRA = Basic × HRA%. Provident Fund = Basic × PF%. Allowances are fixed monthly amounts and prorate by days paid.</p>
+          </div>
+        )}
+      </Modal>
+
+      {/* Company default template */}
+      <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Company salary template"
+        actions={<><Button variant="ghost" onClick={() => setTplOpen(false)}>Cancel</Button><Button onClick={saveTemplate} disabled={tplBusy || !tpl}>{tplBusy ? <Spinner /> : 'Save default'}</Button></>}>
+        {!tpl ? <div className="py-6 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div> : (
+          <div className="grid sm:grid-cols-2 gap-3">
+            {TEMPLATE_FIELDS.map(([k, label]) => (
+              <Field key={k} label={label}><Input type="number" value={tpl[k]} onChange={(e) => setTpl({ ...tpl, [k]: e.target.value })} /></Field>
+            ))}
+            <p className="sm:col-span-2 text-xs text-ink-faint">These defaults pre-fill every new employee's structure for this company. Editing them does not change payslips already generated, or structures already saved per employee.</p>
           </div>
         )}
       </Modal>

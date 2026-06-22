@@ -501,6 +501,26 @@ CREATE TABLE IF NOT EXISTS salary_structures (
   updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Per-company default salary template. New/unset employee structures inherit these
+-- values (the SS_calculator defaults); HR can change them per client and still override
+-- any field at the individual employee level.
+CREATE TABLE IF NOT EXISTS company_salary_templates (
+  company_id         BIGINT PRIMARY KEY REFERENCES companies(id),
+  basic_pct          NUMERIC(5,2)  NOT NULL DEFAULT 50,
+  hra_pct_of_basic   NUMERIC(5,2)  NOT NULL DEFAULT 50,
+  employee_pf_pct    NUMERIC(5,2)  NOT NULL DEFAULT 12,
+  professional_tax   NUMERIC(10,2) NOT NULL DEFAULT 200,
+  welfare_trust      NUMERIC(10,2) NOT NULL DEFAULT 0,
+  lta                NUMERIC(12,2) NOT NULL DEFAULT 0,
+  personal_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  miscellaneous      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  city_allowance     NUMERIC(12,2) NOT NULL DEFAULT 0,
+  performance_pay    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- Seed a default template row for every existing company.
+INSERT INTO company_salary_templates (company_id) SELECT id FROM companies ON CONFLICT (company_id) DO NOTHING;
+
 -- One payslip per employee per month. `data` holds the full rendered snapshot
 -- (earnings, deductions, meta) so a published slip never changes if the structure does.
 CREATE TABLE IF NOT EXISTS payslips (

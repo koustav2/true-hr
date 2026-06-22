@@ -145,6 +145,8 @@ r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.admin
 r.get('/admin/stats', authenticate, requireStaff, dashboard.stats);
 
 // --- Payroll (HR) ---
+r.get('/admin/salary-template', authenticate, requireStaff, payroll.getTemplate);
+r.put('/admin/salary-template', authenticate, requireStaff, payroll.setTemplate);
 r.get('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.getStructure);
 r.put('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.setStructure);
 r.get('/admin/payslips', authenticate, requireStaff, payroll.adminList);

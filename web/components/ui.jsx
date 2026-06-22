@@ -38,23 +38,24 @@ export function Spinner({ className = '' }) {
   return <span className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`} />;
 }
 
-export function Modal({ open, onClose, title, children, actions, tone = 'brand' }) {
+export function Modal({ open, onClose, title, children, actions, tone = 'brand', size = 'md' }) {
   if (!open) return null;
   const ring = { brand: 'bg-brand-50 text-brand-700', danger: 'bg-rose-50 text-rose-600' }[tone] || 'bg-brand-50 text-brand-700';
+  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
   return (
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
-      <div className="relative w-full max-w-md bg-white rounded-xl2 border border-line shadow-pop p-6 animate-in">
+      <div className={`relative w-full ${widths[size] || widths.md} bg-white rounded-xl2 border border-line shadow-pop animate-in flex flex-col max-h-[90vh]`}>
         {title && (
-          <div className="flex items-start gap-3">
+          <div className={`flex items-start gap-3 px-6 pt-6 ${children ? 'pb-2' : 'pb-4'} shrink-0`}>
             <span className={`grid place-items-center h-9 w-9 rounded-full shrink-0 ${ring}`}>
               <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
             </span>
             <h3 className="text-base font-bold text-ink pt-1.5">{title}</h3>
           </div>
         )}
-        {children && <div className="mt-3 text-sm text-ink-soft leading-relaxed">{children}</div>}
-        {actions && <div className="mt-6 flex justify-end gap-2.5">{actions}</div>}
+        {children && <div className={`px-6 ${title ? '' : 'pt-6'} pb-4 text-sm text-ink-soft leading-relaxed overflow-y-auto flex-1`}>{children}</div>}
+        {actions && <div className="flex justify-end gap-2.5 px-6 py-4 border-t border-line shrink-0">{actions}</div>}
       </div>
     </div>
   );

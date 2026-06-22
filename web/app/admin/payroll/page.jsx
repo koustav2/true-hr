@@ -147,7 +147,7 @@ export default function PayrollPage() {
       </Card>
 
       {/* Structure editor */}
-      <Modal open={!!structFor} onClose={() => setStructFor(null)} title={`Salary structure — ${structFor?.name || ''}`}
+      <Modal open={!!structFor} onClose={() => setStructFor(null)} title={`Salary structure — ${structFor?.name || ''}`} size="lg"
         actions={<><Button variant="ghost" onClick={() => setStructFor(null)}>Cancel</Button><Button onClick={saveStructure} disabled={structBusy || !struct}>{structBusy ? <Spinner /> : 'Save'}</Button></>}>
         {!struct ? <div className="py-6 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div> : (
           <div className="grid sm:grid-cols-2 gap-3">
@@ -161,7 +161,7 @@ export default function PayrollPage() {
       </Modal>
 
       {/* Company default template */}
-      <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Company salary template"
+      <Modal open={tplOpen} onClose={() => setTplOpen(false)} title="Company salary template" size="lg"
         actions={<><Button variant="ghost" onClick={() => setTplOpen(false)}>Cancel</Button><Button onClick={saveTemplate} disabled={tplBusy || !tpl}>{tplBusy ? <Spinner /> : 'Save default'}</Button></>}>
         {!tpl ? <div className="py-6 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div> : (
           <div className="grid sm:grid-cols-2 gap-3">

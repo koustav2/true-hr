@@ -33,6 +33,8 @@ object Routes {
   const val AVAIL_COMPOFF = "avail_compoff"
   const val TEAM_COMPOFF = "team_compoff"
   const val SALARY = "salary"
+  const val SALARY_DETAIL = "salary_detail/{id}"
+  fun salaryDetail(id: Long) = "salary_detail/$id"
   const val TEAM = "team"
   const val ADDRESS_BOOK = "address_book"
   const val POLICIES = "policies"

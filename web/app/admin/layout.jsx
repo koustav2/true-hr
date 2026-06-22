@@ -6,7 +6,7 @@ import { useAuth } from '@/lib/auth.jsx';
 import { can, ROLE_LABEL } from '@/lib/permissions.js';
 import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
-import { IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity, IconClock, IconSupport, IconFile } from '@/components/icons.jsx';
+import { IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity, IconClock, IconSupport, IconFile, IconMoney } from '@/components/icons.jsx';
 
 // Each item declares which capability gates it.
 const WORKSPACE = [
@@ -16,6 +16,7 @@ const WORKSPACE = [
   { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, show: can.hr },
   { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, show: can.hr },
   { href: '/admin/policies', label: 'Policies', Icon: IconFile, show: can.hr },
+  { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
 ];
 const ADMINISTRATION = [
   { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.admin },

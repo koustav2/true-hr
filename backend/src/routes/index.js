@@ -13,6 +13,7 @@ import * as leaveAdmin from '../controllers/leaveAdminController.js';
 import * as support from '../controllers/supportController.js';
 import * as policy from '../controllers/policyController.js';
 import * as tour from '../controllers/tourController.js';
+import * as payroll from '../controllers/payrollController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -82,6 +83,11 @@ r.post('/geotags', authenticate, tour.createGeotag);
 r.get('/geotags', authenticate, tour.listGeotags);
 r.get('/geotags/:id/photo', authenticate, tour.geotagPhoto);
 
+// --- Salary Slip (employee) ---
+r.get('/payslips', authenticate, payroll.list);
+r.get('/payslips/:id', authenticate, payroll.detail);
+r.get('/payslips/:id/pdf', authenticate, payroll.pdf);
+
 r.get('/support/catalog', authenticate, support.catalog);
 r.get('/support', authenticate, support.list);
 r.post('/support', authenticate, support.create);
@@ -133,6 +139,16 @@ r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateL
 r.get('/admin/support', authenticate, requireStaff, support.adminList);
 r.post('/admin/support/:id/resolve', authenticate, requireStaff, support.resolve);
 r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.adminAttachment);
+
+// --- Payroll (HR) ---
+r.get('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.getStructure);
+r.put('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.setStructure);
+r.get('/admin/payslips', authenticate, requireStaff, payroll.adminList);
+r.post('/admin/payslips/generate', authenticate, requireStaff, payroll.generate);
+r.get('/admin/payslips/:id', authenticate, requireStaff, payroll.adminDetail);
+r.get('/admin/payslips/:id/pdf', authenticate, requireStaff, payroll.adminPdf);
+r.post('/admin/payslips/:id/publish', authenticate, requireStaff, payroll.publish);
+r.delete('/admin/payslips/:id', authenticate, requireStaff, payroll.remove);
 
 // --- Policies (HR manage) ---
 r.get('/admin/policies', authenticate, requireStaff, policy.adminList);

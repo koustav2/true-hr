@@ -481,6 +481,50 @@ CREATE TABLE IF NOT EXISTS geotags (
 );
 CREATE INDEX IF NOT EXISTS idx_geotags_emp ON geotags(employee_id, captured_at DESC);
 
+-- ── Payroll / Salary Slip ────────────────────────────────────────────────────
+-- One salary structure per employee (set once by HR; basis for monthly payslips).
+CREATE TABLE IF NOT EXISTS salary_structures (
+  id                 BIGSERIAL PRIMARY KEY,
+  employee_id        BIGINT NOT NULL UNIQUE REFERENCES employees(id),
+  grade              TEXT,
+  monthly_ctc        NUMERIC(12,2) NOT NULL DEFAULT 0,
+  basic_pct          NUMERIC(5,2)  NOT NULL DEFAULT 50,
+  hra_pct_of_basic   NUMERIC(5,2)  NOT NULL DEFAULT 50,
+  employee_pf_pct    NUMERIC(5,2)  NOT NULL DEFAULT 12,
+  professional_tax   NUMERIC(10,2) NOT NULL DEFAULT 200,
+  welfare_trust      NUMERIC(10,2) NOT NULL DEFAULT 0,
+  lta                NUMERIC(12,2) NOT NULL DEFAULT 0,
+  personal_allowance NUMERIC(12,2) NOT NULL DEFAULT 0,
+  miscellaneous      NUMERIC(12,2) NOT NULL DEFAULT 0,
+  city_allowance     NUMERIC(12,2) NOT NULL DEFAULT 0,
+  performance_pay    NUMERIC(12,2) NOT NULL DEFAULT 0,
+  updated_at         TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- One payslip per employee per month. `data` holds the full rendered snapshot
+-- (earnings, deductions, meta) so a published slip never changes if the structure does.
+CREATE TABLE IF NOT EXISTS payslips (
+  id               BIGSERIAL PRIMARY KEY,
+  employee_id      BIGINT NOT NULL REFERENCES employees(id),
+  year             INT NOT NULL,
+  month            INT NOT NULL,            -- 1..12
+  status           TEXT NOT NULL DEFAULT 'DRAFT',  -- DRAFT | PUBLISHED
+  days_in_month    INT NOT NULL,
+  days_paid        NUMERIC(5,2) NOT NULL,
+  arrears          NUMERIC(12,2) NOT NULL DEFAULT 0,
+  bonus            NUMERIC(12,2) NOT NULL DEFAULT 0,
+  tds              NUMERIC(12,2) NOT NULL DEFAULT 0,
+  gross_earnings   NUMERIC(12,2) NOT NULL DEFAULT 0,
+  total_deductions NUMERIC(12,2) NOT NULL DEFAULT 0,
+  net_pay          NUMERIC(12,2) NOT NULL DEFAULT 0,
+  data             JSONB NOT NULL,
+  generated_by     BIGINT,
+  generated_at     TIMESTAMPTZ NOT NULL DEFAULT now(),
+  published_at     TIMESTAMPTZ,
+  UNIQUE (employee_id, year, month)
+);
+CREATE INDEX IF NOT EXISTS idx_payslips_emp ON payslips(employee_id, year DESC, month DESC);
+
 -- NOTE: the unique index on lower(official_email) is created in migrate.js (guarded),
 -- so pre-existing duplicate test data can't abort the whole migration.
 -- NOTE: the SUPER_ADMIN enum value is added separately in migrate.js

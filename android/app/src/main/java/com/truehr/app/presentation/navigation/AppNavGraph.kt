@@ -33,6 +33,8 @@ import com.truehr.app.presentation.feature.OdListScreen
 import com.truehr.app.presentation.feature.PoliciesScreen
 import com.truehr.app.presentation.feature.TeamListScreen
 import com.truehr.app.presentation.feature.TeamAttendanceScreen
+import com.truehr.app.presentation.feature.SalarySlipScreen
+import com.truehr.app.presentation.feature.PayslipDetailScreen
 import com.truehr.app.presentation.feature.TourScreen
 import com.truehr.app.presentation.feature.LiveTourScreen
 import com.truehr.app.presentation.feature.TourDetailsScreen
@@ -124,7 +126,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     composable(Routes.TEAM_LEAVE) { LeaveListScreen("Team Leave", teamView = true, onBack = { nav.popBackStack() }) }
     composable(Routes.AVAIL_COMPOFF) { CompOffScreen("Avail CompOff", teamView = false, onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_COMPOFF) { CompOffScreen("Team CompOff", teamView = true, onBack = { nav.popBackStack() }) }
-    composable(Routes.SALARY) { FeatureScreen("Salary Slip", onBack = { nav.popBackStack() }) }
+    composable(Routes.SALARY) { SalarySlipScreen(onBack = { nav.popBackStack() }, onOpenDetail = { id -> nav.navigate(Routes.salaryDetail(id)) }) }
+    composable(
+      route = Routes.SALARY_DETAIL,
+      arguments = listOf(navArgument("id") { type = NavType.LongType }),
+    ) { e -> PayslipDetailScreen(payslipId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.POLICIES) { PoliciesScreen(onBack = { nav.popBackStack() }) }

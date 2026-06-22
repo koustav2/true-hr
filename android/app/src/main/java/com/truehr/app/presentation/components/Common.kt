@@ -4,6 +4,8 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
@@ -12,6 +14,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import com.truehr.app.presentation.theme.*
 
@@ -99,12 +102,12 @@ fun CenterLoader() {
 fun NoTeamState(message: String = "You don't have any team members reporting to you yet.") {
   Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
     Box(Modifier.size(64.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-      Icon(androidx.compose.material.icons.Icons.Filled.Groups, null, tint = Green, modifier = Modifier.size(32.dp))
+      Icon(Icons.Filled.Groups, null, tint = Green, modifier = Modifier.size(32.dp))
     }
     Spacer(Modifier.height(14.dp))
     Text("No team yet", style = MaterialTheme.typography.titleMedium, color = Ink, fontWeight = FontWeight.Bold)
     Spacer(Modifier.height(6.dp))
-    Text(message, color = InkSoft, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+    Text(message, color = InkSoft, style = MaterialTheme.typography.bodyMedium, textAlign = TextAlign.Center)
   }
 }
 

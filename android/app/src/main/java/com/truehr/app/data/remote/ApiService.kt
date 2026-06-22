@@ -145,6 +145,17 @@ interface ApiService {
   @GET("policies/{id}/file")
   suspend fun policyFile(@Path("id") id: Long): ResponseBody
 
+  // Salary Slip
+  @GET("payslips")
+  suspend fun payslips(): List<com.truehr.app.data.remote.dto.PayslipRowDto>
+
+  @GET("payslips/{id}")
+  suspend fun payslip(@Path("id") id: Long): com.truehr.app.data.remote.dto.PayslipDto
+
+  @Streaming
+  @GET("payslips/{id}/pdf")
+  suspend fun payslipPdf(@Path("id") id: Long): ResponseBody
+
   // Tour Management
   @POST("tours/start")
   suspend fun tourStart(@Body body: com.truehr.app.data.remote.dto.StartTourRequest): com.truehr.app.data.remote.dto.TourDto

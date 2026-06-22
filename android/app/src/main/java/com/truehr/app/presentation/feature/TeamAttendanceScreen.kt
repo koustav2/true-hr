@@ -25,6 +25,7 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
 import com.truehr.app.domain.model.TeamMember
 import com.truehr.app.presentation.components.*
+import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 
 @Composable
@@ -33,8 +34,11 @@ fun TeamAttendanceScreen(
   onOpenDaily: (TeamMember) -> Unit = {},
   onOpenMonthly: (TeamMember) -> Unit = {},
   vm: AttendanceViewModel = hiltViewModel(),
+  profileVm: ProfileViewModel = hiltViewModel(),
 ) {
   val s by vm.team.collectAsState()
+  val prof by profileVm.state.collectAsState()
+  val noTeam = prof.data?.isManager == false
   var q by remember { mutableStateOf("") }
   LaunchedEffect(Unit) { vm.loadTeam() }
 
@@ -45,7 +49,7 @@ fun TeamAttendanceScreen(
         Text("Team Attendance", color = Surface, style = MaterialTheme.typography.titleLarge)
       }
     }
-    OutlinedTextField(
+    if (!noTeam) OutlinedTextField(
       value = q, onValueChange = { q = it },
       placeholder = { Text("Search Name, ID or Designation…") },
       leadingIcon = { Icon(Icons.Filled.Search, null, tint = Green) },
@@ -54,6 +58,7 @@ fun TeamAttendanceScreen(
       modifier = Modifier.fillMaxWidth().padding(14.dp),
     )
     when {
+      noTeam -> NoTeamState()
       s.loading -> CenterLoader()
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.loadTeam() })
       else -> {

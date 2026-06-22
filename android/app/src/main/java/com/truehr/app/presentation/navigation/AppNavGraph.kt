@@ -1,6 +1,8 @@
 package com.truehr.app.presentation.navigation
 
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
+import androidx.hilt.navigation.compose.hiltViewModel
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
@@ -41,7 +43,7 @@ import com.truehr.app.presentation.profile.ProfileScreen
 import com.truehr.app.presentation.splash.SplashScreen
 
 @Composable
-fun AppNavGraph(nav: NavHostController = rememberNavController()) {
+fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootViewModel = hiltViewModel()) {
 
   fun toDashboard() = nav.navigate(Routes.DASHBOARD) {
     popUpTo(Routes.SPLASH) { inclusive = true }
@@ -50,6 +52,12 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
   }
   fun toLogin() = nav.navigate(Routes.LOGIN) {
     popUpTo(0) { inclusive = true }
+    launchSingleTop = true
+  }
+
+  // Server rejected our token (401) anywhere in the app → bounce to the login screen.
+  LaunchedEffect(Unit) {
+    rootVm.logoutEvents.collect { toLogin() }
   }
 
   NavHost(navController = nav, startDestination = Routes.SPLASH) {

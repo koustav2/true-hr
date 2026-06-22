@@ -20,14 +20,18 @@ import com.truehr.app.domain.model.OnDuty
 import com.truehr.app.presentation.components.CenterLoader
 import com.truehr.app.presentation.components.ErrorState
 import com.truehr.app.presentation.components.GradientHeader
+import com.truehr.app.presentation.components.NoTeamState
+import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 
 private val TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
 
 @Composable
-fun OdListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
+fun OdListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   var tab by remember { mutableStateOf(0) }
   val s by vm.list.collectAsState()
+  val prof by profileVm.state.collectAsState()
+  val noTeam = teamView && prof.data?.isManager == false
   val reviewBusy by vm.reviewBusy.collectAsState()
   var rejectId by remember { mutableStateOf<Long?>(null) }
 
@@ -59,12 +63,13 @@ fun OdListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: OnDut
         Text(title, color = Surface, style = MaterialTheme.typography.titleLarge)
       }
     }
-    TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
+    if (!noTeam) TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
       TABS.forEachIndexed { i, (_, label) ->
         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
       }
     }
     when {
+      noTeam -> NoTeamState()
       s.loading -> CenterLoader()
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(TABS[tab].first, teamView) })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

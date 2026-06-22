@@ -29,9 +29,11 @@ class PolicyViewModel @Inject constructor(
   val openFile = MutableStateFlow<PolicyFile?>(null)
   val openError = MutableStateFlow<String?>(null)
   fun open(p: Policy) = viewModelScope.launch {
-    opening.value = p.id; openError.value = null
+    val id = p.id
+    if (!p.available || id == null) { openError.value = "This document isn't available yet."; return@launch }
+    opening.value = id; openError.value = null
     try {
-      val bytes = repo.fileBytes(p.id)
+      val bytes = repo.fileBytes(id)
       openFile.value = PolicyFile(bytes, p.filename ?: "${p.title}.pdf", p.mime ?: "application/octet-stream")
     } catch (e: Exception) { openError.value = e.apiMessage("Could not open the document") }
     finally { opening.value = null }

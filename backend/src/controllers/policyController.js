@@ -1,23 +1,54 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
-function shape(r) {
-  return {
-    id: r.id,
-    title: r.title,
-    category: r.category,
-    filename: r.filename,
-    mime: r.mime,
-    uploadedAt: r.created_at,
-  };
+// Fixed catalogue of company documents. These titles always appear in the app (static
+// list); HR uploads the actual PDF against each from the admin portal, and employees can
+// download whichever ones have a file ("available").
+export const POLICY_CATALOG = [
+  'Variable Pay Policy',
+  'Holiday Calendar',
+  'Leave Policy',
+  'R&R Policy',
+  'Star Of The Month Nomination Form',
+  'Local Conveyance Policy',
+  'Domestic Conveyance Policy',
+  'Reimbursement Form',
+];
+
+// Returns the static catalogue merged with whatever's been uploaded (latest file per
+// title), followed by any extra non-catalogue uploads.
+async function buildCatalog() {
+  const rows = (await query(
+    `SELECT DISTINCT ON (title) id, title, category, filename, mime, created_at
+       FROM policies ORDER BY title, created_at DESC`)).rows;
+  const byTitle = new Map(rows.map((r) => [r.title, r]));
+  const catalog = POLICY_CATALOG.map((title) => {
+    const r = byTitle.get(title);
+    return {
+      id: r?.id ?? null,
+      title,
+      category: r?.category ?? null,
+      filename: r?.filename ?? null,
+      mime: r?.mime ?? null,
+      uploadedAt: r?.created_at ?? null,
+      available: !!r,
+    };
+  });
+  const extras = rows
+    .filter((r) => !POLICY_CATALOG.includes(r.title))
+    .map((r) => ({
+      id: r.id, title: r.title, category: r.category, filename: r.filename,
+      mime: r.mime, uploadedAt: r.created_at, available: true,
+    }));
+  return [...catalog, ...extras];
 }
 
-// GET /policies  (any employee) — list, newest first, no file blob
+// (no per-row `shape` helper — buildCatalog already returns the client shape)
+
+// GET /policies  (any employee) — the static catalogue + availability
 export async function list(req, res, next) {
   try {
-    const rows = (await query(
-      `SELECT id, title, category, filename, mime, created_at FROM policies ORDER BY created_at DESC`)).rows;
-    res.json(rows.map(shape));
+    res.json(await buildCatalog());
   } catch (e) { next(e); }
 }
 
@@ -35,20 +66,20 @@ export async function file(req, res, next) {
 
 // ---- HR admin ----
 
-// GET /admin/policies
+// GET /admin/policies — the catalogue with upload status (+ any extra uploads)
 export async function adminList(req, res, next) {
   try {
-    const rows = (await query(
-      `SELECT id, title, category, filename, mime, created_at FROM policies ORDER BY created_at DESC`)).rows;
-    res.json(rows.map(shape));
+    res.json({ catalog: POLICY_CATALOG, items: await buildCatalog() });
   } catch (e) { next(e); }
 }
 
 // POST /admin/policies { title, category, file, mime, filename }
+// Uploading a document for a title replaces any previous file for that same title.
 export async function create(req, res, next) {
   try {
     const { title, category, file: fileB64, mime, filename } = req.body;
     if (!title || !fileB64) return res.status(400).json({ error: 'title and file are required' });
+    await query(`DELETE FROM policies WHERE title=$1`, [title]); // replace-on-upload
     const row = (await query(
       `INSERT INTO policies (title, category, file, mime, filename, uploaded_by)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,

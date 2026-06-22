@@ -24,6 +24,8 @@ import com.truehr.app.domain.model.CompOffRequest
 import com.truehr.app.presentation.components.CenterLoader
 import com.truehr.app.presentation.components.ErrorState
 import com.truehr.app.presentation.components.GradientHeader
+import com.truehr.app.presentation.components.NoTeamState
+import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 import java.text.SimpleDateFormat
 import java.util.Date
@@ -33,13 +35,15 @@ import java.util.TimeZone
 private val ISO_CO = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
 
 @Composable
-fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: CompOffViewModel = hiltViewModel()) {
+fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: CompOffViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   // Employee: tab0 = available OD credits (apply from here), tab1 = approved comp-off.
   // Manager: Pending / Approved / Rejected of requests.
   val tabs = if (teamView) listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
   else listOf("CREDITS" to "Pending", "APPROVED" to "Approved")
 
   var tab by remember { mutableStateOf(0) }
+  val prof by profileVm.state.collectAsState()
+  val noTeam = teamView && prof.data?.isManager == false
   val credits by vm.credits.collectAsState()
   val s by vm.list.collectAsState()
   val reviewBusy by vm.reviewBusy.collectAsState()
@@ -74,11 +78,13 @@ fun CompOffScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Comp
         Text(title, color = Surface, style = MaterialTheme.typography.titleLarge)
       }
     }
-    TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
+    if (!noTeam) TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
       tabs.forEachIndexed { i, (_, label) -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }) }
     }
 
-    if (creditsTab) {
+    if (noTeam) {
+      NoTeamState()
+    } else if (creditsTab) {
       // ---- Available OD credits (apply per item) ----
       if (credits.isEmpty()) {
         Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {

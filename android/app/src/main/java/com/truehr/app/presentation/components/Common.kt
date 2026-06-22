@@ -94,6 +94,20 @@ fun CenterLoader() {
   Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { CircularProgressIndicator(color = Green) }
 }
 
+/** Shown in team/manager views when the signed-in user has nobody reporting to them. */
+@Composable
+fun NoTeamState(message: String = "You don't have any team members reporting to you yet.") {
+  Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
+    Box(Modifier.size(64.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+      Icon(androidx.compose.material.icons.Icons.Filled.Groups, null, tint = Green, modifier = Modifier.size(32.dp))
+    }
+    Spacer(Modifier.height(14.dp))
+    Text("No team yet", style = MaterialTheme.typography.titleMedium, color = Ink, fontWeight = FontWeight.Bold)
+    Spacer(Modifier.height(6.dp))
+    Text(message, color = InkSoft, style = MaterialTheme.typography.bodyMedium, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+  }
+}
+
 @Composable
 fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
   Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {

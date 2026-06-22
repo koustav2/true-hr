@@ -12,8 +12,9 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
+import androidx.compose.material.icons.filled.ChevronRight
 import androidx.compose.material.icons.filled.Description
-import androidx.compose.material.icons.filled.OpenInNew
+import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -27,13 +28,16 @@ import com.truehr.app.domain.model.Policy
 import com.truehr.app.presentation.components.CenterLoader
 import com.truehr.app.presentation.components.ErrorState
 import com.truehr.app.presentation.components.GradientHeader
+import com.truehr.app.presentation.components.initials
+import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 import java.io.File
 
 @Composable
-fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel()) {
+fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   val context = LocalContext.current
   val s by vm.list.collectAsState()
+  val prof by profileVm.state.collectAsState()
   val opening by vm.opening.collectAsState()
   val openFile by vm.openFile.collectAsState()
   val openError by vm.openError.collectAsState()
@@ -63,9 +67,22 @@ fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel()) {
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
-      Row(verticalAlignment = Alignment.CenterVertically) {
-        IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Surface) }
-        Text("Policies", color = Surface, style = MaterialTheme.typography.titleLarge)
+      Column {
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          IconButton(onClick = onBack) { Icon(Icons.AutoMirrored.Filled.ArrowBack, null, tint = Surface) }
+          Text("Policies", color = Surface, style = MaterialTheme.typography.titleLarge)
+        }
+        Spacer(Modifier.height(10.dp))
+        Row(verticalAlignment = Alignment.CenterVertically) {
+          Box(Modifier.size(46.dp).clip(CircleShape).background(Surface.copy(alpha = 0.25f)), contentAlignment = Alignment.Center) {
+            Text(initials(prof.data?.fullName ?: "?"), color = Surface, fontWeight = FontWeight.Bold)
+          }
+          Spacer(Modifier.width(12.dp))
+          Column {
+            Text(prof.data?.fullName ?: "—", color = Surface, fontWeight = FontWeight.Bold)
+            Text(prof.data?.designation ?: "", color = Surface.copy(alpha = 0.9f), style = MaterialTheme.typography.bodyMedium)
+          }
+        }
       }
     }
     when {
@@ -73,7 +90,7 @@ fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel()) {
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No policies available yet.", color = InkSoft) }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(s.data!!) { p -> PolicyCard(p, busy = opening == p.id, onOpen = { vm.open(p) }) }
+        items(s.data!!) { p -> PolicyCard(p, busy = opening != null && opening == p.id, onOpen = { vm.open(p) }) }
       }
     }
   }
@@ -81,21 +98,23 @@ fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel()) {
 
 @Composable
 private fun PolicyCard(p: Policy, busy: Boolean, onOpen: () -> Unit) {
-  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp,
-    border = androidx.compose.foundation.BorderStroke(1.dp, Line),
-    modifier = Modifier.clickable(enabled = !busy, onClick = onOpen)) {
-    Row(Modifier.padding(16.dp), verticalAlignment = Alignment.CenterVertically) {
-      Box(Modifier.size(44.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-        Icon(Icons.Filled.Description, null, tint = Green, modifier = Modifier.size(22.dp))
-      }
-      Spacer(Modifier.width(12.dp))
+  val tint = if (p.available) Green else InkFaint
+  Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 2.dp,
+    modifier = Modifier.clickable(enabled = p.available && !busy, onClick = onOpen)) {
+    Row(Modifier.padding(horizontal = 16.dp, vertical = 16.dp), verticalAlignment = Alignment.CenterVertically) {
+      Icon(Icons.Filled.Description, null, tint = tint, modifier = Modifier.size(22.dp))
+      Spacer(Modifier.width(14.dp))
       Column(Modifier.weight(1f)) {
-        Text(p.title, fontWeight = FontWeight.Bold, color = Ink)
-        Text(listOfNotNull(p.category, p.uploadedAt?.take(10)).joinToString("  ·  ").ifBlank { "Document" },
-          color = InkFaint, style = MaterialTheme.typography.bodyMedium)
+        Text(p.title, fontWeight = FontWeight.SemiBold, color = Ink)
+        if (!p.available) Text("Not uploaded yet", color = InkFaint, style = MaterialTheme.typography.labelSmall)
       }
-      if (busy) CircularProgressIndicator(color = Green, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-      else Icon(Icons.Filled.OpenInNew, null, tint = Green, modifier = Modifier.size(20.dp))
+      if (busy) {
+        CircularProgressIndicator(color = Green, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
+      } else {
+        Icon(Icons.Filled.Download, null, tint = tint, modifier = Modifier.size(22.dp))
+      }
+      Spacer(Modifier.width(10.dp))
+      Icon(Icons.Filled.ChevronRight, null, tint = InkFaint, modifier = Modifier.size(20.dp))
     }
   }
 }

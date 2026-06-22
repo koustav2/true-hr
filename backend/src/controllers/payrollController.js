@@ -199,7 +199,7 @@ export async function adminList(req, res, next) {
          FROM employees e
          LEFT JOIN salary_structures ss ON ss.employee_id=e.id
          LEFT JOIN payslips p ON p.employee_id=e.id AND p.year=$1 AND p.month=$2
-        WHERE e.status='ACTIVE'
+        WHERE e.onboarding_status NOT IN ('REJECTED','EXPIRED')
         ORDER BY e.first_name, e.last_name`, [year, month])).rows;
     res.json({
       year, month, monthName: MONTHS[month - 1],

@@ -1,22 +1,38 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
-import { Card, Button, Input, Spinner, Empty } from '@/components/ui.jsx';
+import { Button } from '@/components/ui.jsx';
+import DataTable from '@/components/DataTable.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
-import { IconPlus, IconSearch, IconUsers } from '@/components/icons.jsx';
+import { IconPlus } from '@/components/icons.jsx';
 
 export default function EmployeesPage() {
   const [rows, setRows] = useState(null);
-  const [q, setQ] = useState('');
+  const router = useRouter();
   useEffect(() => { api.get('/employees').then(setRows).catch(() => setRows([])); }, []);
 
-  const filtered = useMemo(() => {
-    if (!rows) return [];
-    const t = q.toLowerCase();
-    return rows.filter((r) =>
-      `${r.first_name} ${r.last_name} ${r.official_email} ${r.employee_code || ''}`.toLowerCase().includes(t));
-  }, [rows, q]);
+  const columns = [
+    {
+      key: 'name', label: 'Employee', sortable: true,
+      sortValue: (r) => `${r.first_name} ${r.last_name}`,
+      render: (r) => (
+        <div className="flex items-center gap-3">
+          <span className="grid place-items-center h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold shrink-0">
+            {((r.first_name?.[0] || '') + (r.last_name?.[0] || '')).toUpperCase()}</span>
+          <span className="min-w-0">
+            <span className="font-medium text-ink block">{r.first_name} {r.last_name}</span>
+            <span className="text-xs text-ink-faint">{r.official_email}</span>
+          </span>
+        </div>
+      ),
+    },
+    { key: 'designation', label: 'Designation', sortable: true, className: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-ink-soft', render: (r) => r.designation || '—' },
+    { key: 'department', label: 'Department', sortable: true, className: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-ink-soft', render: (r) => r.department || '—' },
+    { key: 'employee_code', label: 'Employee ID', sortable: true, className: 'hidden lg:table-cell', cellClassName: 'hidden lg:table-cell text-ink-soft', render: (r) => r.employee_code || '—' },
+    { key: 'onboarding_status', label: 'Status', sortable: true, render: (r) => <StatusBadge status={r.onboarding_status} /> },
+  ];
 
   return (
     <div className="space-y-6">
@@ -28,50 +44,16 @@ export default function EmployeesPage() {
         <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>
       </div>
 
-      <div className="relative max-w-xs">
-        <span className="absolute left-3 top-1/2 -translate-y-1/2 text-ink-faint"><IconSearch width={16} height={16} /></span>
-        <Input placeholder="Search name, email, ID…" value={q} onChange={(e) => setQ(e.target.value)} className="pl-9" />
-      </div>
-
-      <Card className="overflow-hidden">
-        {!rows ? (
-          <div className="grid place-items-center py-20"><Spinner className="text-brand-600 h-6 w-6" /></div>
-        ) : filtered.length === 0 ? (
-          <Empty title="No employees found" subtitle="Try a different search, or onboard a new employee." icon={<IconUsers width={22} height={22} />} />
-        ) : (
-          <table className="w-full text-sm">
-            <thead>
-              <tr className="text-left text-ink-faint bg-slate-50/60 border-b border-line">
-                <th className="font-medium px-5 py-3">Employee</th>
-                <th className="font-medium px-5 py-3 hidden md:table-cell">Designation</th>
-                <th className="font-medium px-5 py-3 hidden md:table-cell">Department</th>
-                <th className="font-medium px-5 py-3 hidden lg:table-cell">Employee ID</th>
-                <th className="font-medium px-5 py-3">Status</th>
-              </tr>
-            </thead>
-            <tbody className="divide-y divide-line">
-              {filtered.map((r) => (
-                <tr key={r.id} className="hover:bg-slate-50/70 transition-colors">
-                  <td className="px-5 py-3.5">
-                    <Link href={`/admin/employees/${r.id}`} className="flex items-center gap-3 group">
-                      <span className="grid place-items-center h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold">
-                        {(r.first_name[0] + r.last_name[0]).toUpperCase()}</span>
-                      <span>
-                        <span className="font-medium text-ink block group-hover:text-brand-700">{r.first_name} {r.last_name}</span>
-                        <span className="text-xs text-ink-faint">{r.official_email}</span>
-                      </span>
-                    </Link>
-                  </td>
-                  <td className="px-5 py-3.5 hidden md:table-cell text-ink-soft">{r.designation || '—'}</td>
-                  <td className="px-5 py-3.5 hidden md:table-cell text-ink-soft">{r.department || '—'}</td>
-                  <td className="px-5 py-3.5 hidden lg:table-cell text-ink-soft">{r.employee_code || <span className="text-ink-faint">—</span>}</td>
-                  <td className="px-5 py-3.5"><StatusBadge status={r.onboarding_status} /></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        )}
-      </Card>
+      <DataTable
+        columns={columns}
+        rows={rows || []}
+        loading={!rows}
+        searchKeys={['first_name', 'last_name', 'official_email', 'employee_code', 'designation', 'department']}
+        searchPlaceholder="Search name, email, ID…"
+        onRowClick={(r) => router.push(`/admin/employees/${r.id}`)}
+        emptyTitle="No employees found"
+        emptySubtitle="Onboard a new employee to get started."
+      />
     </div>
   );
 }

@@ -14,6 +14,7 @@ import * as support from '../controllers/supportController.js';
 import * as policy from '../controllers/policyController.js';
 import * as tour from '../controllers/tourController.js';
 import * as payroll from '../controllers/payrollController.js';
+import * as dashboard from '../controllers/dashboardController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -139,6 +140,9 @@ r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateL
 r.get('/admin/support', authenticate, requireStaff, support.adminList);
 r.post('/admin/support/:id/resolve', authenticate, requireStaff, support.resolve);
 r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.adminAttachment);
+
+// --- Dashboard stats (HR) ---
+r.get('/admin/stats', authenticate, requireStaff, dashboard.stats);
 
 // --- Payroll (HR) ---
 r.get('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.getStructure);

@@ -63,3 +63,12 @@ export const IconSupport = (p) => (
 export const IconMoney = (p) => (
   <svg {...base} {...p}><rect x="2" y="6" width="20" height="12" rx="2"/><circle cx="12" cy="12" r="2.5"/><path d="M6 12h.01M18 12h.01"/></svg>
 );
+export const IconMenu = (p) => (
+  <svg {...base} {...p}><line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/></svg>
+);
+export const IconChevronLeft = (p) => (
+  <svg {...base} {...p}><polyline points="15 18 9 12 15 6"/></svg>
+);
+export const IconTicket = (p) => (
+  <svg {...base} {...p}><path d="M3 9V7a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2v2a2 2 0 0 0 0 4v2a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-2a2 2 0 0 0 0-4z"/></svg>
+);

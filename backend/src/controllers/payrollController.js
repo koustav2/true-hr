@@ -297,6 +297,12 @@ export async function generate(req, res, next) {
   try {
     const { employeeId, year, month } = req.body;
     if (!employeeId || !year || !month) return res.status(400).json({ error: 'employeeId, year and month are required' });
+    // A published payslip is locked — it must be unpublished before it can change.
+    const existing = (await query(
+      `SELECT status FROM payslips WHERE employee_id=$1 AND year=$2 AND month=$3`, [employeeId, year, month])).rows[0];
+    if (existing?.status === 'PUBLISHED') {
+      return res.status(409).json({ error: 'This payslip is published. Unpublish it first to make changes.' });
+    }
     const sRow = (await query(`SELECT * FROM salary_structures WHERE employee_id=$1`, [employeeId])).rows[0];
     if (!sRow) return res.status(409).json({ error: 'Set a salary structure for this employee first' });
     const s = shapeStructure(sRow);
@@ -340,9 +346,25 @@ export async function publish(req, res, next) {
   } catch (e) { next(e); }
 }
 
-// DELETE /admin/payslips/:id
+// POST /admin/payslips/:id/unpublish — revert a published payslip to draft so it can be corrected
+export async function unpublish(req, res, next) {
+  try {
+    const row = (await query(
+      `UPDATE payslips SET status='DRAFT', published_at=NULL WHERE id=$1 RETURNING id`, [req.params.id])).rows[0];
+    if (!row) return res.status(404).json({ error: 'Payslip not found' });
+    await audit(req.user.id, 'PAYSLIP_UNPUBLISH', 'payslip', row.id, {});
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// DELETE /admin/payslips/:id — only drafts can be deleted
 export async function remove(req, res, next) {
   try {
+    const row = (await query(`SELECT status FROM payslips WHERE id=$1`, [req.params.id])).rows[0];
+    if (!row) return res.status(404).json({ error: 'Payslip not found' });
+    if (row.status === 'PUBLISHED') {
+      return res.status(409).json({ error: 'Published payslips cannot be deleted. Unpublish it first.' });
+    }
     await query(`DELETE FROM payslips WHERE id=$1`, [req.params.id]);
     await audit(req.user.id, 'PAYSLIP_DELETE', 'payslip', req.params.id, {});
     res.json({ ok: true });

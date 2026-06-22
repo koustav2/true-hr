@@ -76,7 +76,8 @@ export default function PayrollPage() {
     } catch (e) { setMsg(e.message); } finally { setGenBusy(false); }
   }
   async function publish(id) { await api.post(`/admin/payslips/${id}/publish`); load(); }
-  async function removeSlip(id) { await api.del(`/admin/payslips/${id}`); load(); }
+  async function unpublish(id) { await api.post(`/admin/payslips/${id}/unpublish`); load(); }
+  async function removeSlip(id) { try { await api.del(`/admin/payslips/${id}`); load(); } catch (e) { setMsg(e.message); } }
 
   async function viewPdf(id) {
     const win = window.open('', '_blank');
@@ -134,10 +135,16 @@ export default function PayrollPage() {
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openStructure(r)} className="text-ink-soft text-xs font-medium hover:underline mr-3">Structure</button>
-                    {r.hasStructure && <button onClick={() => openGenerate(r)} className="text-brand-700 text-xs font-medium hover:underline mr-3">{r.payslipId ? 'Re-generate' : 'Generate'}</button>}
                     {r.payslipId && <button onClick={() => viewPdf(r.payslipId)} className="text-brand-700 text-xs font-medium hover:underline mr-3">PDF</button>}
-                    {r.status === 'DRAFT' && <button onClick={() => publish(r.payslipId)} className="text-emerald-700 text-xs font-medium hover:underline mr-3">Publish</button>}
-                    {r.payslipId && <button onClick={() => removeSlip(r.payslipId)} className="text-rose-600 text-xs font-medium hover:underline">Delete</button>}
+                    {r.status === 'PUBLISHED' ? (
+                      <button onClick={() => unpublish(r.payslipId)} className="text-amber-600 text-xs font-medium hover:underline">Unpublish</button>
+                    ) : (
+                      <>
+                        {r.hasStructure && <button onClick={() => openGenerate(r)} className="text-brand-700 text-xs font-medium hover:underline mr-3">{r.payslipId ? 'Re-generate' : 'Generate'}</button>}
+                        {r.status === 'DRAFT' && <button onClick={() => publish(r.payslipId)} className="text-emerald-700 text-xs font-medium hover:underline mr-3">Publish</button>}
+                        {r.payslipId && <button onClick={() => removeSlip(r.payslipId)} className="text-rose-600 text-xs font-medium hover:underline">Delete</button>}
+                      </>
+                    )}
                   </td>
                 </tr>
               ))}

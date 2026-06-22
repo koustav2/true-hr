@@ -154,6 +154,7 @@ r.post('/admin/payslips/generate', authenticate, requireStaff, payroll.generate)
 r.get('/admin/payslips/:id', authenticate, requireStaff, payroll.adminDetail);
 r.get('/admin/payslips/:id/pdf', authenticate, requireStaff, payroll.adminPdf);
 r.post('/admin/payslips/:id/publish', authenticate, requireStaff, payroll.publish);
+r.post('/admin/payslips/:id/unpublish', authenticate, requireStaff, payroll.unpublish);
 r.delete('/admin/payslips/:id', authenticate, requireStaff, payroll.remove);
 
 // --- Policies (HR manage) ---

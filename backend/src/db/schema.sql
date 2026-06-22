@@ -348,6 +348,19 @@ CREATE TABLE IF NOT EXISTS comp_off_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_compoff_emp ON comp_off_requests(employee_id, status);
 
+-- Company policy documents (HR uploads; employees view/download)
+CREATE TABLE IF NOT EXISTS policies (
+  id           BIGSERIAL PRIMARY KEY,
+  title        TEXT NOT NULL,
+  category     TEXT,
+  file         TEXT NOT NULL,            -- base64
+  mime         TEXT,
+  filename     TEXT,
+  uploaded_by  BIGINT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_policies_cat ON policies(category, created_at DESC);
+
 -- Support Desk tickets (HR / IT / Admin self-service)
 CREATE TABLE IF NOT EXISTS support_tickets (
   id              BIGSERIAL PRIMARY KEY,
@@ -416,6 +429,57 @@ INSERT INTO leave_entitlements (state, el, cl, sl, el_accum, cl_accum, sl_accum)
   ('Goa',            15,  6,  9, 45, 0,  0),
   ('Jharkhand',      18,  6, 12, 45, 0,  0)    -- SL = half pay for 12 days
 ON CONFLICT (state) DO NOTHING;
+
+-- ── Tour Management ──────────────────────────────────────────────────────────
+-- A field tour is a continuously GPS-tracked trip: Start Tour opens it, the device
+-- streams location fixes (buffered offline, synced when online), End Tour closes it.
+CREATE TABLE IF NOT EXISTS tours (
+  id            BIGSERIAL PRIMARY KEY,
+  employee_id   BIGINT NOT NULL REFERENCES employees(id),
+  -- client_uuid lets an offline-created tour be reconciled to its server row idempotently
+  client_uuid   TEXT,
+  status        TEXT NOT NULL DEFAULT 'ACTIVE',  -- ACTIVE | ENDED
+  started_at    TIMESTAMPTZ,
+  ended_at      TIMESTAMPTZ,
+  start_lat     DOUBLE PRECISION,
+  start_lng     DOUBLE PRECISION,
+  start_address TEXT,
+  end_lat       DOUBLE PRECISION,
+  end_lng       DOUBLE PRECISION,
+  end_address   TEXT,
+  distance_km   NUMERIC(10,3) NOT NULL DEFAULT 0,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_tours_emp ON tours(employee_id, started_at DESC);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tours_client_uuid ON tours(client_uuid) WHERE client_uuid IS NOT NULL;
+
+-- Ordered path of a tour. client_seq is the device-side monotonic index used to
+-- de-duplicate points re-sent after an offline gap.
+CREATE TABLE IF NOT EXISTS tour_points (
+  id          BIGSERIAL PRIMARY KEY,
+  tour_id     BIGINT NOT NULL REFERENCES tours(id) ON DELETE CASCADE,
+  lat         DOUBLE PRECISION NOT NULL,
+  lng         DOUBLE PRECISION NOT NULL,
+  accuracy    DOUBLE PRECISION,
+  captured_at TIMESTAMPTZ NOT NULL,
+  client_seq  BIGINT
+);
+CREATE INDEX IF NOT EXISTS idx_tour_points ON tour_points(tour_id, captured_at);
+CREATE UNIQUE INDEX IF NOT EXISTS uq_tour_points_seq ON tour_points(tour_id, client_seq) WHERE client_seq IS NOT NULL;
+
+-- Geo-tagged photos (Geo Tag / Geo Tag List): a captured image stamped with the
+-- employee, time, address and coordinates.
+CREATE TABLE IF NOT EXISTS geotags (
+  id          BIGSERIAL PRIMARY KEY,
+  employee_id BIGINT NOT NULL REFERENCES employees(id),
+  lat         DOUBLE PRECISION,
+  lng         DOUBLE PRECISION,
+  address     TEXT,
+  photo       TEXT,            -- base64 jpeg
+  remark      TEXT,
+  captured_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_geotags_emp ON geotags(employee_id, captured_at DESC);
 
 -- NOTE: the unique index on lower(official_email) is created in migrate.js (guarded),
 -- so pre-existing duplicate test data can't abort the whole migration.

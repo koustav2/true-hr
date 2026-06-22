@@ -28,8 +28,14 @@ import com.truehr.app.presentation.feature.ViewTicketsScreen
 import com.truehr.app.presentation.feature.LeaveListScreen
 import com.truehr.app.presentation.feature.LeaveMenuScreen
 import com.truehr.app.presentation.feature.OdListScreen
+import com.truehr.app.presentation.feature.PoliciesScreen
 import com.truehr.app.presentation.feature.TeamListScreen
 import com.truehr.app.presentation.feature.TeamAttendanceScreen
+import com.truehr.app.presentation.feature.TourScreen
+import com.truehr.app.presentation.feature.LiveTourScreen
+import com.truehr.app.presentation.feature.TourDetailsScreen
+import com.truehr.app.presentation.feature.GeoTagScreen
+import com.truehr.app.presentation.feature.GeoTagListScreen
 import com.truehr.app.presentation.profile.PfScreen
 import com.truehr.app.presentation.profile.ProfileScreen
 import com.truehr.app.presentation.splash.SplashScreen
@@ -113,7 +119,7 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
     composable(Routes.SALARY) { FeatureScreen("Salary Slip", onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.POLICIES) { FeatureScreen("Policies", onBack = { nav.popBackStack() }) }
+    composable(Routes.POLICIES) { PoliciesScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.SUPPORT) { SupportDeskScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
     composable(
       route = Routes.SUPPORT_CREATE,
@@ -123,7 +129,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController()) {
       route = Routes.SUPPORT_VIEW,
       arguments = listOf(navArgument("cat") { type = NavType.StringType }),
     ) { e -> ViewTicketsScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
-    composable(Routes.TOUR) { FeatureScreen("Tour Management", onBack = { nav.popBackStack() }) }
+    composable(Routes.TOUR) { TourScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    composable(Routes.TOUR_LIVE) { LiveTourScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.TOUR_DETAILS) { TourDetailsScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.GEOTAG) { GeoTagScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.GEOTAG_LIST) { GeoTagListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ESS) { FeatureScreen("My ESS", onBack = { nav.popBackStack() }) }
 
     composable(

@@ -42,6 +42,10 @@ object Routes {
   const val SUPPORT_VIEW = "support_view/{cat}"
   fun supportView(cat: String) = "support_view/$cat"
   const val TOUR = "tour"
+  const val TOUR_LIVE = "tour_live"
+  const val TOUR_DETAILS = "tour_details"
+  const val GEOTAG = "geotag"
+  const val GEOTAG_LIST = "geotag_list"
   const val ESS = "ess"
 
   // generic feature route: feature/{title}

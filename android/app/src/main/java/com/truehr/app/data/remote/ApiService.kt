@@ -17,11 +17,13 @@ import com.truehr.app.data.remote.dto.PunchRequest
 import com.truehr.app.data.remote.dto.PunchResponse
 import com.truehr.app.data.remote.dto.TeamMemberDto
 import com.truehr.app.data.remote.dto.TodayDto
+import okhttp3.ResponseBody
 import retrofit2.http.Body
 import retrofit2.http.GET
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
+import retrofit2.http.Streaming
 
 interface ApiService {
   @POST("auth/login")
@@ -135,6 +137,42 @@ interface ApiService {
   suspend fun compOffReview(@Path("id") id: Long, @Body body: OdReviewRequest)
 
   // Support Desk
+  // Policies
+  @GET("policies")
+  suspend fun policies(): List<com.truehr.app.data.remote.dto.PolicyDto>
+
+  @Streaming
+  @GET("policies/{id}/file")
+  suspend fun policyFile(@Path("id") id: Long): ResponseBody
+
+  // Tour Management
+  @POST("tours/start")
+  suspend fun tourStart(@Body body: com.truehr.app.data.remote.dto.StartTourRequest): com.truehr.app.data.remote.dto.TourDto
+
+  @GET("tours")
+  suspend fun tours(
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.TourDto>
+
+  @GET("tours/{id}")
+  suspend fun tourDetail(@Path("id") id: Long): com.truehr.app.data.remote.dto.TourDetailDto
+
+  @POST("tours/{id}/points")
+  suspend fun tourAddPoints(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.AddPointsRequest)
+
+  @POST("tours/{id}/end")
+  suspend fun tourEnd(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.EndTourRequest): com.truehr.app.data.remote.dto.TourDto
+
+  @POST("geotags")
+  suspend fun geotagCreate(@Body body: com.truehr.app.data.remote.dto.CreateGeotagRequest)
+
+  @GET("geotags")
+  suspend fun geotags(
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.GeotagDto>
+
   @GET("support/catalog")
   suspend fun supportCatalog(): com.truehr.app.data.remote.dto.SupportCatalogDto
 

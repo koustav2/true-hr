@@ -11,6 +11,8 @@ import * as leave from '../controllers/leaveController.js';
 import * as compOff from '../controllers/compOffController.js';
 import * as leaveAdmin from '../controllers/leaveAdminController.js';
 import * as support from '../controllers/supportController.js';
+import * as policy from '../controllers/policyController.js';
+import * as tour from '../controllers/tourController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -66,6 +68,20 @@ r.post('/compoff', authenticate, compOff.apply);
 r.post('/compoff/:id/review', authenticate, compOff.review);
 
 // --- Support Desk (HR / IT / Admin) ---
+// --- Policies (employee read) ---
+r.get('/policies', authenticate, policy.list);
+r.get('/policies/:id/file', authenticate, policy.file);
+
+// --- Tour Management (live GPS tracking + geo-tags) ---
+r.post('/tours/start', authenticate, tour.start);
+r.get('/tours', authenticate, tour.list);
+r.get('/tours/:id', authenticate, tour.detail);
+r.post('/tours/:id/points', authenticate, tour.addPoints);
+r.post('/tours/:id/end', authenticate, tour.end);
+r.post('/geotags', authenticate, tour.createGeotag);
+r.get('/geotags', authenticate, tour.listGeotags);
+r.get('/geotags/:id/photo', authenticate, tour.geotagPhoto);
+
 r.get('/support/catalog', authenticate, support.catalog);
 r.get('/support', authenticate, support.list);
 r.post('/support', authenticate, support.create);
@@ -117,5 +133,10 @@ r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateL
 r.get('/admin/support', authenticate, requireStaff, support.adminList);
 r.post('/admin/support/:id/resolve', authenticate, requireStaff, support.resolve);
 r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.adminAttachment);
+
+// --- Policies (HR manage) ---
+r.get('/admin/policies', authenticate, requireStaff, policy.adminList);
+r.post('/admin/policies', authenticate, requireStaff, policy.create);
+r.delete('/admin/policies/:id', authenticate, requireStaff, policy.remove);
 
 export default r;

@@ -1,3 +1,5 @@
+import java.util.Properties
+
 plugins {
   alias(libs.plugins.android.application)
   alias(libs.plugins.kotlin.android)
@@ -6,6 +8,14 @@ plugins {
   alias(libs.plugins.hilt)
   alias(libs.plugins.ksp)
 }
+
+// Read the Google Maps API key from local.properties (kept out of git).
+// Add a line:  MAPS_API_KEY=AIza...your key...
+val localProps = Properties().apply {
+  val f = rootProject.file("local.properties")
+  if (f.exists()) f.inputStream().use { load(it) }
+}
+val mapsApiKey: String = localProps.getProperty("MAPS_API_KEY") ?: ""
 
 android {
   namespace = "com.truehr.app"
@@ -21,6 +31,9 @@ android {
 
     // Base URL of the TRUE HR backend. Use 10.0.2.2 to reach localhost from the emulator.
     buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
+
+    // Injected into AndroidManifest as the Google Maps API key.
+    manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
   }
 
   buildTypes {
@@ -69,4 +82,14 @@ dependencies {
   implementation(libs.androidx.datastore.preferences)
   implementation(libs.coil.compose)
   implementation(libs.play.services.location)
+
+  // Tour Management: maps, offline buffer (Room), background sync (WorkManager + Hilt)
+  implementation(libs.maps.compose)
+  implementation(libs.play.services.maps)
+  implementation(libs.androidx.room.runtime)
+  implementation(libs.androidx.room.ktx)
+  ksp(libs.androidx.room.compiler)
+  implementation(libs.androidx.work.runtime)
+  implementation(libs.androidx.hilt.work)
+  ksp(libs.androidx.hilt.compiler)
 }

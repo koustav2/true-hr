@@ -145,25 +145,20 @@ async function loadMeta(employeeId) {
 
 // ── Employee ─────────────────────────────────────────────────────────────────
 
-// GET /payslips — rolling list of recent months with availability (published only).
+// GET /payslips — only the signed-in employee's own published payslips, newest first.
 export async function list(req, res, next) {
   try {
     const empId = req.user.employeeId;
     if (!empId) return res.json([]);
-    const published = (await query(
-      `SELECT id, year, month, net_pay FROM payslips
-        WHERE employee_id=$1 AND status='PUBLISHED'`, [empId])).rows;
-    const byKey = new Map(published.map((p) => [`${p.year}-${p.month}`, p]));
-    const now = new Date();
-    const rows = [];
-    for (let i = 0; i < 12; i++) {
-      const dt = new Date(now.getFullYear(), now.getMonth() - i, 1);
-      const y = dt.getFullYear(); const m = dt.getMonth() + 1;
-      const hit = byKey.get(`${y}-${m}`);
-      rows.push({ year: y, month: m, monthName: MONTHS[m - 1], available: !!hit, id: hit?.id ?? null });
-    }
     const code = (await query(`SELECT employee_code FROM employees WHERE id=$1`, [empId])).rows[0]?.employee_code || null;
-    res.json(rows.map((r) => ({ ...r, employeeCode: code })));
+    const rows = (await query(
+      `SELECT id, year, month FROM payslips
+        WHERE employee_id=$1 AND status='PUBLISHED'
+        ORDER BY year DESC, month DESC`, [empId])).rows;
+    res.json(rows.map((r) => ({
+      id: r.id, year: r.year, month: r.month, monthName: MONTHS[r.month - 1],
+      employeeCode: code, available: true,
+    })));
   } catch (e) { next(e); }
 }
 

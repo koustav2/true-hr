@@ -79,7 +79,11 @@ fun SalarySlipScreen(onBack: () -> Unit, onOpenDetail: (Long) -> Unit, vm: Salar
               HCell("View", 0.16f); HCell("Download", 0.20f); HCell("Employee Code", 0.32f); HCell("Year", 0.14f); HCell("Month", 0.18f)
             }
             HorizontalDivider(color = Line)
-            (s.data ?: emptyList()).forEach { row ->
+            if ((s.data ?: emptyList()).isEmpty()) {
+              Box(Modifier.fillMaxWidth().padding(28.dp), contentAlignment = Alignment.Center) {
+                Text("No salary slips published yet.", color = InkSoft)
+              }
+            } else (s.data ?: emptyList()).forEach { row ->
               PayslipRowItem(row, busy = downloading == row.id, onView = { row.id?.let(onOpenDetail) }, onDownload = { vm.download(row) })
               HorizontalDivider(color = Line)
             }

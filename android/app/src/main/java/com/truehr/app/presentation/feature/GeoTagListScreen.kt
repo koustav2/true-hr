@@ -21,6 +21,14 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import coil.compose.AsyncImage
+import com.google.android.gms.maps.GoogleMapOptions
+import com.google.android.gms.maps.model.CameraPosition
+import com.google.android.gms.maps.model.LatLng
+import com.google.maps.android.compose.GoogleMap
+import com.google.maps.android.compose.MapUiSettings
+import com.google.maps.android.compose.Marker
+import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.rememberCameraPositionState
 import com.truehr.app.BuildConfig
 import com.truehr.app.core.Formats
 import com.truehr.app.domain.model.Geotag
@@ -64,6 +72,18 @@ private fun GeotagCard(g: Geotag) {
         contentScale = ContentScale.Crop,
         modifier = Modifier.fillMaxWidth().height(190.dp).clip(RoundedCornerShape(topStart = 16.dp, topEnd = 16.dp)),
       )
+      if (g.lat != null && g.lng != null) {
+        val pos = LatLng(g.lat, g.lng)
+        val cam = rememberCameraPositionState(key = "geo_${g.id}") { position = CameraPosition.fromLatLngZoom(pos, 15f) }
+        GoogleMap(
+          modifier = Modifier.fillMaxWidth().height(150.dp),
+          cameraPositionState = cam,
+          googleMapOptionsFactory = { GoogleMapOptions().liteMode(true) },
+          uiSettings = MapUiSettings(zoomControlsEnabled = false, scrollGesturesEnabled = false),
+        ) {
+          Marker(state = MarkerState(pos))
+        }
+      }
       Column(Modifier.padding(16.dp)) {
         InfoLine(Icons.Filled.Badge, "Employee Code:", g.employeeCode ?: "—")
         InfoLine(Icons.Filled.CalendarMonth, "Date:", fmtDate(g.capturedAt))

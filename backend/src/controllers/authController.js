@@ -91,6 +91,7 @@ export async function myTeam(req, res, next) {
     const rows = (await query(
       `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
               d.title AS designation, dep.name AS department,
+              COALESCE(NULLIF(e.posting_state, ''), (SELECT a.state FROM employee_addresses a WHERE a.employee_id=e.id ORDER BY a.id LIMIT 1)) AS state,
               rm.first_name AS rm_first, rm.last_name AS rm_last, rm.employee_code AS rm_code,
               fm.first_name AS fm_first, fm.last_name AS fm_last, fm.employee_code AS fm_code
        FROM employees e
@@ -106,6 +107,7 @@ export async function myTeam(req, res, next) {
       name: `${r.first_name} ${r.last_name}`.trim(),
       designation: r.designation,
       department: r.department,
+      state: r.state || null,
       email: r.official_email,
       phone: r.phone,
       reportingManager: nameOf(r.rm_first, r.rm_last, r.rm_code),

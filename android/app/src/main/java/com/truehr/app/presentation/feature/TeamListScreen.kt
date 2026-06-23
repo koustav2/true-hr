@@ -11,6 +11,7 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.Mail
 import androidx.compose.material.icons.filled.Phone
+import androidx.compose.material.icons.filled.Place
 import androidx.compose.material.icons.filled.Search
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
@@ -61,15 +62,39 @@ fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) 
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       else -> {
         val list = (s.data ?: emptyList()).filter {
-          q.isBlank() || "${it.name} ${it.employeeCode} ${it.designation} ${it.department}".contains(q, ignoreCase = true)
+          q.isBlank() || "${it.name} ${it.employeeCode} ${it.designation} ${it.department} ${it.state}".contains(q, ignoreCase = true)
         }
+        // Group state-wise, alphabetically; unknown states fall under "Other".
+        val grouped = list.groupBy { it.state?.takeIf { s -> s.isNotBlank() } ?: "Other" }
+          .toSortedMap(compareBy { if (it == "Other") "￿" else it })
         if (list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          Text("No team members under you.", color = InkSoft)
+          Text(if (q.isBlank()) "No team members under you." else "No matches.", color = InkSoft)
         } else LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-          items(list) { TeamMateCard(it, onClick = { selected = it }) }
+          grouped.forEach { (state, members) ->
+            item(key = "h_$state") { StateHeader(state, members.size) }
+            items(members, key = { it.employeeCode }) { TeamMateCard(it, onClick = { selected = it }) }
+          }
         }
       }
     }
+  }
+}
+
+@Composable
+private fun StateHeader(state: String, count: Int) {
+  Row(
+    Modifier.fillMaxWidth().padding(top = 8.dp, bottom = 2.dp),
+    verticalAlignment = Alignment.CenterVertically,
+  ) {
+    Icon(Icons.Filled.Place, null, tint = Green, modifier = Modifier.size(16.dp))
+    Spacer(Modifier.width(6.dp))
+    Text(state.uppercase(), color = Green, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.labelMedium)
+    Spacer(Modifier.width(8.dp))
+    Surface(color = Green.copy(alpha = 0.12f), shape = RoundedCornerShape(20.dp)) {
+      Text("$count", color = Green, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 8.dp, vertical = 2.dp))
+    }
+    Spacer(Modifier.width(10.dp))
+    HorizontalDivider(color = Line, modifier = Modifier.weight(1f))
   }
 }
 
@@ -131,6 +156,7 @@ private fun TeamMateDialog(m: TeamMate, onDismiss: () -> Unit) {
         DetailRow("Official email", m.email)
         DetailRow("Employee code", m.employeeCode)
         DetailRow("Designation", m.designation)
+        DetailRow("State", m.state)
         DetailRow("Mobile", m.phone)
         DetailRow("Reporting manager", m.reportingManager)
         DetailRow("Functional manager", m.functionalManager)

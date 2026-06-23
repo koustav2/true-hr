@@ -31,6 +31,7 @@ data class TeamMateDto(
   val name: String? = null,
   val designation: String? = null,
   val department: String? = null,
+  val state: String? = null,
   val email: String? = null,
   val phone: String? = null,
   val reportingManager: String? = null,

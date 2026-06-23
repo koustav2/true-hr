@@ -49,6 +49,7 @@ class ProfileRepositoryImpl @Inject constructor(
       name = it.name.orEmpty(),
       designation = it.designation,
       department = it.department,
+      state = it.state,
       email = it.email,
       phone = it.phone,
       reportingManager = it.reportingManager,

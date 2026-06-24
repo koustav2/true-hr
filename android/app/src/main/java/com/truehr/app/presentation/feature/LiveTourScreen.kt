@@ -159,6 +159,14 @@ fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
       modifier = Modifier.fillMaxWidth().align(Alignment.BottomCenter),
     ) {
       Column(Modifier.padding(14.dp).navigationBarsPadding()) {
+        // Live distance + points captured (computed on-device from the recorded path).
+        if (active != null) {
+          val km = remember(pathLatLng) { com.truehr.app.core.pathDistanceKm(path) }
+          Row(Modifier.fillMaxWidth().padding(bottom = 10.dp), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+            StatChip("Distance", String.format(java.util.Locale.US, "%.2f km", km), Modifier.weight(1f))
+            StatChip("Points", path.size.toString(), Modifier.weight(1f))
+          }
+        }
         status?.let {
           Text(it, color = if (active != null) Green else InkSoft, style = MaterialTheme.typography.bodyMedium)
           Spacer(Modifier.height(8.dp))
@@ -181,6 +189,16 @@ fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
           ) { Icon(Icons.Filled.Stop, null); Spacer(Modifier.width(6.dp)); Text("End Tour", fontWeight = FontWeight.Bold) }
         }
       }
+    }
+  }
+}
+
+@Composable
+private fun StatChip(label: String, value: String, modifier: Modifier = Modifier) {
+  Surface(color = Green.copy(alpha = 0.08f), shape = RoundedCornerShape(12.dp), modifier = modifier) {
+    Column(Modifier.padding(vertical = 8.dp, horizontal = 12.dp)) {
+      Text(label, color = InkFaint, style = MaterialTheme.typography.labelSmall)
+      Text(value, color = Green, fontWeight = FontWeight.Bold, style = MaterialTheme.typography.titleMedium)
     }
   }
 }

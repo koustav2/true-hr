@@ -44,7 +44,7 @@ private val ymd = SimpleDateFormat("yyyy-MM-dd", Locale.US)
 private val pretty = SimpleDateFormat("MMM dd, yyyy", Locale.getDefault())
 
 @Composable
-fun TourDetailsScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
+fun TourDetailsScreen(onBack: () -> Unit, onOpenRoute: (Long) -> Unit = {}, vm: TourViewModel = hiltViewModel()) {
   val context = LocalContext.current
   val s by vm.tours.collectAsState()
 
@@ -85,7 +85,7 @@ fun TourDetailsScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
       s.data == null -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("Pick a range and tap View Tours.", color = InkSoft) }
       s.data!!.isEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No tours in this range.", color = InkSoft) }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-        items(s.data!!) { t -> TourCard(t) }
+        items(s.data!!) { t -> TourCard(t, onClick = { onOpenRoute(t.id) }) }
       }
     }
   }
@@ -105,8 +105,9 @@ private fun DateChip(text: String, modifier: Modifier = Modifier, onClick: () ->
 }
 
 @Composable
-private fun TourCard(t: Tour) {
-  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth()) {
+private fun TourCard(t: Tour, onClick: () -> Unit) {
+  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp,
+    modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
     Column {
       val center = LatLng(t.startLat ?: 22.5726, t.startLng ?: 88.3639)
       val cam = rememberCameraPositionState(key = "tour_${t.id}") {

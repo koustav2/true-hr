@@ -46,6 +46,8 @@ object Routes {
   const val TOUR = "tour"
   const val TOUR_LIVE = "tour_live"
   const val TOUR_DETAILS = "tour_details"
+  const val TOUR_ROUTE = "tour_route/{id}"
+  fun tourRoute(id: Long) = "tour_route/$id"
   const val GEOTAG = "geotag"
   const val GEOTAG_LIST = "geotag_list"
   const val ESS = "ess"

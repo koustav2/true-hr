@@ -38,6 +38,7 @@ import com.truehr.app.presentation.feature.PayslipDetailScreen
 import com.truehr.app.presentation.feature.TourScreen
 import com.truehr.app.presentation.feature.LiveTourScreen
 import com.truehr.app.presentation.feature.TourDetailsScreen
+import com.truehr.app.presentation.feature.TourRouteScreen
 import com.truehr.app.presentation.feature.GeoTagScreen
 import com.truehr.app.presentation.feature.GeoTagListScreen
 import com.truehr.app.presentation.profile.PfScreen
@@ -145,7 +146,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     ) { e -> ViewTicketsScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
     composable(Routes.TOUR) { TourScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
     composable(Routes.TOUR_LIVE) { LiveTourScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TOUR_DETAILS) { TourDetailsScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.TOUR_DETAILS) { TourDetailsScreen(onBack = { nav.popBackStack() }, onOpenRoute = { id -> nav.navigate(Routes.tourRoute(id)) }) }
+    composable(
+      route = Routes.TOUR_ROUTE,
+      arguments = listOf(navArgument("id") { type = NavType.LongType }),
+    ) { e -> TourRouteScreen(tourId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
     composable(Routes.GEOTAG) { GeoTagScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.GEOTAG_LIST) { GeoTagListScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ESS) { FeatureScreen("My ESS", onBack = { nav.popBackStack() }) }

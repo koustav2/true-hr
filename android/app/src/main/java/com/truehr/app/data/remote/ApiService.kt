@@ -145,6 +145,22 @@ interface ApiService {
   @GET("policies/{id}/file")
   suspend fun policyFile(@Path("id") id: Long): ResponseBody
 
+  // Resignation
+  @GET("resignation/context")
+  suspend fun resignationContext(): com.truehr.app.data.remote.dto.ResignationContextDto
+
+  @POST("resignation")
+  suspend fun resignationApply(@Body body: com.truehr.app.data.remote.dto.ApplyResignationRequest)
+
+  @POST("resignation/{id}/withdraw")
+  suspend fun resignationWithdraw(@Path("id") id: Long)
+
+  @GET("resignation/team")
+  suspend fun resignationTeam(@Query("status") status: String): List<com.truehr.app.data.remote.dto.ResignationDto>
+
+  @POST("resignation/{id}/review")
+  suspend fun resignationReview(@Path("id") id: Long, @Body body: OdReviewRequest)
+
   // Salary Slip
   @GET("payslips")
   suspend fun payslips(): List<com.truehr.app.data.remote.dto.PayslipRowDto>

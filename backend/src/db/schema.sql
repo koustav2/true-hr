@@ -481,6 +481,24 @@ CREATE TABLE IF NOT EXISTS geotags (
 );
 CREATE INDEX IF NOT EXISTS idx_geotags_emp ON geotags(employee_id, captured_at DESC);
 
+-- ── Resignation ──────────────────────────────────────────────────────────────
+ALTER TABLE employees ADD COLUMN IF NOT EXISTS notice_period_days INT NOT NULL DEFAULT 30;
+
+CREATE TABLE IF NOT EXISTS resignations (
+  id                 BIGSERIAL PRIMARY KEY,
+  employee_id        BIGINT NOT NULL REFERENCES employees(id),
+  resignation_date   DATE NOT NULL,
+  last_working_date  DATE NOT NULL,
+  reason             TEXT,
+  notice_period_days INT NOT NULL DEFAULT 30,
+  status             TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | APPROVED | REJECTED | WITHDRAWN
+  reviewed_by        BIGINT,
+  review_note        TEXT,
+  applied_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_at        TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_resignation_emp ON resignations(employee_id, status);
+
 -- ── Payroll / Salary Slip ────────────────────────────────────────────────────
 -- One salary structure per employee (set once by HR; basis for monthly payslips).
 CREATE TABLE IF NOT EXISTS salary_structures (

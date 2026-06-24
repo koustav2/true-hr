@@ -15,6 +15,7 @@ import * as policy from '../controllers/policyController.js';
 import * as tour from '../controllers/tourController.js';
 import * as payroll from '../controllers/payrollController.js';
 import * as dashboard from '../controllers/dashboardController.js';
+import * as resignation from '../controllers/resignationController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -84,6 +85,14 @@ r.post('/geotags', authenticate, tour.createGeotag);
 r.get('/geotags', authenticate, tour.listGeotags);
 r.get('/geotags/:id/photo', authenticate, tour.geotagPhoto);
 
+// --- Resignation ---
+r.get('/resignation/context', authenticate, resignation.context);
+r.get('/resignation/team', authenticate, resignation.team);
+r.get('/resignation', authenticate, resignation.listOwn);
+r.post('/resignation', authenticate, resignation.apply);
+r.post('/resignation/:id/withdraw', authenticate, resignation.withdraw);
+r.post('/resignation/:id/review', authenticate, resignation.review);
+
 // --- Salary Slip (employee) ---
 r.get('/payslips', authenticate, payroll.list);
 r.get('/payslips/:id', authenticate, payroll.detail);
@@ -143,6 +152,10 @@ r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.admin
 
 // --- Dashboard stats (HR) ---
 r.get('/admin/stats', authenticate, requireStaff, dashboard.stats);
+
+// --- Resignations (HR) ---
+r.get('/admin/resignations', authenticate, requireStaff, resignation.adminList);
+r.post('/admin/resignations/:id/review', authenticate, requireStaff, resignation.adminReview);
 
 // --- Payroll (HR) ---
 r.get('/admin/salary-template', authenticate, requireStaff, payroll.getTemplate);

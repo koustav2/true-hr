@@ -26,6 +26,7 @@ import com.truehr.app.domain.model.TeamMate
 import com.truehr.app.presentation.components.CenterLoader
 import com.truehr.app.presentation.components.ErrorState
 import com.truehr.app.presentation.components.GradientHeader
+import com.truehr.app.presentation.components.NoTeamState
 import com.truehr.app.presentation.components.initials
 import com.truehr.app.presentation.theme.*
 
@@ -67,8 +68,9 @@ fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) 
         // Group state-wise, alphabetically; unknown states fall under "Other".
         val grouped = list.groupBy { it.state?.takeIf { s -> s.isNotBlank() } ?: "Other" }
           .toSortedMap(compareBy { if (it == "Other") "￿" else it })
-        if (list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          Text(if (q.isBlank()) "No team members under you." else "No matches.", color = InkSoft)
+        if (list.isEmpty() && q.isBlank()) NoTeamState()
+        else if (list.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+          Text("No matches.", color = InkSoft)
         } else LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
           grouped.forEach { (state, members) ->
             item(key = "h_$state") { StateHeader(state, members.size) }

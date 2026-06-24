@@ -8,7 +8,7 @@ import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
-  IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX,
+  IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
 } from '@/components/icons.jsx';
 
 const WORKSPACE = [
@@ -19,6 +19,7 @@ const WORKSPACE = [
   { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, show: can.hr },
   { href: '/admin/policies', label: 'Policies', Icon: IconFile, show: can.hr },
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
+  { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, show: can.hr },
 ];
 const ADMINISTRATION = [
   { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.admin },

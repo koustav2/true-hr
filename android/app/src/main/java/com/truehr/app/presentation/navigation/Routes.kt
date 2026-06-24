@@ -43,6 +43,8 @@ object Routes {
   fun supportCreate(cat: String) = "support_create/$cat"
   const val SUPPORT_VIEW = "support_view/{cat}"
   fun supportView(cat: String) = "support_view/$cat"
+  const val RESIGNATION = "resignation"
+  const val TEAM_RESIGNATION = "team_resignation"
   const val TOUR = "tour"
   const val TOUR_LIVE = "tour_live"
   const val TOUR_DETAILS = "tour_details"

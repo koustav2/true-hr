@@ -35,6 +35,9 @@ import com.truehr.app.presentation.feature.TeamListScreen
 import com.truehr.app.presentation.feature.TeamAttendanceScreen
 import com.truehr.app.presentation.feature.SalarySlipScreen
 import com.truehr.app.presentation.feature.PayslipDetailScreen
+import com.truehr.app.presentation.feature.TaskSummaryScreen
+import com.truehr.app.presentation.feature.AssignTaskScreen
+import com.truehr.app.presentation.feature.TeamTaskScreen
 import com.truehr.app.presentation.feature.ResignationScreen
 import com.truehr.app.presentation.feature.TeamResignationScreen
 import com.truehr.app.presentation.feature.TourScreen
@@ -155,6 +158,9 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     ) { e -> TourRouteScreen(tourId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
     composable(Routes.GEOTAG) { GeoTagScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.GEOTAG_LIST) { GeoTagListScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.TASK_SUMMARY) { TaskSummaryScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.ASSIGN_TASK) { AssignTaskScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.TEAM_TASK) { TeamTaskScreen(onAssign = { nav.navigate(Routes.ASSIGN_TASK) }, onBack = { nav.popBackStack() }) }
     composable(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ESS) { FeatureScreen("My ESS", onBack = { nav.popBackStack() }) }

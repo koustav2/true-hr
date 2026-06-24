@@ -12,6 +12,7 @@ import com.truehr.app.data.repository.ProfileRepositoryImpl
 import com.truehr.app.data.repository.TourRepositoryImpl
 import com.truehr.app.data.repository.PayrollRepositoryImpl
 import com.truehr.app.data.repository.ResignationRepositoryImpl
+import com.truehr.app.data.repository.TaskRepositoryImpl
 import com.truehr.app.domain.repository.AttendanceRepository
 import com.truehr.app.domain.repository.AuthRepository
 import com.truehr.app.domain.repository.MissPunchRepository
@@ -24,6 +25,7 @@ import com.truehr.app.domain.repository.ProfileRepository
 import com.truehr.app.domain.repository.TourRepository
 import com.truehr.app.domain.repository.PayrollRepository
 import com.truehr.app.domain.repository.ResignationRepository
+import com.truehr.app.domain.repository.TaskRepository
 import dagger.Binds
 import dagger.Module
 import dagger.hilt.InstallIn
@@ -68,4 +70,7 @@ abstract class RepositoryModule {
 
   @Binds @Singleton
   abstract fun bindResignationRepository(impl: ResignationRepositoryImpl): ResignationRepository
+
+  @Binds @Singleton
+  abstract fun bindTaskRepository(impl: TaskRepositoryImpl): TaskRepository
 }

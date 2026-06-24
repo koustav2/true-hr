@@ -32,6 +32,7 @@ data class MissPunch(
 )
 
 data class TeamMate(
+  val id: Long,
   val employeeCode: String,
   val name: String,
   val designation: String?,

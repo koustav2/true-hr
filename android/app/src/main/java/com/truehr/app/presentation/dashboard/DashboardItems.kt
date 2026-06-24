@@ -19,6 +19,8 @@ val dashboardItems = listOf(
   DashItem("Address Book", Icons.Filled.Place, Routes.ADDRESS_BOOK),
   DashItem("Team List", Icons.Filled.Groups, Routes.TEAM),
   DashItem("PF, ESIC & Insurance", Icons.Filled.HealthAndSafety, Routes.PF),
+  DashItem("Task Summary", Icons.AutoMirrored.Filled.ListAlt, Routes.TASK_SUMMARY),
+  DashItem("Team Tasks", Icons.Filled.AddTask, Routes.TEAM_TASK),
   DashItem("Policies", Icons.AutoMirrored.Filled.ListAlt, Routes.POLICIES),
   DashItem("Resignation", Icons.Filled.Logout, Routes.RESIGNATION),
   DashItem("Team Resignation", Icons.Filled.HowToReg, Routes.TEAM_RESIGNATION),

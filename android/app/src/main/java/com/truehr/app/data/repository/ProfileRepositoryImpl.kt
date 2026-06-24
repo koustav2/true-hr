@@ -45,6 +45,7 @@ class ProfileRepositoryImpl @Inject constructor(
 
   override suspend fun myTeam(): List<TeamMate> = api.myTeam().map {
     TeamMate(
+      id = it.id ?: 0L,
       employeeCode = it.employeeCode.orEmpty(),
       name = it.name.orEmpty(),
       designation = it.designation,

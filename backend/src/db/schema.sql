@@ -481,6 +481,23 @@ CREATE TABLE IF NOT EXISTS geotags (
 );
 CREATE INDEX IF NOT EXISTS idx_geotags_emp ON geotags(employee_id, captured_at DESC);
 
+-- ── Task Management ──────────────────────────────────────────────────────────
+CREATE TABLE IF NOT EXISTS tasks (
+  id           BIGSERIAL PRIMARY KEY,
+  title        TEXT NOT NULL,
+  description  TEXT,
+  assigned_to  BIGINT NOT NULL REFERENCES employees(id),
+  assigned_by  BIGINT REFERENCES employees(id),
+  due_date     DATE,
+  around_time  TEXT,
+  status       TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | ONGOING | CLOSED
+  remark       TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at   TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_tasks_assignee ON tasks(assigned_to, status);
+CREATE INDEX IF NOT EXISTS idx_tasks_assigner ON tasks(assigned_by, status);
+
 -- ── Resignation ──────────────────────────────────────────────────────────────
 ALTER TABLE employees ADD COLUMN IF NOT EXISTS notice_period_days INT NOT NULL DEFAULT 30;
 

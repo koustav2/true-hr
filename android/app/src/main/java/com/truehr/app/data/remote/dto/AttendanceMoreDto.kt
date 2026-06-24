@@ -27,6 +27,7 @@ data class HoldRequest(val employeeId: Long)
 
 @Serializable
 data class TeamMateDto(
+  val id: Long? = null,
   val employeeCode: String? = null,
   val name: String? = null,
   val designation: String? = null,

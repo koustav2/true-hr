@@ -16,6 +16,7 @@ import * as tour from '../controllers/tourController.js';
 import * as payroll from '../controllers/payrollController.js';
 import * as dashboard from '../controllers/dashboardController.js';
 import * as resignation from '../controllers/resignationController.js';
+import * as task from '../controllers/taskController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -84,6 +85,14 @@ r.post('/tours/:id/end', authenticate, tour.end);
 r.post('/geotags', authenticate, tour.createGeotag);
 r.get('/geotags', authenticate, tour.listGeotags);
 r.get('/geotags/:id/photo', authenticate, tour.geotagPhoto);
+
+// --- Task Management ---
+r.get('/tasks/summary', authenticate, task.summary);
+r.get('/tasks/team/summary', authenticate, task.teamSummary);
+r.get('/tasks/team', authenticate, task.team);
+r.get('/tasks', authenticate, task.mine);
+r.post('/tasks', authenticate, task.create);
+r.post('/tasks/:id/status', authenticate, task.updateStatus);
 
 // --- Resignation ---
 r.get('/resignation/context', authenticate, resignation.context);

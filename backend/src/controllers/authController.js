@@ -89,7 +89,7 @@ export async function myTeam(req, res, next) {
     const empId = req.user.employeeId;
     if (!empId) return res.json([]);
     const rows = (await query(
-      `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
               d.title AS designation, dep.name AS department,
               COALESCE(NULLIF(e.posting_state, ''), (SELECT a.state FROM employee_addresses a WHERE a.employee_id=e.id ORDER BY a.id LIMIT 1)) AS state,
               rm.first_name AS rm_first, rm.last_name AS rm_last, rm.employee_code AS rm_code,
@@ -103,6 +103,7 @@ export async function myTeam(req, res, next) {
        ORDER BY e.first_name, e.last_name`, [empId])).rows;
     const nameOf = (f, l, c) => (f ? `${f} ${l}${c ? ` · ${c}` : ''}`.trim() : null);
     res.json(rows.map((r) => ({
+      id: r.id,
       employeeCode: r.employee_code,
       name: `${r.first_name} ${r.last_name}`.trim(),
       designation: r.designation,

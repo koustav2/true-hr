@@ -145,6 +145,37 @@ interface ApiService {
   @GET("policies/{id}/file")
   suspend fun policyFile(@Path("id") id: Long): ResponseBody
 
+  // Tasks
+  @GET("tasks")
+  suspend fun tasks(
+    @Query("status") status: String? = null,
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.TaskDto>
+
+  @GET("tasks/summary")
+  suspend fun taskSummary(): com.truehr.app.data.remote.dto.TaskSummaryDto
+
+  @GET("tasks/team")
+  suspend fun taskTeam(
+    @Query("memberId") memberId: Long? = null,
+    @Query("status") status: String? = null,
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.TaskDto>
+
+  @GET("tasks/team/summary")
+  suspend fun taskTeamSummary(
+    @Query("from") from: String? = null,
+    @Query("to") to: String? = null,
+  ): List<com.truehr.app.data.remote.dto.TeamTaskSummaryDto>
+
+  @POST("tasks")
+  suspend fun taskCreate(@Body body: com.truehr.app.data.remote.dto.CreateTaskRequest)
+
+  @POST("tasks/{id}/status")
+  suspend fun taskStatus(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.UpdateTaskStatusRequest)
+
   // Resignation
   @GET("resignation/context")
   suspend fun resignationContext(): com.truehr.app.data.remote.dto.ResignationContextDto

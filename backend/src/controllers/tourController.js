@@ -152,7 +152,16 @@ export async function list(req, res, next) {
     if (to)   { params.push(to);   where += ` AND started_at < ($${params.length}::date + 1)`; }
     const rows = (await query(
       `SELECT ${TOUR_COLS} FROM tours WHERE ${where} ORDER BY started_at DESC NULLS LAST`, params)).rows;
-    res.json(rows.map(shapeTour));
+    // Attach each tour's path so the list cards can draw the route line.
+    const ids = rows.map((r) => r.id);
+    const byTour = {};
+    if (ids.length) {
+      const pts = (await query(
+        `SELECT tour_id, lat, lng FROM tour_points
+          WHERE tour_id = ANY($1::bigint[]) ORDER BY tour_id, captured_at, id`, [ids])).rows;
+      for (const p of pts) { (byTour[p.tour_id] ||= []).push({ lat: p.lat, lng: p.lng }); }
+    }
+    res.json(rows.map((r) => ({ ...shapeTour(r), points: byTour[r.id] || [] })));
   } catch (e) { next(e); }
 }
 

@@ -170,6 +170,7 @@ class TourRepositoryImpl @Inject constructor(
     id = id, status = status ?: "ENDED", startedAt = startedAt, endedAt = endedAt,
     startLat = startLat, startLng = startLng, startAddress = startAddress,
     endLat = endLat, endLng = endLng, endAddress = endAddress, distanceKm = distanceKm,
+    points = points.map { LatLngPoint(it.lat, it.lng) },
   )
 
   private fun isoNow(): String {

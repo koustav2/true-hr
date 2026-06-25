@@ -16,6 +16,7 @@ data class TourDto(
   val endLng: Double? = null,
   val endAddress: String? = null,
   val distanceKm: Double = 0.0,
+  val points: List<TourPointDto> = emptyList(),
 )
 
 @Serializable

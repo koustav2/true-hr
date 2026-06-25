@@ -96,7 +96,7 @@ private fun TaskCard(t: Task, busy: Boolean, onStart: () -> Unit, onClose: () ->
       if (!t.description.isNullOrBlank()) { Spacer(Modifier.height(4.dp)); Text(t.description, color = InkSoft, style = MaterialTheme.typography.bodyMedium) }
       Spacer(Modifier.height(8.dp))
       Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        t.dueDate?.let { Text("Due: ${dmyT(it)}", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
+        t.dueDate?.let { Text("Due: ${taskDmy(it)}", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
         t.aroundTime?.let { Text("Time: $it", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
       }
       if (!t.assignedByName.isNullOrBlank()) Text("Assigned by ${t.assignedByName}", color = InkFaint, style = MaterialTheme.typography.labelSmall)
@@ -118,7 +118,7 @@ private fun TaskCard(t: Task, busy: Boolean, onStart: () -> Unit, onClose: () ->
   }
 }
 
-internal fun dmyT(iso: String): String {
+internal fun taskDmy(iso: String): String {
   val p = iso.take(10).split("-")
   return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
 }

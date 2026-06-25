@@ -29,6 +29,7 @@ import com.google.maps.android.compose.GoogleMap
 import com.google.maps.android.compose.MapUiSettings
 import com.google.maps.android.compose.Marker
 import com.google.maps.android.compose.MarkerState
+import com.google.maps.android.compose.Polyline
 import com.google.maps.android.compose.rememberCameraPositionState
 import com.truehr.app.core.Formats
 import com.truehr.app.domain.model.Tour
@@ -119,6 +120,8 @@ private fun TourCard(t: Tour, onClick: () -> Unit) {
         googleMapOptionsFactory = { GoogleMapOptions().liteMode(true) },
         uiSettings = MapUiSettings(zoomControlsEnabled = false, scrollGesturesEnabled = false),
       ) {
+        val path = remember(t.id) { t.points.map { LatLng(it.lat, it.lng) } }
+        if (path.size >= 2) Polyline(points = path, color = Green, width = 10f)
         if (t.startLat != null && t.startLng != null) Marker(state = MarkerState(LatLng(t.startLat, t.startLng)), title = "Start")
         if (t.endLat != null && t.endLng != null) Marker(state = MarkerState(LatLng(t.endLat, t.endLng)), title = "End")
       }

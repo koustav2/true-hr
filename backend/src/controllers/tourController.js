@@ -18,7 +18,8 @@ function pathDistanceKm(points) {
   let total = 0;
   for (let i = 1; i < points.length; i++) {
     const d = haversineKm(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng);
-    if (d >= 0.005) total += d;
+    // Count real movement only: ignore sub-5m jitter and >3km teleport outliers.
+    if (d >= 0.005 && d <= 3) total += d;
   }
   return total;
 }

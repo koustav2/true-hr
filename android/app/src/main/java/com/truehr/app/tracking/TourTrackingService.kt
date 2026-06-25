@@ -7,6 +7,7 @@ import android.app.Service
 import android.content.Context
 import android.content.Intent
 import android.content.pm.ServiceInfo
+import android.location.Location
 import android.os.Build
 import android.os.IBinder
 import androidx.core.app.ServiceCompat
@@ -39,11 +40,33 @@ class TourTrackingService : Service() {
   private var tourLocalId: Long = -1L
   private var pointsSinceSync = 0
 
+  // Last accepted fix — used to reject GPS outliers ("jumps" to another place).
+  private var lastLat: Double? = null
+  private var lastLng: Double? = null
+  private var lastTime: Long = 0L
+
   private val callback = object : LocationCallback() {
     override fun onLocationResult(result: LocationResult) {
       val loc = result.lastLocation ?: return
       val id = tourLocalId
       if (id <= 0) return
+
+      // 1) Drop low-accuracy fixes (outliers usually carry a large accuracy radius).
+      if (loc.hasAccuracy() && loc.accuracy > MAX_ACCURACY_M) return
+
+      // 2) Drop physically impossible jumps (e.g. a teleport to another state).
+      val now = loc.time.takeIf { it > 0 } ?: System.currentTimeMillis()
+      val pLat = lastLat; val pLng = lastLng
+      if (pLat != null && pLng != null) {
+        val out = FloatArray(1)
+        Location.distanceBetween(pLat, pLng, loc.latitude, loc.longitude, out)
+        val meters = out[0]
+        val dtSec = ((now - lastTime).coerceAtLeast(1L)) / 1000.0
+        val speed = meters / dtSec  // m/s
+        if (meters > MAX_JUMP_M && speed > MAX_SPEED_MPS) return  // implausible — reject
+      }
+      lastLat = loc.latitude; lastLng = loc.longitude; lastTime = now
+
       scope.launch {
         repo.recordPoint(id, loc.latitude, loc.longitude, loc.accuracy.toDouble())
         if (++pointsSinceSync >= SYNC_EVERY_N_POINTS) {
@@ -131,6 +154,10 @@ class TourTrackingService : Service() {
     private const val FASTEST_MS = 5_000L
     private const val MIN_DISTANCE_M = 15f
     private const val SYNC_EVERY_N_POINTS = 6
+    // Outlier rejection thresholds.
+    private const val MAX_ACCURACY_M = 60f        // discard fixes worse than 60 m
+    private const val MAX_JUMP_M = 1000f          // a hop bigger than 1 km …
+    private const val MAX_SPEED_MPS = 55.0        // … at >55 m/s (~198 km/h) is a teleport
     const val ACTION_STOP = "com.truehr.app.tracking.STOP"
     const val EXTRA_TOUR_ID = "tour_local_id"
 

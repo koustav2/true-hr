@@ -18,12 +18,13 @@ fun haversineKm(aLat: Double, aLng: Double, bLat: Double, bLng: Double): Double 
   return 2 * r * asin(min(1.0, sqrt(s)))
 }
 
-/** Total path length of an ordered list of points, ignoring sub-5m jitter. */
+/** Total path length of an ordered list of points. Ignores sub-5m jitter and skips
+ *  implausible teleport segments (> 3 km between consecutive fixes) as GPS outliers. */
 fun pathDistanceKm(points: List<LatLngPoint>): Double {
   var total = 0.0
   for (i in 1 until points.size) {
     val d = haversineKm(points[i - 1].lat, points[i - 1].lng, points[i].lat, points[i].lng)
-    if (d >= 0.005) total += d
+    if (d in 0.005..3.0) total += d
   }
   return total
 }

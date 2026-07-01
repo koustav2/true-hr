@@ -13,7 +13,10 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import android.content.Intent
+import android.net.Uri
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.input.KeyboardType
@@ -73,5 +76,15 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewM
       TextButton(onClick = {}) { Text("Forgot Password?", color = Green) }
       PrimaryButton(if (s.loading) "" else "Login", loading = s.loading, onClick = vm::login, modifier = Modifier.width(150.dp))
     }
+
+    Spacer(Modifier.weight(1f))
+    val context = LocalContext.current
+    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      TextButton(onClick = { open("https://truehr.co.in/privacy") }) { Text("Privacy Policy", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
+      Text("·", color = InkFaint)
+      TextButton(onClick = { open("https://truehr.co.in/terms") }) { Text("Terms & Conditions", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
+    }
+    Spacer(Modifier.navigationBarsPadding())
   }
 }

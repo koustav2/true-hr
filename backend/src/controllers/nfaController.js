@@ -76,6 +76,23 @@ function validate(b) {
   return errs;
 }
 
+// Integrity: every line's header must belong to the NFA's expense category, and
+// every sub-header to its header (prevents cross-category line injection).
+async function validateLineHierarchy(lines, expenseCategoryId) {
+  const headerIds = [...new Set(lines.map((l) => Number(l.headerId)))];
+  const okHeaders = (await query(
+    `SELECT count(*) AS c FROM expense_headers WHERE id = ANY($1::bigint[]) AND category_id = $2`,
+    [headerIds, expenseCategoryId])).rows[0];
+  if (Number(okHeaders.c) !== headerIds.length) return 'One or more expense headers do not belong to the selected category';
+  const pairs = lines.filter((l) => l.subheaderId);
+  for (const l of pairs) {
+    const ok = (await query(
+      `SELECT 1 FROM expense_subheaders WHERE id=$1 AND header_id=$2`, [l.subheaderId, l.headerId])).rowCount;
+    if (!ok) return 'One or more sub-headers do not belong to their expense header';
+  }
+  return null;
+}
+
 async function nextCode(client, year) {
   const r = await client.query(
     `INSERT INTO nfa_code_seq (year, last_value) VALUES ($1, 1)
@@ -105,6 +122,8 @@ export async function create(req, res, next) {
     const b = req.body || {};
     const errs = validate(b);
     if (errs.length) return res.status(400).json({ error: errs.join('; ') });
+    const hierErr = await validateLineHierarchy(b.lines, b.expenseCategoryId);
+    if (hierErr) return res.status(400).json({ error: hierErr });
 
     const lines = b.lines.map((l, i) => ({
       seq: i + 1, headerId: l.headerId, subheaderId: l.subheaderId || null,
@@ -277,6 +296,11 @@ export async function update(req, res, next) {
     const inst = await engine.getInstance(nfa.approval_instance_id);
     const isCurrentApprover = inst && inst.chain.some((s) => s.seq === inst.currentStageSeq && s.approver?.id === req.user.employeeId);
     if (!isCurrentApprover && !isStaff(req.user)) return res.status(403).json({ error: 'Only the current approver can edit' });
+
+    if (Array.isArray(b.lines) && b.lines.length) {
+      const hierErr = await validateLineHierarchy(b.lines, nfa.expense_category_id);
+      if (hierErr) return res.status(400).json({ error: hierErr });
+    }
 
     await tx(async (client) => {
       if (Array.isArray(b.lines) && b.lines.length) {

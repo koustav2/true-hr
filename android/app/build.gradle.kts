@@ -17,6 +17,18 @@ val localProps = Properties().apply {
 }
 val mapsApiKey: String = localProps.getProperty("MAPS_API_KEY") ?: ""
 
+// Release signing: secrets live in android/keystore.properties (gitignored).
+// Create it with:
+//   storeFile=truehr-release.jks
+//   storePassword=***
+//   keyAlias=truehr
+//   keyPassword=***
+val keystoreProps = Properties().apply {
+  val f = rootProject.file("keystore.properties")
+  if (f.exists()) f.inputStream().use { load(it) }
+}
+val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
+
 android {
   namespace = "com.truehr.app"
   compileSdk = 34
@@ -25,21 +37,46 @@ android {
     applicationId = "com.truehr.app"
     minSdk = 24
     targetSdk = 34
-    versionCode = 1
-    versionName = "1.0.0"
+    versionCode = 2
+    versionName = "1.1.0"
     vectorDrawables { useSupportLibrary = true }
-
-    // Base URL of the TRUE HR backend. Use 10.0.2.2 to reach localhost from the emulator.
-    buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
 
     // Injected into AndroidManifest as the Google Maps API key.
     manifestPlaceholders["MAPS_API_KEY"] = mapsApiKey
+  }
+
+  signingConfigs {
+    if (hasReleaseKeystore) {
+      create("release") {
+        storeFile = rootProject.file(keystoreProps.getProperty("storeFile"))
+        storePassword = keystoreProps.getProperty("storePassword")
+        keyAlias = keystoreProps.getProperty("keyAlias")
+        keyPassword = keystoreProps.getProperty("keyPassword")
+      }
+    }
+  }
+
+  // Environment flavours: pick the Build Variant (e.g. prodRelease) before building.
+  flavorDimensions += "env"
+  productFlavors {
+    create("prod") {
+      dimension = "env"
+      buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
+    }
+    create("staging") {
+      dimension = "env"
+      applicationIdSuffix = ".staging"
+      versionNameSuffix = "-staging"
+      // 10.0.2.2 reaches localhost from the Android emulator.
+      buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:4000/api/\"")
+    }
   }
 
   buildTypes {
     release {
       isMinifyEnabled = false
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
+      if (hasReleaseKeystore) signingConfig = signingConfigs.getByName("release")
     }
   }
   compileOptions {

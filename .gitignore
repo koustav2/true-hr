@@ -27,3 +27,8 @@ android/local.properties
 # Gradle caches anywhere
 .gradle/
 build/
+
+# Android release signing (never commit)
+android/keystore.properties
+*.jks
+*.keystore

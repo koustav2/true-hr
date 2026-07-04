@@ -20,7 +20,8 @@ val dashboardItems = listOfNotNull(
   if (FeatureFlags.NFA_SUITE) DashItem("My Performance", Icons.Filled.Insights, Routes.MY_PERFORMANCE) else null,
   if (FeatureFlags.NFA_SUITE) DashItem("Team KPI & PMS", Icons.Filled.Grade, Routes.TEAM_PMS) else null,
   DashItem("Leave Management", Icons.Filled.BeachAccess, Routes.LEAVE),
-  DashItem("My ESS", Icons.Filled.Spa, Routes.ESS),
+  // My ESS is the hub for the flag-gated NFA/PMS suite — hidden with it.
+  if (FeatureFlags.NFA_SUITE) DashItem("My ESS", Icons.Filled.Spa, Routes.ESS) else null,
   DashItem("Address Book", Icons.Filled.Place, Routes.ADDRESS_BOOK),
   DashItem("Team List", Icons.Filled.Groups, Routes.TEAM),
   DashItem("PF, ESIC & Insurance", Icons.Filled.HealthAndSafety, Routes.PF),

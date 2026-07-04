@@ -56,16 +56,17 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
 
 @Composable
 private fun DashboardTile(item: DashItem, onClick: () -> Unit) {
-  Surface(color = Surface, modifier = Modifier.fillMaxWidth().aspectRatio(0.95f).padding(1.dp)) {
+  // Compact tiles: wider than tall so the grid stacks tightly (was ~square).
+  Surface(color = Surface, modifier = Modifier.fillMaxWidth().aspectRatio(1.22f).padding(1.dp)) {
     Column(
-      Modifier.clickable(onClick = onClick).padding(12.dp),
+      Modifier.clickable(onClick = onClick).padding(8.dp),
       horizontalAlignment = Alignment.CenterHorizontally,
       verticalArrangement = Arrangement.Center,
     ) {
-      Box(Modifier.size(54.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-        Icon(item.icon, null, tint = Green, modifier = Modifier.size(28.dp))
+      Box(Modifier.size(44.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
+        Icon(item.icon, null, tint = Green, modifier = Modifier.size(24.dp))
       }
-      Spacer(Modifier.height(10.dp))
+      Spacer(Modifier.height(6.dp))
       Text(item.label, style = MaterialTheme.typography.labelSmall, color = Ink, textAlign = TextAlign.Center, maxLines = 2)
     }
   }

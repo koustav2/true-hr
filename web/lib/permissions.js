@@ -18,5 +18,6 @@ export const can = {
 
 // Landing page per role after login.
 export function homeFor(role) {
+  if (role === 'EMPLOYEE') return '/ess';
   return can.hr(role) ? '/admin' : '/admin/users';
 }

@@ -17,6 +17,13 @@ import * as payroll from '../controllers/payrollController.js';
 import * as dashboard from '../controllers/dashboardController.js';
 import * as resignation from '../controllers/resignationController.js';
 import * as task from '../controllers/taskController.js';
+import * as approval from '../controllers/approvalController.js';
+import * as masters from '../controllers/mastersController.js';
+import * as nfa from '../controllers/nfaController.js';
+import * as settlement from '../controllers/settlementController.js';
+import * as nfaReport from '../controllers/nfaReportController.js';
+import * as pms from '../controllers/pmsController.js';
+import * as vendor from '../controllers/vendorController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -94,6 +101,67 @@ r.get('/tasks', authenticate, task.mine);
 r.post('/tasks', authenticate, task.create);
 r.post('/tasks/:id/status', authenticate, task.updateStatus);
 
+// --- NFA masters ---
+r.get('/meta/nfa-masters', authenticate, masters.nfaMasters);
+r.get('/admin/masters/:type', authenticate, requireStaff, masters.list);
+r.post('/admin/masters/expense-hierarchy/import', authenticate, requireStaff, masters.importExpenseHierarchy);
+r.post('/admin/masters/:type', authenticate, requireStaff, masters.create);
+r.put('/admin/masters/:type/:id', authenticate, requireStaff, masters.update);
+r.delete('/admin/masters/:type/:id', authenticate, requireStaff, masters.remove);
+
+// --- Approval-chain engine (generic: NFA / settlement / resignation / PMS) ---
+r.get('/approvals/pending', authenticate, approval.pending);
+r.get('/approvals/preview', authenticate, approval.preview);
+r.get('/approvals/:id', authenticate, approval.detail);
+r.post('/approvals/:id/act', authenticate, approval.actOn);
+r.post('/approvals/:id/resubmit', authenticate, approval.resubmit);
+
+// --- NFA (Note For Approval) ---
+r.get('/nfa/pending', authenticate, nfa.pendingApprovals);
+r.get('/nfa/ledger', authenticate, nfa.ledger);
+r.get('/nfa', authenticate, nfa.listMine);
+r.post('/nfa', authenticate, nfa.create);
+r.get('/nfa/:id', authenticate, nfa.detail);
+r.post('/nfa/:id/act', authenticate, nfa.actOn);
+r.post('/nfa/:id/resubmit', authenticate, nfa.resubmit);
+r.put('/nfa/:id', authenticate, nfa.update);
+r.post('/nfa/:id/release-payment', authenticate, nfa.releasePayment);
+r.get('/admin/nfa', authenticate, requireStaff, nfa.adminList);
+
+// --- NFA settlements ---
+r.post('/nfa/:id/settlement', authenticate, settlement.submit);
+r.get('/nfa/:id/settlement', authenticate, settlement.forNfa);
+r.get('/settlements/pending', authenticate, settlement.pendingApprovals);
+r.post('/settlements/:id/act', authenticate, settlement.actOn);
+r.post('/settlements/:id/resubmit', authenticate, settlement.resubmit);
+r.get('/admin/settlements', authenticate, requireStaff, settlement.adminList);
+
+// --- NFA reports & analytics ---
+r.get('/admin/nfa-dashboard', authenticate, requireStaff, nfaReport.dashboard);
+r.get('/admin/reports/project-expense', authenticate, requireStaff, nfaReport.projectExpense);
+r.get('/admin/reports/client-billing', authenticate, requireStaff, nfaReport.clientBilling);
+r.get('/admin/nfa-export', authenticate, requireStaff, nfaReport.nfaExport);
+
+// --- PMS / KPI ---
+r.get('/pms/grades', authenticate, pms.grades);
+r.get('/pms/pending', authenticate, pms.pendingRatings);
+r.post('/pms/:id/rate', authenticate, pms.rate);
+r.get('/kpi/team-pending', authenticate, pms.teamPending);
+r.get('/kpi', authenticate, pms.listMine);
+r.post('/kpi', authenticate, pms.createKpi);
+r.get('/kpi/:id', authenticate, pms.detail);
+r.put('/kpi/:id', authenticate, pms.updateKpi);
+r.post('/kpi/:id/review', authenticate, pms.reviewKpi);
+r.post('/kpi/:id/pms', authenticate, pms.submitPms);
+
+// --- Vendor registration & agreements ---
+r.get('/vendors', authenticate, vendor.listVendors);
+r.post('/vendors', authenticate, vendor.createVendor);
+r.post('/admin/vendors/:id/review', authenticate, requireStaff, vendor.reviewVendor);
+r.get('/agreements', authenticate, vendor.listAgreements);
+r.post('/agreements', authenticate, vendor.createAgreement);
+r.post('/admin/agreements/:id/review', authenticate, requireStaff, vendor.reviewAgreement);
+
 // --- Resignation ---
 r.get('/resignation/context', authenticate, resignation.context);
 r.get('/resignation/team', authenticate, resignation.team);
@@ -101,6 +169,8 @@ r.get('/resignation', authenticate, resignation.listOwn);
 r.post('/resignation', authenticate, resignation.apply);
 r.post('/resignation/:id/withdraw', authenticate, resignation.withdraw);
 r.post('/resignation/:id/review', authenticate, resignation.review);
+r.get('/resignation/:id/chain', authenticate, resignation.chain);
+r.post('/resignation/:id/act', authenticate, resignation.actOn);
 
 // --- Salary Slip (employee) ---
 r.get('/payslips', authenticate, payroll.list);

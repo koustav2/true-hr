@@ -580,6 +580,450 @@ CREATE TABLE IF NOT EXISTS payslips (
 );
 CREATE INDEX IF NOT EXISTS idx_payslips_emp ON payslips(employee_id, year DESC, month DESC);
 
+-- ── NFA master data (Phase 1 — see docs/PROJECT_PLAN_NFA_PMS.md) ─────────────
+-- Searchable, deduplicated, in-app managed masters that drive the NFA form's
+-- cascading dropdowns (GreenHR kept these in Excel; we keep them in tables).
+
+CREATE TABLE IF NOT EXISTS business_operations (
+  id     BIGSERIAL PRIMARY KEY,
+  name   TEXT NOT NULL UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Cost-to-company group legal entities (distinct from `companies`, which are
+-- the HRMS tenant companies employees belong to).
+CREATE TABLE IF NOT EXISTS group_companies (
+  id     BIGSERIAL PRIMARY KEY,
+  name   TEXT NOT NULL UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS cost_zones (
+  id     BIGSERIAL PRIMARY KEY,
+  name   TEXT NOT NULL UNIQUE,
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS projects (
+  id                    BIGSERIAL PRIMARY KEY,
+  name                  TEXT NOT NULL UNIQUE,
+  business_operation_id BIGINT REFERENCES business_operations(id),
+  group_company_id      BIGINT REFERENCES group_companies(id),
+  active                BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE INDEX IF NOT EXISTS idx_projects_op ON projects(business_operation_id);
+
+CREATE TABLE IF NOT EXISTS office_locations (
+  id     BIGSERIAL PRIMARY KEY,
+  name   TEXT NOT NULL UNIQUE,
+  kind   TEXT NOT NULL DEFAULT 'CITY',   -- CITY | OFFICE | CENTER | SPECIAL (e.g. "Client-Side")
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+-- Unified client/vendor master (GreenHR mixes both in one list; the type flag
+-- lets us filter while keeping one deduped register).
+CREATE TABLE IF NOT EXISTS clients_vendors (
+  id     BIGSERIAL PRIMARY KEY,
+  name   TEXT NOT NULL,
+  type   TEXT NOT NULL DEFAULT 'CLIENT', -- CLIENT | VENDOR | BOTH
+  active BOOLEAN NOT NULL DEFAULT TRUE
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_clients_vendors_name ON clients_vendors (lower(name));
+
+-- 3-level expense hierarchy: Category → Header → SubHeader.
+-- business_operation_id NULL = category available for all operations.
+CREATE TABLE IF NOT EXISTS expense_categories (
+  id                    BIGSERIAL PRIMARY KEY,
+  name                  TEXT NOT NULL UNIQUE,
+  business_operation_id BIGINT REFERENCES business_operations(id),
+  active                BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS expense_headers (
+  id          BIGSERIAL PRIMARY KEY,
+  category_id BIGINT NOT NULL REFERENCES expense_categories(id) ON DELETE CASCADE,
+  name        TEXT NOT NULL,
+  active      BOOLEAN NOT NULL DEFAULT TRUE,
+  UNIQUE (category_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS expense_subheaders (
+  id        BIGSERIAL PRIMARY KEY,
+  header_id BIGINT NOT NULL REFERENCES expense_headers(id) ON DELETE CASCADE,
+  name      TEXT NOT NULL,
+  active    BOOLEAN NOT NULL DEFAULT TRUE,
+  UNIQUE (header_id, name)
+);
+
+-- Seed the values observed in the GreenHR reference demos (editable by HR).
+INSERT INTO business_operations (name) VALUES
+  ('Advisory Services'),('BPO'),('Corporate'),('CSR Initiative'),
+  ('Infra Set Up and Support Service'),('IT / Software'),('KPO'),('Managed Services'),
+  ('Operations and Maintenance (O&M)'),('Skilling'),('Sourcing'),('Staffing'),
+  ('Training & Development')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO cost_zones (name) VALUES ('Corporate'),('North Star'),('South-East'),('North-West')
+ON CONFLICT (name) DO NOTHING;
+
+INSERT INTO expense_categories (name) VALUES
+  ('General Administrative Expenses'),('Skill Project Expenses'),('HR Expenses'),
+  ('IT Infra'),('IT Software'),('Legal Compliance Expenses'),('Marketing & Branding'),
+  ('New Business Development Expenses'),('Recruitment Expenses'),('Salary Expense'),
+  ('Staffing Expenses'),('Talent Acquisition'),('Training & Development'),
+  ('Asset Procurement Expenses'),('Banking & Finance Expenses'),('Compliance Expenses'),
+  ('Charitable Activity')
+ON CONFLICT (name) DO NOTHING;
+
+-- ── Generic approval-chain engine ────────────────────────────────────────────
+-- One engine powers all multi-stage workflows (NFA, NFA settlement, resignation,
+-- PMS rating). A flow defines ordered stages; an instance is one run of a flow
+-- for a subject row (e.g. nfas.id). Stages are resolved to concrete approvers at
+-- submission time and stored on the instance, so later org changes don't alter
+-- an in-flight chain. Unresolvable optional stages are auto-BYPASSED (GreenHR:
+-- "System By-Pass Matrix Manager Not Available").
+
+CREATE TABLE IF NOT EXISTS approval_flows (
+  id      BIGSERIAL PRIMARY KEY,
+  code    TEXT NOT NULL UNIQUE,   -- NFA | NFA_SETTLEMENT | RESIGNATION | PMS_RATING
+  name    TEXT NOT NULL,
+  active  BOOLEAN NOT NULL DEFAULT TRUE
+);
+
+CREATE TABLE IF NOT EXISTS approval_flow_stages (
+  id            BIGSERIAL PRIMARY KEY,
+  flow_id       BIGINT NOT NULL REFERENCES approval_flows(id) ON DELETE CASCADE,
+  seq           INT NOT NULL,
+  role_key      TEXT NOT NULL,    -- REPORTING_MANAGER | FINANCE_INITIATOR | PROJECT_LEADER | ...
+  -- manager_chain: resolve from employees.reporting/function/operational manager
+  -- matrix:        resolve from approver_matrix using the subject's context (project/category/zone)
+  -- named_user:    fixed default approver on the stage
+  resolver_type TEXT NOT NULL DEFAULT 'manager_chain',
+  default_approver_employee_id BIGINT REFERENCES employees(id),
+  optional_bypass BOOLEAN NOT NULL DEFAULT TRUE,  -- auto-skip when approver can't be resolved
+  UNIQUE (flow_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS approval_instances (
+  id                    BIGSERIAL PRIMARY KEY,
+  flow_id               BIGINT NOT NULL REFERENCES approval_flows(id),
+  subject_type          TEXT NOT NULL,   -- 'nfa' | 'nfa_settlement' | 'resignation' | 'pms'
+  subject_id            BIGINT NOT NULL,
+  raised_by_employee_id BIGINT REFERENCES employees(id),
+  context               JSONB NOT NULL DEFAULT '{}',  -- {projectId, expenseCategoryId, zoneId, ...}
+  status                TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | QUERY | APPROVED | REJECTED | CANCELLED
+  current_stage_seq     INT NOT NULL DEFAULT 1,
+  query_stage_seq       INT,             -- stage that raised the query (resume point)
+  rejected_by_role      TEXT,            -- for "Finance Rejected-<name>" style statuses
+  rejected_by_name      TEXT,
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  completed_at          TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_approval_inst_subject ON approval_instances(subject_type, subject_id);
+CREATE INDEX IF NOT EXISTS idx_approval_inst_status  ON approval_instances(status);
+
+-- Chain as resolved for one instance (snapshot of approvers at submission).
+CREATE TABLE IF NOT EXISTS approval_instance_stages (
+  id                    BIGSERIAL PRIMARY KEY,
+  instance_id           BIGINT NOT NULL REFERENCES approval_instances(id) ON DELETE CASCADE,
+  seq                   INT NOT NULL,
+  role_key              TEXT NOT NULL,
+  approver_employee_id  BIGINT REFERENCES employees(id),  -- NULL => unresolved (bypassed)
+  status                TEXT NOT NULL DEFAULT 'WAITING',  -- WAITING | PENDING | APPROVED | REJECTED | QUERY | BYPASSED
+  remarks               TEXT,
+  acted_at              TIMESTAMPTZ,
+  UNIQUE (instance_id, seq)
+);
+CREATE INDEX IF NOT EXISTS idx_approval_stage_approver
+  ON approval_instance_stages(approver_employee_id, status);
+
+-- Full audit trail of actions (approvals, rejections, queries, bypasses, resubmits).
+CREATE TABLE IF NOT EXISTS approval_actions (
+  id                 BIGSERIAL PRIMARY KEY,
+  instance_id        BIGINT NOT NULL REFERENCES approval_instances(id) ON DELETE CASCADE,
+  stage_seq          INT NOT NULL,
+  actor_employee_id  BIGINT REFERENCES employees(id),  -- NULL for system actions (bypass/auto-reject)
+  action             TEXT NOT NULL,   -- APPROVED | REJECTED | QUERY_HOLD | BYPASSED | RESUBMITTED
+  remarks            TEXT,
+  acted_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_approval_actions_inst ON approval_actions(instance_id);
+
+-- Approver matrix: which named person fills a matrix-resolved role for a given
+-- project / expense-category / zone combination (any column may be NULL = wildcard;
+-- most-specific row wins). Master tables (projects/categories/zones) land in Phase 1,
+-- so these are plain BIGINTs for now.
+CREATE TABLE IF NOT EXISTS approver_matrix (
+  id                   BIGSERIAL PRIMARY KEY,
+  project_id           BIGINT,
+  expense_category_id  BIGINT,
+  zone_id              BIGINT,
+  role_key             TEXT NOT NULL,
+  approver_employee_id BIGINT NOT NULL REFERENCES employees(id),
+  updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_approver_matrix
+  ON approver_matrix (COALESCE(project_id,0), COALESCE(expense_category_id,0), COALESCE(zone_id,0), role_key);
+
+-- Seed the flows observed in the GreenHR reference demos (27-06-2026).
+INSERT INTO approval_flows (code, name) VALUES
+  ('NFA',            'NFA (Note For Approval) expense/advance'),
+  ('NFA_SETTLEMENT', 'NFA settlement'),
+  ('RESIGNATION',    'E-Resignation full & final'),
+  ('PMS_RATING',     'PMS final rating chain')
+ON CONFLICT (code) DO NOTHING;
+
+INSERT INTO approval_flow_stages (flow_id, seq, role_key, resolver_type, optional_bypass)
+SELECT f.id, s.seq, s.role_key, s.resolver_type, s.bypass
+FROM approval_flows f
+JOIN (VALUES
+  -- NFA: Reporting Mgr → Finance Initiator → Project Leader → Business Leader → Finance → Final Approval
+  ('NFA', 1, 'REPORTING_MANAGER', 'manager_chain', FALSE),
+  ('NFA', 2, 'FINANCE_INITIATOR', 'matrix',        TRUE),
+  ('NFA', 3, 'PROJECT_LEADER',    'matrix',        TRUE),
+  ('NFA', 4, 'BUSINESS_LEADER',   'matrix',        TRUE),
+  ('NFA', 5, 'FINANCE',           'matrix',        FALSE),
+  ('NFA', 6, 'FINAL_APPROVAL',    'matrix',        TRUE),
+  -- Settlement: Rpt Mgr → Functional Head → Admin → Finance → Director → Closer
+  ('NFA_SETTLEMENT', 1, 'REPORTING_MANAGER', 'manager_chain', FALSE),
+  ('NFA_SETTLEMENT', 2, 'FUNCTIONAL_HEAD',   'manager_chain', TRUE),
+  ('NFA_SETTLEMENT', 3, 'ADMIN',             'named_user',    TRUE),
+  ('NFA_SETTLEMENT', 4, 'FINANCE',           'matrix',        FALSE),
+  ('NFA_SETTLEMENT', 5, 'DIRECTOR',          'named_user',    TRUE),
+  ('NFA_SETTLEMENT', 6, 'CLOSER',            'named_user',    TRUE),
+  -- Resignation: Rpt Mgr → Functional Head → IT Infra → Office Admin → Finance → HR
+  ('RESIGNATION', 1, 'REPORTING_MANAGER', 'manager_chain', FALSE),
+  ('RESIGNATION', 2, 'FUNCTIONAL_HEAD',   'manager_chain', TRUE),
+  ('RESIGNATION', 3, 'IT_INFRA',          'named_user',    TRUE),
+  ('RESIGNATION', 4, 'OFFICE_ADMIN',      'named_user',    TRUE),
+  ('RESIGNATION', 5, 'FINANCE',           'named_user',    TRUE),
+  ('RESIGNATION', 6, 'HR',                'named_user',    FALSE),
+  -- PMS: Matrix Mgr → Reporting Mgr → Functional Mgr → HR (matrix mgr commonly bypassed)
+  ('PMS_RATING', 1, 'MATRIX_MANAGER',     'manager_chain', TRUE),
+  ('PMS_RATING', 2, 'REPORTING_MANAGER',  'manager_chain', FALSE),
+  ('PMS_RATING', 3, 'FUNCTIONAL_MANAGER', 'manager_chain', TRUE),
+  ('PMS_RATING', 4, 'HR',                 'named_user',    FALSE)
+) AS s(flow_code, seq, role_key, resolver_type, bypass) ON s.flow_code = f.code
+ON CONFLICT (flow_id, seq) DO NOTHING;
+
+-- ── NFA (Note For Approval) — expense / advance / purchase-request (Phase 2) ─
+-- Lifecycle: PENDING → (QUERY ↔ PENDING) → APPROVED → PAYMENT_RELEASED, or
+-- REJECTED at any stage. Approval runs on the generic engine (flow code 'NFA').
+-- Settlement lands in Phase 3 as its own table + flow.
+
+-- Yearly NFA code counter → codes like NFA20260001.
+CREATE TABLE IF NOT EXISTS nfa_code_seq (
+  year       INT PRIMARY KEY,
+  last_value BIGINT NOT NULL DEFAULT 0
+);
+
+CREATE TABLE IF NOT EXISTS nfas (
+  id                     BIGSERIAL PRIMARY KEY,
+  nfa_code               TEXT NOT NULL UNIQUE,
+  employee_id            BIGINT NOT NULL REFERENCES employees(id),
+  raise_for              TEXT NOT NULL DEFAULT 'EXPENSE',  -- EXPENSE | PURCHASE_REQUEST
+  business_operation_id  BIGINT NOT NULL REFERENCES business_operations(id),
+  group_company_id       BIGINT NOT NULL REFERENCES group_companies(id),
+  project_id             BIGINT NOT NULL REFERENCES projects(id),
+  expense_category_id    BIGINT NOT NULL REFERENCES expense_categories(id),
+  zone_id                BIGINT NOT NULL REFERENCES cost_zones(id),
+  location_id            BIGINT NOT NULL REFERENCES office_locations(id),
+  client_vendor_id       BIGINT REFERENCES clients_vendors(id),
+  expense_month          INT NOT NULL CHECK (expense_month BETWEEN 1 AND 12),
+  expense_year           INT NOT NULL,
+  payment_type           TEXT NOT NULL,  -- ADVANCE_SELF | ADVANCE_VENDOR | REIMB_SELF | REIMB_VENDOR | PPS_CANDIDATE | INCENTIVE
+  billable_type          TEXT NOT NULL,  -- NON_BILLABLE | BILLABLE_CLIENT | BILLABLE_PARTNER
+  billed_state           TEXT,           -- BILLED | TO_BE_BILLED (only when BILLABLE_CLIENT)
+  invoice_date           DATE,
+  invoice_amount         NUMERIC(14,2),
+  expected_payment_date  DATE,
+  settlement_due_date    DATE NOT NULL,
+  purpose                TEXT NOT NULL,
+  description            TEXT,
+  priority               TEXT NOT NULL DEFAULT 'MEDIUM',   -- HIGH | MEDIUM | LOW
+  attachment_document_id BIGINT REFERENCES documents(id),
+  total_nfa_amount       NUMERIC(14,2) NOT NULL DEFAULT 0,
+  total_logistic_amount  NUMERIC(14,2) NOT NULL DEFAULT 0,
+  grand_total            NUMERIC(14,2) NOT NULL DEFAULT 0,
+  status                 TEXT NOT NULL DEFAULT 'PENDING',  -- PENDING | QUERY | REJECTED | APPROVED | PAYMENT_RELEASED
+  status_label           TEXT,           -- e.g. "FINANCE Rejected-Balwant Singh", "Query Raised By: PROJECT_LEADER"
+  approval_instance_id   BIGINT REFERENCES approval_instances(id),
+  payment_released_at    TIMESTAMPTZ,
+  payment_released_by    BIGINT REFERENCES employees(id),
+  created_at             TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at             TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_nfas_emp    ON nfas(employee_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nfas_status ON nfas(status);
+
+CREATE TABLE IF NOT EXISTS nfa_lines (
+  id              BIGSERIAL PRIMARY KEY,
+  nfa_id          BIGINT NOT NULL REFERENCES nfas(id) ON DELETE CASCADE,
+  seq             INT NOT NULL,
+  header_id       BIGINT NOT NULL REFERENCES expense_headers(id),
+  subheader_id    BIGINT REFERENCES expense_subheaders(id),
+  nfa_amount      NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (nfa_amount >= 0),
+  logistic_amount NUMERIC(14,2) NOT NULL DEFAULT 0 CHECK (logistic_amount >= 0),
+  total_amount    NUMERIC(14,2) NOT NULL DEFAULT 0,
+  UNIQUE (nfa_id, seq)
+);
+
+-- ── NFA settlement cycle (Phase 3) ───────────────────────────────────────────
+-- After PAYMENT_RELEASED the employee must submit a settlement; it runs its own
+-- 6-stage chain (flow 'NFA_SETTLEMENT'). Overdue unsubmitted settlements are
+-- AUTO_REJECTED by the settlement worker and must be resubmitted (GreenHR rule).
+ALTER TABLE nfas ADD COLUMN IF NOT EXISTS settlement_status TEXT;  -- NULL | PENDING | IN_PROGRESS | CLOSE | AUTO_REJECTED
+
+CREATE TABLE IF NOT EXISTS nfa_settlements (
+  id                   BIGSERIAL PRIMARY KEY,
+  nfa_id               BIGINT NOT NULL REFERENCES nfas(id) ON DELETE CASCADE,
+  employee_id          BIGINT NOT NULL REFERENCES employees(id),
+  amount               NUMERIC(14,2) NOT NULL CHECK (amount >= 0),
+  remarks              TEXT,
+  document_id          BIGINT REFERENCES documents(id),
+  status               TEXT NOT NULL DEFAULT 'IN_PROGRESS',  -- IN_PROGRESS | CLOSED | REJECTED | AUTO_REJECTED
+  approval_instance_id BIGINT REFERENCES approval_instances(id),
+  raised_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  closed_at            TIMESTAMPTZ
+);
+CREATE INDEX IF NOT EXISTS idx_nfa_settlements_nfa ON nfa_settlements(nfa_id, raised_at DESC);
+CREATE INDEX IF NOT EXISTS idx_nfa_settlements_emp ON nfa_settlements(employee_id, status);
+
+-- ── PMS / KPI (Phase 5) ──────────────────────────────────────────────────────
+-- Monthly cycle: employee creates KPI (KRAs, weightages sum 100) → RM approves
+-- (or Discuss = send back) → KPI LOCKED → employee submits PMS self-assessment →
+-- 4-level rating chain (flow 'PMS_RATING': Matrix → Reporting → Functional → HR,
+-- missing levels auto-bypassed) → final grade (OAT-5 … SBT-1).
+
+CREATE TABLE IF NOT EXISTS kpis (
+  id           BIGSERIAL PRIMARY KEY,
+  employee_id  BIGINT NOT NULL REFERENCES employees(id),
+  year         INT NOT NULL,
+  month        INT NOT NULL CHECK (month BETWEEN 1 AND 12),
+  status       TEXT NOT NULL DEFAULT 'RM_PENDING',  -- RM_PENDING | LOCKED | DISCUSS
+  submitted_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  approved_by  BIGINT REFERENCES employees(id),
+  approved_at  TIMESTAMPTZ,
+  UNIQUE (employee_id, year, month)
+);
+
+CREATE TABLE IF NOT EXISTS kpi_kras (
+  id                BIGSERIAL PRIMARY KEY,
+  kpi_id            BIGINT NOT NULL REFERENCES kpis(id) ON DELETE CASCADE,
+  seq               INT NOT NULL,
+  description       TEXT NOT NULL,
+  weightage         NUMERIC(5,2) NOT NULL CHECK (weightage > 0),
+  -- e.g. [{"min":90,"max":104,"rating":3},{"min":105,"max":119,"rating":4},{"min":120,"max":null,"rating":5}]
+  measurement_bands JSONB NOT NULL DEFAULT '[{"min":90,"max":104,"rating":3},{"min":105,"max":119,"rating":4},{"min":120,"max":null,"rating":5}]',
+  UNIQUE (kpi_id, seq)
+);
+
+CREATE TABLE IF NOT EXISTS pms_submissions (
+  id                   BIGSERIAL PRIMARY KEY,
+  kpi_id               BIGINT NOT NULL UNIQUE REFERENCES kpis(id) ON DELETE CASCADE,
+  status               TEXT NOT NULL DEFAULT 'APPROVAL_PENDING',  -- APPROVAL_PENDING | FUNCTIONAL_APPROVED | REJECTED
+  self_rating          NUMERIC(4,2),
+  submitted_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  approval_instance_id BIGINT REFERENCES approval_instances(id),
+  final_grade          TEXT,           -- OAT | SAT | AT | BT | SBT
+  final_pli_pct        NUMERIC(6,2)
+);
+
+CREATE TABLE IF NOT EXISTS pms_kra_scores (
+  id            BIGSERIAL PRIMARY KEY,
+  submission_id BIGINT NOT NULL REFERENCES pms_submissions(id) ON DELETE CASCADE,
+  kra_id        BIGINT NOT NULL REFERENCES kpi_kras(id),
+  mtd_target    TEXT,
+  mtd_achieved  TEXT,
+  self_rating   NUMERIC(4,2),
+  self_remarks  TEXT,
+  mgr_rating    NUMERIC(4,2),
+  mgr_remarks   TEXT,
+  UNIQUE (submission_id, kra_id)
+);
+
+-- One row per rating level actually actioned (Matrix/Reporting/Functional/HR).
+CREATE TABLE IF NOT EXISTS pms_level_ratings (
+  id            BIGSERIAL PRIMARY KEY,
+  submission_id BIGINT NOT NULL REFERENCES pms_submissions(id) ON DELETE CASCADE,
+  role_key      TEXT NOT NULL,
+  pli_rating    INT,
+  pli_pct       NUMERIC(6,2),
+  remarks       TEXT,
+  rated_by      BIGINT REFERENCES employees(id),
+  rated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (submission_id, role_key)
+);
+
+-- Published grade ladder (GreenHR PMSGradeSystem.pdf).
+CREATE TABLE IF NOT EXISTS pms_grades (
+  grade   INT PRIMARY KEY,
+  code    TEXT NOT NULL,
+  label   TEXT NOT NULL,
+  min_pct INT NOT NULL,
+  max_pct INT
+);
+INSERT INTO pms_grades (grade, code, label, min_pct, max_pct) VALUES
+  (5,'OAT','Outstandingly Achieved Target',120,NULL),
+  (4,'SAT','Significantly Achieved Target',105,119),
+  (3,'AT','Achieved Target',90,104),
+  (2,'BT','Below Target',60,89),
+  (1,'SBT','Significantly Below Target',0,59)
+ON CONFLICT (grade) DO NOTHING;
+
+-- ── E-Resignation on the approval engine (Phase 6) ───────────────────────────
+-- New resignations run the 6-stage 'RESIGNATION' flow (RM → Functional Head →
+-- IT Infra → Office Admin → Finance → HR). Legacy single-step review endpoints
+-- keep working for rows without an instance.
+ALTER TABLE resignations ADD COLUMN IF NOT EXISTS approval_instance_id BIGINT REFERENCES approval_instances(id);
+
+-- ── Vendor registration & agreements (GreenHR NFA submenu) ──────────────────
+-- Vendor Registration: statutory registrations each with a value + uploaded doc.
+CREATE TABLE IF NOT EXISTS vendor_registrations (
+  id                  BIGSERIAL PRIMARY KEY,
+  registered_by       BIGINT REFERENCES employees(id),
+  association_with    BIGINT REFERENCES group_companies(id),
+  company_name        TEXT NOT NULL,
+  nature_of_business  TEXT,
+  business_category   TEXT,
+  head_office_address TEXT,
+  branch_address      TEXT,
+  plant_address       TEXT,
+  type_of_company     TEXT,           -- Proprietorship | Partnership | Pvt Ltd | Others ...
+  pan                 TEXT,  pan_doc_id   BIGINT REFERENCES documents(id),
+  gst                 TEXT,  gst_doc_id   BIGINT REFERENCES documents(id),
+  esic                TEXT,  esic_doc_id  BIGINT REFERENCES documents(id),
+  pf                  TEXT,  pf_doc_id    BIGINT REFERENCES documents(id),
+  msmed               TEXT,  msmed_doc_id BIGINT REFERENCES documents(id),
+  nsic_ssi            TEXT,  nsic_doc_id  BIGINT REFERENCES documents(id),
+  support_doc_id      BIGINT REFERENCES documents(id),
+  contact_person      TEXT,
+  contact_phone       TEXT,
+  contact_email       TEXT,
+  status              TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING | APPROVED | REJECTED
+  reviewed_by         BIGINT REFERENCES employees(id),
+  reviewed_at         TIMESTAMPTZ,
+  created_at          TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+-- Rent/other agreements per project/location/client, with admin approval.
+CREATE TABLE IF NOT EXISTS agreements (
+  id             BIGSERIAL PRIMARY KEY,
+  uploaded_by    BIGINT REFERENCES employees(id),
+  project_id     BIGINT REFERENCES projects(id),
+  location_id    BIGINT REFERENCES office_locations(id),
+  client_id      BIGINT REFERENCES clients_vendors(id),
+  agreement_type TEXT NOT NULL DEFAULT 'RENT',
+  details        TEXT,
+  start_date     DATE NOT NULL,
+  end_date       DATE NOT NULL,
+  document_id    BIGINT REFERENCES documents(id),
+  status         TEXT NOT NULL DEFAULT 'PENDING',   -- PENDING | APPROVED | REJECTED
+  reviewed_by    BIGINT REFERENCES employees(id),
+  reviewed_at    TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- NOTE: the unique index on lower(official_email) is created in migrate.js (guarded),
 -- so pre-existing duplicate test data can't abort the whole migration.
 -- NOTE: the SUPER_ADMIN enum value is added separately in migrate.js

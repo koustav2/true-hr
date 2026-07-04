@@ -45,3 +45,18 @@ export const api = {
   put: (p, b) => req('PUT', p, b),
   del: (p) => req('DELETE', p),
 };
+
+// Authenticated file download (CSV/XLSX exports) — fetches as a blob and
+// triggers a browser download.
+export async function downloadFile(path, filename) {
+  const headers = {};
+  if (token) headers.Authorization = `Bearer ${token}`;
+  const res = await fetch(BASE + path, { headers });
+  if (!res.ok) throw new Error(`Download failed (${res.status})`);
+  const blob = await res.blob();
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); a.remove();
+  URL.revokeObjectURL(url);
+}

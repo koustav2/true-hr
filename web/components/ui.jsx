@@ -1,3 +1,4 @@
+import React from 'react';
 export function Button({ as: As = 'button', variant = 'primary', size = 'md', className = '', children, ...props }) {
   const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
   const sizes = { md: 'px-4 py-2.5 text-sm', sm: 'px-3 py-1.5 text-[13px]' };
@@ -72,5 +73,23 @@ export function Empty({ title, subtitle, icon = null }) {
       <div className="font-semibold text-ink">{title}</div>
       {subtitle && <div className="text-sm text-ink-faint mt-1">{subtitle}</div>}
     </div>
+  );
+}
+
+// Two-step destructive action: first click arms ("Sure?"), second click within
+// 2.5s executes. Prevents accidental deletes/rejects without a heavy modal.
+export function ConfirmClick({ onConfirm, children, confirmLabel = 'Sure?', className = '', armedClassName = 'text-rose-700 font-bold' }) {
+  const [armed, setArmed] = React.useState(false);
+  React.useEffect(() => {
+    if (!armed) return undefined;
+    const t = setTimeout(() => setArmed(false), 2500);
+    return () => clearTimeout(t);
+  }, [armed]);
+  return (
+    <button
+      onClick={(e) => { e.stopPropagation(); if (armed) { setArmed(false); onConfirm(); } else setArmed(true); }}
+      className={armed ? `${className} ${armedClassName}` : className}>
+      {armed ? confirmLabel : children}
+    </button>
   );
 }

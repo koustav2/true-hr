@@ -1,5 +1,8 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import * as engine from '../services/approvalEngine.js';
+
+const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 
 async function isMyReport(managerId, employeeId) {
   return (await query(
@@ -96,8 +99,54 @@ export async function apply(req, res, next) {
       `INSERT INTO resignations (employee_id, resignation_date, last_working_date, reason, notice_period_days)
        VALUES ($1,$2,$3,$4,$5) RETURNING id`,
       [empId, resignationDate, lastWorkingDate, reason || null, np])).rows[0];
+    // Phase 6: run the 6-stage RESIGNATION flow (RM → Functional Head → IT Infra
+    // → Office Admin → Finance → HR); unstaffed named stages auto-bypass.
+    try {
+      const inst = await engine.createInstance('RESIGNATION', 'resignation', row.id, empId, {}, req.user.id);
+      await query(`UPDATE resignations SET approval_instance_id=$2 WHERE id=$1`, [row.id, inst.id]);
+    } catch (err) {
+      console.warn('[resignation] approval chain not created:', err.message);
+    }
     await audit(req.user.id, 'RESIGNATION_APPLY', 'resignation', row.id, {});
     res.status(201).json({ ok: true, id: row.id });
+  } catch (e) { next(e); }
+}
+
+// GET /resignation/:id/chain — the 6-stage approval trail.
+export async function chain(req, res, next) {
+  try {
+    const r = (await query(`SELECT * FROM resignations WHERE id=$1`, [Number(req.params.id)])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (!r.approval_instance_id) return res.json(null); // legacy row
+    const inst = await engine.getInstance(r.approval_instance_id);
+    const me = req.user.employeeId;
+    const inChain = inst.chain.some((s) => s.approver?.id === me);
+    if (Number(r.employee_id) !== Number(me) && !inChain && !STAFF.includes(req.user.role))
+      return res.status(403).json({ error: 'Forbidden' });
+    res.json(inst);
+  } catch (e) { next(e); }
+}
+
+// POST /resignation/:id/act { action, remarks } — current-stage approver (or HR override).
+// When the chain completes, the resignation is APPROVED; a rejection anywhere rejects it.
+export async function actOn(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const r = (await query(`SELECT * FROM resignations WHERE id=$1`, [id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Not found' });
+    if (!r.approval_instance_id) return res.status(409).json({ error: 'Legacy resignation — use the review endpoint' });
+    if (r.status !== 'PENDING') return res.status(409).json({ error: `Resignation is ${r.status}` });
+    const { action, remarks } = req.body || {};
+    const inst = await engine.act(r.approval_instance_id, req.user.employeeId, action, remarks, {
+      isStaff: STAFF.includes(req.user.role), actorUserId: req.user.id,
+    });
+    if (inst.status === 'APPROVED') {
+      await query(`UPDATE resignations SET status='APPROVED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || null]);
+    } else if (inst.status === 'REJECTED') {
+      await query(`UPDATE resignations SET status='REJECTED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || inst.statusLabel]);
+    }
+    await audit(req.user.id, `RESIGNATION_${action}`, 'resignation', id, { stage: inst.currentStageSeq });
+    res.json({ status: inst.status === 'PENDING' ? 'PENDING' : inst.status, approval: inst });
   } catch (e) { next(e); }
 }
 

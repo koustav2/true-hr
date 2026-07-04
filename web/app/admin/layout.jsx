@@ -9,6 +9,7 @@ import { Spinner } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
   IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
+  IconBriefcase, IconTicket,
 } from '@/components/icons.jsx';
 
 const WORKSPACE = [
@@ -21,11 +22,20 @@ const WORKSPACE = [
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
   { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, show: can.hr },
 ];
+const FINANCE = [
+  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, show: can.hr },
+  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, show: can.hr },
+  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, show: can.hr },
+  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, show: can.hr },
+];
+const PERFORMANCE = [
+  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, show: can.hr },
+];
 const ADMINISTRATION = [
   { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.admin },
   { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, show: can.admin },
 ];
-const ALL = [...WORKSPACE, ...ADMINISTRATION];
+const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
 
 const ROLE_BADGE = {
   SUPER_ADMIN: 'bg-grape-50 text-grape-700 ring-grape-200',
@@ -97,6 +107,8 @@ export default function AdminLayout({ children }) {
       </div>
       <div className={`pt-5 flex-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
         <NavGroup title="Workspace" items={WORKSPACE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="NFA & Finance" items={FINANCE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="Performance" items={PERFORMANCE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         <NavGroup title="Administration" items={ADMINISTRATION} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
       <div className={`mt-auto border-t border-line ${collapsed ? 'p-2' : 'p-3'}`}>

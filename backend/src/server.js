@@ -6,6 +6,7 @@ import routes from './routes/index.js';
 import { notFound, errorHandler } from './middleware/error.js';
 import { startEmailWorker } from './services/emailQueue.js';
 import { startExpiryWorker } from './services/expiryWorker.js';
+import { startSettlementWorker } from './services/settlementWorker.js';
 
 const app = express();
 app.set('trust proxy', true);
@@ -23,4 +24,5 @@ app.listen(config.port, () => {
   console.log(`[truehr-api] listening on http://localhost:${config.port}`);
   startEmailWorker();
   startExpiryWorker();
+  startSettlementWorker();
 });

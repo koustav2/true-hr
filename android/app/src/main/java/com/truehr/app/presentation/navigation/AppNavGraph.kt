@@ -163,7 +163,45 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     composable(Routes.TEAM_TASK) { TeamTaskScreen(onAssign = { nav.navigate(Routes.ASSIGN_TASK) }, onBack = { nav.popBackStack() }) }
     composable(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.ESS) { FeatureScreen("My ESS", onBack = { nav.popBackStack() }) }
+    composable(Routes.ESS) { EssScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    composable(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.MY_PERFORMANCE) {
+      MyPerformanceScreen(onBack = { nav.popBackStack() },
+        onCreateKpi = { nav.navigate(Routes.CREATE_KPI) },
+        onOpenKpi = { id -> nav.navigate(Routes.kpiDetail(id)) })
+    }
+    composable(Routes.CREATE_KPI) { CreateKpiScreen(onBack = { nav.popBackStack() }) }
+    composable(
+      route = Routes.KPI_DETAIL,
+      arguments = listOf(navArgument("id") { type = NavType.LongType }),
+    ) { e -> KpiDetailScreen(kpiId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
+    composable(Routes.TEAM_PMS) { TeamPmsScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.VENDOR_REGISTRATION) { VendorRegistrationScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.UPLOAD_AGREEMENT) { UploadAgreementScreen(onBack = { nav.popBackStack() }) }
+
+    composable(Routes.NFA) { NfaMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    composable(Routes.NFA_CREATE) { CreateNfaScreen(onBack = { nav.popBackStack() }) }
+    composable(Routes.NFA_LIST) {
+      NfaListScreen("My NFAs", inbox = false, onBack = { nav.popBackStack() },
+        onOpen = { id, act -> nav.navigate(Routes.nfaDetail(id, act)) })
+    }
+    composable(Routes.NFA_APPROVALS) {
+      NfaListScreen("NFA Approvals", inbox = true, onBack = { nav.popBackStack() },
+        onOpen = { id, act -> nav.navigate(Routes.nfaDetail(id, act)) })
+    }
+    composable(
+      route = Routes.NFA_DETAIL,
+      arguments = listOf(
+        navArgument("id") { type = NavType.LongType },
+        navArgument("act") { type = NavType.BoolType; defaultValue = false },
+      ),
+    ) { e ->
+      NfaDetailScreen(
+        id = e.arguments?.getLong("id") ?: 0L,
+        canAct = e.arguments?.getBoolean("act") ?: false,
+        onBack = { nav.popBackStack() },
+      )
+    }
 
     composable(
       route = Routes.FEATURE,

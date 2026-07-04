@@ -231,6 +231,94 @@ interface ApiService {
     @Query("to") to: String? = null,
   ): List<com.truehr.app.data.remote.dto.GeotagDto>
 
+  // NFA (Note For Approval)
+  @GET("meta/nfa-masters")
+  suspend fun nfaMasters(): com.truehr.app.data.remote.dto.NfaMastersDto
+
+  @GET("approvals/preview")
+  suspend fun nfaApprovalPreview(
+    @Query("flow") flow: String = "NFA",
+    @Query("projectId") projectId: Long? = null,
+    @Query("expenseCategoryId") expenseCategoryId: Long? = null,
+    @Query("zoneId") zoneId: Long? = null,
+  ): List<com.truehr.app.data.remote.dto.NfaPreviewStageDto>
+
+  @POST("nfa")
+  suspend fun nfaCreate(@Body body: com.truehr.app.data.remote.dto.CreateNfaRequest): com.truehr.app.data.remote.dto.NfaDetailDto
+
+  @GET("nfa")
+  suspend fun nfaList(
+    @Query("year") year: Int? = null,
+    @Query("month") month: Int? = null,
+    @Query("status") status: String? = null,
+  ): List<com.truehr.app.data.remote.dto.NfaRowDto>
+
+  @GET("nfa/pending")
+  suspend fun nfaPending(): List<com.truehr.app.data.remote.dto.NfaRowDto>
+
+  @GET("nfa/ledger")
+  suspend fun nfaLedger(): com.truehr.app.data.remote.dto.NfaLedgerDto
+
+  @GET("nfa/{id}")
+  suspend fun nfaDetail(@Path("id") id: Long): com.truehr.app.data.remote.dto.NfaDetailDto
+
+  @POST("nfa/{id}/act")
+  suspend fun nfaAct(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.NfaActRequest): com.truehr.app.data.remote.dto.NfaDetailDto
+
+  @POST("nfa/{id}/resubmit")
+  suspend fun nfaResubmit(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.NfaResubmitRequest): com.truehr.app.data.remote.dto.NfaDetailDto
+
+  // NFA settlements
+  @POST("nfa/{id}/settlement")
+  suspend fun settlementSubmit(@Path("id") nfaId: Long, @Body body: com.truehr.app.data.remote.dto.SubmitSettlementRequest): com.truehr.app.data.remote.dto.SettlementDto
+
+  @GET("nfa/{id}/settlement")
+  suspend fun settlementForNfa(@Path("id") nfaId: Long): com.truehr.app.data.remote.dto.SettlementDto
+
+  @GET("settlements/pending")
+  suspend fun settlementsPending(): List<com.truehr.app.data.remote.dto.SettlementDto>
+
+  @POST("settlements/{id}/act")
+  suspend fun settlementAct(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.NfaActRequest): com.truehr.app.data.remote.dto.SettlementDto
+
+  // PMS / KPI
+  @GET("kpi")
+  suspend fun kpiList(@Query("year") year: Int? = null): List<com.truehr.app.data.remote.dto.KpiRowDto>
+
+  @POST("kpi")
+  suspend fun kpiCreate(@Body body: com.truehr.app.data.remote.dto.CreateKpiRequest): com.truehr.app.data.remote.dto.KpiDetailDto
+
+  @GET("kpi/team-pending")
+  suspend fun kpiTeamPending(): List<com.truehr.app.data.remote.dto.TeamKpiRowDto>
+
+  @GET("kpi/{id}")
+  suspend fun kpiDetail(@Path("id") id: Long): com.truehr.app.data.remote.dto.KpiDetailDto
+
+  @POST("kpi/{id}/review")
+  suspend fun kpiReview(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.KpiReviewRequest): com.truehr.app.data.remote.dto.KpiDetailDto
+
+  @POST("kpi/{id}/pms")
+  suspend fun pmsSubmit(@Path("id") kpiId: Long, @Body body: com.truehr.app.data.remote.dto.SubmitPmsRequest): com.truehr.app.data.remote.dto.KpiDetailDto
+
+  @GET("pms/pending")
+  suspend fun pmsPending(): List<com.truehr.app.data.remote.dto.PendingRatingDto>
+
+  @POST("pms/{id}/rate")
+  suspend fun pmsRate(@Path("id") submissionId: Long, @Body body: com.truehr.app.data.remote.dto.RatePmsRequest): com.truehr.app.data.remote.dto.KpiDetailDto
+
+  // Vendors & agreements
+  @GET("vendors")
+  suspend fun vendors(): List<com.truehr.app.data.remote.dto.VendorDto>
+
+  @POST("vendors")
+  suspend fun vendorCreate(@Body body: com.truehr.app.data.remote.dto.CreateVendorRequest): com.truehr.app.data.remote.dto.VendorDto
+
+  @GET("agreements")
+  suspend fun agreements(): List<com.truehr.app.data.remote.dto.AgreementDto>
+
+  @POST("agreements")
+  suspend fun agreementCreate(@Body body: com.truehr.app.data.remote.dto.CreateAgreementRequest): com.truehr.app.data.remote.dto.AgreementDto
+
   @GET("support/catalog")
   suspend fun supportCatalog(): com.truehr.app.data.remote.dto.SupportCatalogDto
 

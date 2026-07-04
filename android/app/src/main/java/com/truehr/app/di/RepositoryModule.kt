@@ -5,6 +5,7 @@ import com.truehr.app.data.repository.AuthRepositoryImpl
 import com.truehr.app.data.repository.MissPunchRepositoryImpl
 import com.truehr.app.data.repository.CompOffRepositoryImpl
 import com.truehr.app.data.repository.LeaveRepositoryImpl
+import com.truehr.app.data.repository.NfaRepositoryImpl
 import com.truehr.app.data.repository.PolicyRepositoryImpl
 import com.truehr.app.data.repository.SupportRepositoryImpl
 import com.truehr.app.data.repository.OnDutyRepositoryImpl
@@ -18,6 +19,7 @@ import com.truehr.app.domain.repository.AuthRepository
 import com.truehr.app.domain.repository.MissPunchRepository
 import com.truehr.app.domain.repository.CompOffRepository
 import com.truehr.app.domain.repository.LeaveRepository
+import com.truehr.app.domain.repository.NfaRepository
 import com.truehr.app.domain.repository.PolicyRepository
 import com.truehr.app.domain.repository.SupportRepository
 import com.truehr.app.domain.repository.OnDutyRepository
@@ -73,4 +75,10 @@ abstract class RepositoryModule {
 
   @Binds @Singleton
   abstract fun bindTaskRepository(impl: TaskRepositoryImpl): TaskRepository
+
+  @Binds @Singleton
+  abstract fun bindNfaRepository(impl: NfaRepositoryImpl): NfaRepository
+
+  @Binds @Singleton
+  abstract fun bindEssRepository(impl: com.truehr.app.data.repository.EssRepositoryImpl): com.truehr.app.domain.repository.EssRepository
 }

@@ -4,19 +4,21 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.ListAlt
 import androidx.compose.material.icons.filled.*
 import androidx.compose.ui.graphics.vector.ImageVector
+import com.truehr.app.core.FeatureFlags
 import com.truehr.app.presentation.navigation.Routes
 
 data class DashItem(val label: String, val icon: ImageVector, val route: String)
 
-val dashboardItems = listOf(
+val dashboardItems = listOfNotNull(
   DashItem("Attendance", Icons.Filled.EventAvailable, Routes.ATTENDANCE),
   DashItem("My Profile", Icons.Filled.Person, Routes.PROFILE),
   DashItem("Salary Slip", Icons.Filled.ReceiptLong, Routes.SALARY),
   DashItem("Tour Management", Icons.Filled.Map, Routes.TOUR),
   DashItem("Support Desk", Icons.Filled.SupportAgent, Routes.SUPPORT),
-  DashItem("NFA", Icons.Filled.RequestQuote, Routes.NFA),
-  DashItem("My Performance", Icons.Filled.Insights, Routes.MY_PERFORMANCE),
-  DashItem("Team KPI & PMS", Icons.Filled.Grade, Routes.TEAM_PMS),
+  // NFA / PMS suite — hidden behind FeatureFlags.NFA_SUITE for this release.
+  if (FeatureFlags.NFA_SUITE) DashItem("NFA", Icons.Filled.RequestQuote, Routes.NFA) else null,
+  if (FeatureFlags.NFA_SUITE) DashItem("My Performance", Icons.Filled.Insights, Routes.MY_PERFORMANCE) else null,
+  if (FeatureFlags.NFA_SUITE) DashItem("Team KPI & PMS", Icons.Filled.Grade, Routes.TEAM_PMS) else null,
   DashItem("Leave Management", Icons.Filled.BeachAccess, Routes.LEAVE),
   DashItem("My ESS", Icons.Filled.Spa, Routes.ESS),
   DashItem("Address Book", Icons.Filled.Place, Routes.ADDRESS_BOOK),

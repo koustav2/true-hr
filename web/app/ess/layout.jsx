@@ -5,6 +5,7 @@ import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
+import { FEATURES } from '@/lib/flags.js';
 
 // Employee self-service portal (GreenHR-style: everything usable from the web,
 // desktop or phone browser). Simple top-nav shell — no admin sidebar.
@@ -28,6 +29,18 @@ export default function EssLayout({ children }) {
 
   if (!ready || !auth?.token) {
     return <div className="min-h-screen grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
+  }
+
+  // Portal is flag-gated for this release (see lib/flags.js).
+  if (!FEATURES.nfaSuite) {
+    return (
+      <div className="min-h-screen grid place-items-center p-6 text-center">
+        <div>
+          <div className="text-lg font-semibold text-ink">Employee portal coming soon</div>
+          <p className="text-sm text-ink-faint mt-1">This section isn&apos;t available yet. Please use the TrueHR mobile app.</p>
+        </div>
+      </div>
+    );
   }
 
   const isActive = (href) => (href === '/ess' ? pathname === '/ess' : pathname.startsWith(href));

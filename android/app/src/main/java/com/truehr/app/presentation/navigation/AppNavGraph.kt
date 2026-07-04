@@ -175,7 +175,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     composable(Routes.TEAM_TASK) { TeamTaskScreen(onAssign = { nav.navigate(Routes.ASSIGN_TASK) }, onBack = { nav.popBackStack() }) }
     composable(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.ESS) { EssScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    composable(Routes.ESS) {
+      // ESS hub (with NFA/PMS tiles) is flag-gated for this release.
+      if (com.truehr.app.core.FeatureFlags.NFA_SUITE) EssScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() })
+      else FeatureScreen("My ESS", onBack = { nav.popBackStack() })
+    }
     composable(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.MY_PERFORMANCE) {
       MyPerformanceScreen(onBack = { nav.popBackStack() },

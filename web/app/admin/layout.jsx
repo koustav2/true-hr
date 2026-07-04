@@ -4,6 +4,7 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { can, ROLE_LABEL } from '@/lib/permissions.js';
+import { FEATURES } from '@/lib/flags.js';
 import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
 import {
@@ -22,14 +23,16 @@ const WORKSPACE = [
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
   { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, show: can.hr },
 ];
+// NFA / PMS suite — hidden behind FEATURES.nfaSuite for this release.
+const gated = (role) => FEATURES.nfaSuite && can.hr(role);
 const FINANCE = [
-  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, show: can.hr },
-  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, show: can.hr },
-  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, show: can.hr },
-  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, show: can.hr },
+  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, show: gated },
+  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, show: gated },
+  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, show: gated },
+  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, show: gated },
 ];
 const PERFORMANCE = [
-  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, show: can.hr },
+  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, show: gated },
 ];
 const ADMINISTRATION = [
   { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.admin },

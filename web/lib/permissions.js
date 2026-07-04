@@ -16,8 +16,10 @@ export const can = {
   superadmin: (role) => role === 'SUPER_ADMIN',
 };
 
+import { FEATURES } from './flags.js';
+
 // Landing page per role after login.
 export function homeFor(role) {
-  if (role === 'EMPLOYEE') return '/ess';
+  if (role === 'EMPLOYEE' && FEATURES.nfaSuite) return '/ess';
   return can.hr(role) ? '/admin' : '/admin/users';
 }

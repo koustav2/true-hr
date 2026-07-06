@@ -75,11 +75,13 @@ function CreateKpiModal({ onClose, onDone }) {
     <Modal open onClose={onClose} title="Create KPI" size="lg">
       <div className="space-y-3 max-h-[70vh] overflow-y-auto pr-1">
         <div className="flex items-end gap-3">
-          <Field label="Month" required>
-            <Select value={month} onChange={(e) => setMonth(e.target.value)}>
-              {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
-            </Select>
-          </Field>
+          <div className="w-40">
+            <Field label="Month" required>
+              <Select value={month} onChange={(e) => setMonth(e.target.value)}>
+                {MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}
+              </Select>
+            </Field>
+          </div>
           <label className="flex items-center gap-2 text-sm pb-2.5">
             <input type="checkbox" checked={copyPrevious} onChange={(e) => setCopyPrevious(e.target.checked)} />
             Copy Previous KPI
@@ -89,11 +91,11 @@ function CreateKpiModal({ onClose, onDone }) {
           <div className="space-y-3">
             {kras.map((k, i) => (
               <div key={i} className="flex gap-2 items-start">
-                <Textarea rows={2} className="flex-1" placeholder={`KRA ${i + 1} description`} value={k.description}
+                <Textarea rows={2} className="flex-1 min-w-0" placeholder={`KRA ${i + 1} description`} value={k.description}
                   onChange={(e) => setKras((ks) => ks.map((x, j) => (j === i ? { ...x, description: e.target.value } : x)))} />
-                <Input type="number" className="w-24" placeholder="Wt %" value={k.weightage}
+                <Input type="number" className="w-24 shrink-0" placeholder="Wt %" value={k.weightage}
                   onChange={(e) => setKras((ks) => ks.map((x, j) => (j === i ? { ...x, weightage: e.target.value } : x)))} />
-                <button onClick={() => setKras((ks) => ks.filter((_, j) => j !== i))} className="text-xs text-red-600 mt-3">remove</button>
+                <button onClick={() => setKras((ks) => ks.filter((_, j) => j !== i))} className="text-xs text-red-600 mt-3 shrink-0">remove</button>
               </div>
             ))}
             <div className="flex items-center justify-between">

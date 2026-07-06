@@ -30,10 +30,14 @@ export function Field({ label, hint, required, children }) {
 }
 
 const inputCls = 'w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:shadow-focus';
+// Callers may pass an explicit width (w-24, w-40, w-[…]); drop the built-in
+// w-full then, otherwise the two width utilities conflict and w-full can win
+// (seen live: the KPI "Wt %" input swallowing the whole row).
+const inputBase = (extra) => /(^|\s)w-(\d|\[)/.test(extra || '') ? inputCls.replace('w-full ', '') : inputCls;
 
-export function Input(props) { return <input {...props} className={`${inputCls} ${props.className || ''}`} />; }
-export function Select({ children, ...props }) { return <select {...props} className={`${inputCls} appearance-none bg-no-repeat ${props.className || ''}`} style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")", backgroundPosition: 'right 0.75rem center', paddingRight: '2.25rem' }}>{children}</select>; }
-export function Textarea(props) { return <textarea {...props} className={`${inputCls} ${props.className || ''}`} />; }
+export function Input(props) { return <input {...props} className={`${inputBase(props.className)} ${props.className || ''}`} />; }
+export function Select({ children, ...props }) { return <select {...props} className={`${inputBase(props.className)} appearance-none bg-no-repeat ${props.className || ''}`} style={{ backgroundImage: "url(\"data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%2394a3b8' stroke-width='2' stroke-linecap='round' stroke-linejoin='round'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E\")", backgroundPosition: 'right 0.75rem center', paddingRight: '2.25rem' }}>{children}</select>; }
+export function Textarea(props) { return <textarea {...props} className={`${inputBase(props.className)} ${props.className || ''}`} />; }
 
 export function Spinner({ className = '' }) {
   return <span className={`inline-block h-4 w-4 animate-spin rounded-full border-2 border-current border-t-transparent ${className}`} />;

@@ -25,6 +25,9 @@ interface EssRepository {
   suspend fun pmsPending(): List<PendingRating>
   suspend fun ratePms(submissionId: Long, pliRating: Int, pliPct: Double, remarks: String?): KpiDetail
 
+  // App -> web SSO
+  suspend fun webSsoToken(): String
+
   // Vendors & agreements
   suspend fun vendors(): List<com.truehr.app.domain.model.VendorRow>
   suspend fun createVendor(input: com.truehr.app.domain.model.VendorInput): com.truehr.app.domain.model.VendorRow

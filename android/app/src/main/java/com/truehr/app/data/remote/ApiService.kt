@@ -306,6 +306,9 @@ interface ApiService {
   @POST("pms/{id}/rate")
   suspend fun pmsRate(@Path("id") submissionId: Long, @Body body: com.truehr.app.data.remote.dto.RatePmsRequest): com.truehr.app.data.remote.dto.KpiDetailDto
 
+  @retrofit2.http.POST("auth/web-sso-token")
+  suspend fun webSsoToken(): com.truehr.app.data.remote.dto.WebSsoTokenDto
+
   // Vendors & agreements
   @GET("vendors")
   suspend fun vendors(): List<com.truehr.app.data.remote.dto.VendorDto>

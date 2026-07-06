@@ -41,6 +41,7 @@ import com.truehr.app.presentation.feature.TeamTaskScreen
 import com.truehr.app.presentation.feature.ResignationScreen
 import com.truehr.app.presentation.feature.TeamResignationScreen
 import com.truehr.app.presentation.feature.EssScreen
+import com.truehr.app.presentation.feature.EssWebScreen
 import com.truehr.app.presentation.feature.NfaMenuScreen
 import com.truehr.app.presentation.feature.CreateNfaScreen
 import com.truehr.app.presentation.feature.NfaListScreen
@@ -176,9 +177,9 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     composable(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.ESS) {
-      // ESS hub (with NFA/PMS tiles) is flag-gated for this release.
-      if (com.truehr.app.core.FeatureFlags.NFA_SUITE) EssScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() })
-      else FeatureScreen("My ESS", onBack = { nav.popBackStack() })
+      // My ESS lives on the web (NFA, settlements, PMS, vendors). The tile
+      // fetches a 60s SSO token and opens the browser already signed in.
+      EssWebScreen(onBack = { nav.popBackStack() })
     }
     composable(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
     composable(Routes.MY_PERFORMANCE) {

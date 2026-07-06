@@ -81,6 +81,9 @@ class EssRepositoryImpl @Inject constructor(
   override suspend fun ratePms(submissionId: Long, pliRating: Int, pliPct: Double, remarks: String?): KpiDetail =
     api.pmsRate(submissionId, RatePmsRequest(pliRating = pliRating, pliPct = pliPct, remarks = remarks)).toModel()
 
+  // ---- App -> web SSO ----
+  override suspend fun webSsoToken(): String = api.webSsoToken().token
+
   // ---- Vendors & agreements ----
   override suspend fun vendors(): List<com.truehr.app.domain.model.VendorRow> = api.vendors().map {
     com.truehr.app.domain.model.VendorRow(it.id, it.companyName.orEmpty(), it.natureOfBusiness, it.typeOfCompany, it.pan, it.gst, it.status)

@@ -157,6 +157,11 @@ data class RatePmsRequest(
   val remarks: String? = null,
 )
 
+// ---- App → web SSO handoff ----
+
+@Serializable
+data class WebSsoTokenDto(val token: String)
+
 // ---- Vendors & agreements ----
 
 @Serializable

@@ -1,6 +1,6 @@
 import { query } from '../db/pool.js';
 import { verifyPassword, hashPassword } from '../utils/password.js';
-import { signToken } from '../utils/jwt.js';
+import { signToken, signSsoToken, verifyToken } from '../utils/jwt.js';
 import { decrypt } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
 
@@ -24,6 +24,33 @@ export async function login(req, res, next) {
     await audit(user.id, 'LOGIN', 'user_account', user.id);
     res.json({
       token,
+      user: { id: user.id, email: user.email, role: user.role, mustChangePassword: user.must_change_password },
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /auth/web-sso-token — the app requests a 60s one-time-style handoff token,
+// then opens <web>/sso?t=<token> in the browser (GreenHR-style tokenized link).
+export async function webSsoToken(req, res, next) {
+  try {
+    res.json({ token: signSsoToken({ id: req.user.id, role: req.user.role, employeeId: req.user.employeeId }) });
+  } catch (e) { next(e); }
+}
+
+// POST /auth/web-sso { token } — the web /sso page exchanges the handoff token
+// for a normal session (same response shape as login).
+export async function webSsoExchange(req, res, next) {
+  try {
+    const { token } = req.body || {};
+    let payload;
+    try { payload = verifyToken(token); } catch { return res.status(401).json({ error: 'Invalid or expired link — open My ESS from the app again' }); }
+    if (payload.purpose !== 'web_sso') return res.status(401).json({ error: 'Invalid token' });
+    const user = (await query(`SELECT * FROM user_accounts WHERE id=$1 AND status='ACTIVE'`, [payload.id])).rows[0];
+    if (!user) return res.status(401).json({ error: 'Account not found or disabled' });
+    const session = signToken({ id: user.id, role: user.role, employeeId: user.employee_id });
+    await audit(user.id, 'LOGIN_WEB_SSO', 'user_account', user.id);
+    res.json({
+      token: session,
       user: { id: user.id, email: user.email, role: user.role, mustChangePassword: user.must_change_password },
     });
   } catch (e) { next(e); }

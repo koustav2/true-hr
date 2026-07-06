@@ -62,6 +62,7 @@ android {
     create("prod") {
       dimension = "env"
       buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
+      buildConfigField("String", "WEB_URL", "\"https://truehr.co.in\"")
     }
     create("staging") {
       dimension = "env"
@@ -69,6 +70,7 @@ android {
       versionNameSuffix = "-staging"
       // 10.0.2.2 reaches localhost from the Android emulator.
       buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:4000/api/\"")
+      buildConfigField("String", "WEB_URL", "\"http://10.0.2.2:5173\"")
     }
   }
 

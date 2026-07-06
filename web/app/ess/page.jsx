@@ -24,11 +24,19 @@ export default function EssDashboard() {
   }, [year]);
 
   const tiles = [
+    ['Attendance', '/ess/attendance', 'Calendar, punches & miss-punch'],
+    ['Leave', '/ess/leave', 'Apply, balances, comp-off & team approvals'],
     ['Create NFA', '/ess/nfa/create', 'Raise an expense / advance request'],
     ['My NFAs', '/ess/nfa', 'Track status & submit settlements'],
     ['Approvals', '/ess/approvals', 'NFAs & settlements waiting on you'],
     ['My Performance', '/ess/pms', 'KPI, PMS & monthly grades'],
+    ['Tasks', '/ess/tasks', 'My tasks, assign & team'],
+    ['Salary Slips', '/ess/payslips', 'Download published payslips'],
+    ['Support Desk', '/ess/support', 'HR / IT / Admin tickets'],
+    ['Policies', '/ess/policies', 'Company policies & formats'],
     ['Vendors & Agreements', '/ess/vendors', 'Register vendors, upload agreements'],
+    ['Resignation', '/ess/resignation', 'Apply, track & team approvals'],
+    ['My Profile', '/ess/profile', 'Profile, team & address book'],
   ];
 
   return (

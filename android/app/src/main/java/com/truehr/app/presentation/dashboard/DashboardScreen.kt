@@ -139,7 +139,7 @@ private fun BannerCarousel(banners: List<BannerDto>) {
         contentScale = ContentScale.Crop,
         modifier = Modifier
           .fillMaxWidth()
-          .height(240.dp)
+          .height(200.dp)
           .clip(RoundedCornerShape(18.dp))
           .background(Color(0xFFE6E9EF)), // placeholder tint while loading
       )

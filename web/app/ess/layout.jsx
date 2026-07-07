@@ -11,11 +11,18 @@ import { FEATURES } from '@/lib/flags.js';
 // desktop or phone browser). Simple top-nav shell — no admin sidebar.
 const NAV = [
   { href: '/ess', label: 'Dashboard' },
-  { href: '/ess/nfa/create', label: 'Create NFA' },
-  { href: '/ess/nfa', label: 'My NFAs' },
+  { href: '/ess/attendance', label: 'Attendance' },
+  { href: '/ess/leave', label: 'Leave' },
+  { href: '/ess/nfa', label: 'NFA' },
   { href: '/ess/approvals', label: 'Approvals' },
-  { href: '/ess/pms', label: 'My Performance' },
-  { href: '/ess/vendors', label: 'Vendors & Agreements' },
+  { href: '/ess/pms', label: 'Performance' },
+  { href: '/ess/tasks', label: 'Tasks' },
+  { href: '/ess/payslips', label: 'Payslips' },
+  { href: '/ess/support', label: 'Support' },
+  { href: '/ess/policies', label: 'Policies' },
+  { href: '/ess/vendors', label: 'Vendors' },
+  { href: '/ess/resignation', label: 'Resignation' },
+  { href: '/ess/profile', label: 'Profile' },
 ];
 
 export default function EssLayout({ children }) {

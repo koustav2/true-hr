@@ -6,6 +6,19 @@ for (const k of required) {
   if (!process.env[k]) console.warn(`[config] Warning: ${k} is not set`);
 }
 
+// In production, refuse to boot with missing/default secrets — a silently
+// weak JWT secret or PII key is a data breach waiting to happen.
+if (process.env.NODE_ENV === 'production') {
+  const fatal = [];
+  if (!process.env.JWT_SECRET || process.env.JWT_SECRET === 'dev-secret') fatal.push('JWT_SECRET');
+  if (!process.env.PII_ENCRYPTION_KEY || /^0+$/.test(process.env.PII_ENCRYPTION_KEY)) fatal.push('PII_ENCRYPTION_KEY');
+  if (!process.env.DATABASE_URL) fatal.push('DATABASE_URL');
+  if (fatal.length) {
+    console.error(`[config] FATAL: production requires real values for: ${fatal.join(', ')}`);
+    process.exit(1);
+  }
+}
+
 export const config = {
   port: parseInt(process.env.PORT || '4000', 10),
   env: process.env.NODE_ENV || 'development',

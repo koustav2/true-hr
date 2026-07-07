@@ -2,5 +2,5 @@
 // for this release — flip to true to expose the admin sections and the /ess
 // employee portal again.
 export const FEATURES = {
-  nfaSuite: false,
+  nfaSuite: true,
 };

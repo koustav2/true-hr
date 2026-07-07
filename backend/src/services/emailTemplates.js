@@ -118,3 +118,15 @@ export function credentialsEmail({ name, employeeCode, officialEmail, tempPasswo
       ${btn(LOGIN_URL, 'Open Web Console')}${btn(APP_DOWNLOAD, 'Download Android App', '#636363')}`),
   };
 }
+
+// ---- Forgot-password OTP ----
+export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
+  return shell('Password Reset Code', `
+    <p>Dear <strong>${name || 'User'}</strong>,</p>
+    <p>Use the one-time code below to reset your TRUE HR password. It is valid for <strong>${minutes} minutes</strong>.</p>
+    <div style="text-align:center;margin:22px 0">
+      <span style="display:inline-block;background:#f0fdf4;border:1px dashed #059669;color:#065f46;font-size:30px;font-weight:800;letter-spacing:10px;padding:14px 26px;border-radius:12px">${otp}</span>
+    </div>
+    <p style="color:#6b7280;font-size:13px">If you didn't request this, you can safely ignore this email — your password will stay unchanged.</p>
+  `);
+}

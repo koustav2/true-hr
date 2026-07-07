@@ -35,7 +35,7 @@ import com.truehr.app.presentation.components.PrimaryButton
 import com.truehr.app.presentation.theme.*
 
 @Composable
-fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewModel = hiltViewModel()) {
+fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, onForgotPassword: () -> Unit = {}, vm: LoginViewModel = hiltViewModel()) {
   val s by vm.state.collectAsState()
   val event by vm.event.collectAsState()
 
@@ -132,7 +132,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, vm: LoginViewM
           Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium)
         }
         Spacer(Modifier.height(6.dp))
-        TextButton(onClick = {}, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 4.dp)) {
+        TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 4.dp)) {
           Text("Forgot Password?", color = Green, style = MaterialTheme.typography.labelLarge)
         }
         Spacer(Modifier.height(10.dp))

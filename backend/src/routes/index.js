@@ -31,6 +31,8 @@ const r = Router();
 
 // --- Auth ---
 r.post('/auth/login', auth.login);
+r.post('/auth/forgot-password', auth.forgotPassword);
+r.post('/auth/reset-password', auth.resetPassword);
 r.post('/auth/change-password', authenticate, auth.changePassword);
 r.post('/auth/web-sso-token', authenticate, auth.webSsoToken);
 r.post('/auth/web-sso', auth.webSsoExchange);

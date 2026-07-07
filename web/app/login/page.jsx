@@ -1,5 +1,6 @@
 'use client';
 import { useState } from 'react';
+import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { homeFor } from '@/lib/permissions.js';
@@ -56,6 +57,9 @@ export default function LoginPage() {
             <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@truehr.example" required /></Field>
             <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></Field>
             {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{err}</div>}
+            <div className="text-right -mt-1">
+              <Link href="/forgot-password" className="text-sm text-brand-700 font-medium hover:underline">Forgot password?</Link>
+            </div>
             <Button type="submit" disabled={loading} className="w-full">{loading ? <Spinner /> : 'Sign in'}</Button>
           </form>
           {/* <p className="text-xs text-ink-faint mt-6 leading-relaxed">Demo HR login is pre-filled. The password is set during <code className="text-brand-700 bg-brand-50 px-1 py-0.5 rounded">npm run seed</code>.</p> */}

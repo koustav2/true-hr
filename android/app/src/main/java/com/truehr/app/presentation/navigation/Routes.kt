@@ -3,6 +3,7 @@ package com.truehr.app.presentation.navigation
 object Routes {
   const val SPLASH = "splash"
   const val LOGIN = "login"
+  const val FORGOT_PASSWORD = "forgot_password"
   const val CHANGE_PASSWORD = "change_password"
   const val DASHBOARD = "dashboard"
   const val PROFILE = "profile"

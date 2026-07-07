@@ -1040,3 +1040,15 @@ CREATE TABLE IF NOT EXISTS app_banners (
   uploaded_by BIGINT REFERENCES employees(id),
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
+
+-- Forgot-password OTPs (6-digit code emailed to the user; verified on reset).
+CREATE TABLE IF NOT EXISTS password_reset_otps (
+  id         BIGSERIAL PRIMARY KEY,
+  user_id    BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+  otp_hash   TEXT NOT NULL,
+  expires_at TIMESTAMPTZ NOT NULL,
+  attempts   INT NOT NULL DEFAULT 0,
+  used_at    TIMESTAMPTZ,
+  created_at TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_pwreset_user ON password_reset_otps (user_id, created_at DESC);

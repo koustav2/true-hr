@@ -20,6 +20,15 @@ data class LoginResponse(val token: String, val user: UserDto)
 data class ChangePasswordRequest(val newPassword: String)
 
 @Serializable
+data class ForgotPasswordRequest(val email: String)
+
+@Serializable
+data class ResetPasswordRequest(val email: String, val otp: String, val newPassword: String)
+
+@Serializable
+data class OkResponse(val ok: Boolean = false, val message: String? = null)
+
+@Serializable
 data class MeDto(
   val id: Long? = null,
   val email: String? = null,

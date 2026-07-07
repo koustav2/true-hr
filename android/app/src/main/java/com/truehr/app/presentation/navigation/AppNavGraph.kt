@@ -19,6 +19,7 @@ import androidx.navigation.navArgument
 import androidx.navigation.NavType
 import com.truehr.app.presentation.theme.Canvas
 import com.truehr.app.presentation.auth.ChangePasswordScreen
+import com.truehr.app.presentation.auth.ForgotPasswordScreen
 import com.truehr.app.presentation.auth.LoginScreen
 import com.truehr.app.presentation.dashboard.DashboardScreen
 import com.truehr.app.presentation.feature.ApplyMissPunchScreen
@@ -110,7 +111,11 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
       SplashScreen(onLoggedIn = { toDashboard() }, onGuest = { nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } } })
     }
     composable(Routes.LOGIN) {
-      LoginScreen(onLoggedIn = { toDashboard() }, onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD) })
+      LoginScreen(onLoggedIn = { toDashboard() }, onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD) },
+        onForgotPassword = { nav.navigate(Routes.FORGOT_PASSWORD) })
+    }
+    screen(Routes.FORGOT_PASSWORD) {
+      ForgotPasswordScreen(onBack = { nav.popBackStack() })
     }
     screen(Routes.CHANGE_PASSWORD) {
       ChangePasswordScreen(onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })

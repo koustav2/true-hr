@@ -39,6 +39,8 @@ const apiLimiter = rateLimit({
 });
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/web-sso', authLimiter);
+app.use('/api/auth/forgot-password', authLimiter);
+app.use('/api/auth/reset-password', authLimiter);
 app.use('/api', apiLimiter);
 
 // ── Health probes ────────────────────────────────────────────────────────────

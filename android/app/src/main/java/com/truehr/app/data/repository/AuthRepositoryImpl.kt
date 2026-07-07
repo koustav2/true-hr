@@ -32,5 +32,13 @@ class AuthRepositoryImpl @Inject constructor(
     api.changePassword(ChangePasswordRequest(new))
   }
 
+  override suspend fun forgotPassword(email: String) {
+    api.forgotPassword(com.truehr.app.data.remote.dto.ForgotPasswordRequest(email.trim()))
+  }
+
+  override suspend fun resetPassword(email: String, otp: String, newPassword: String) {
+    api.resetPassword(com.truehr.app.data.remote.dto.ResetPasswordRequest(email.trim(), otp.trim(), newPassword))
+  }
+
   override suspend fun logout() = tokenStore.clear()
 }

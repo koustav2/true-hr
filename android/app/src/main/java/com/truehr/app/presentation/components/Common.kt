@@ -129,13 +129,14 @@ fun PrimaryButton(text: String, enabled: Boolean = true, loading: Boolean = fals
 }
 
 @Composable
-fun AppTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, isPassword: Boolean = false, visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, trailing: @Composable (() -> Unit)? = null) {
+fun AppTextField(value: String, onValueChange: (String) -> Unit, label: String, modifier: Modifier = Modifier, isPassword: Boolean = false, visualTransformation: androidx.compose.ui.text.input.VisualTransformation = androidx.compose.ui.text.input.VisualTransformation.None, trailing: @Composable (() -> Unit)? = null, keyboardOptions: androidx.compose.foundation.text.KeyboardOptions = androidx.compose.foundation.text.KeyboardOptions.Default) {
   OutlinedTextField(
     value = value,
     onValueChange = onValueChange,
     label = { Text(label) },
     singleLine = true,
     visualTransformation = visualTransformation,
+    keyboardOptions = keyboardOptions,
     trailingIcon = trailing,
     shape = RoundedCornerShape(14.dp),
     colors = OutlinedTextFieldDefaults.colors(

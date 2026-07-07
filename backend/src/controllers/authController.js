@@ -3,6 +3,9 @@ import { verifyPassword, hashPassword } from '../utils/password.js';
 import { signToken, signSsoToken, verifyToken } from '../utils/jwt.js';
 import { decrypt } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
+import { createHash, randomInt } from 'crypto';
+import { enqueueEmail } from '../services/emailQueue.js';
+import { passwordResetOtpEmail } from '../services/emailTemplates.js';
 
 export async function login(req, res, next) {
   try {
@@ -53,6 +56,79 @@ export async function webSsoExchange(req, res, next) {
       token: session,
       user: { id: user.id, email: user.email, role: user.role, mustChangePassword: user.must_change_password },
     });
+  } catch (e) { next(e); }
+}
+
+// Shared lookup: official email OR employee code (same rule as login).
+async function findAccount(ident) {
+  let user = (await query(`SELECT ua.*, e.first_name FROM user_accounts ua LEFT JOIN employees e ON e.id=ua.employee_id
+                            WHERE lower(ua.email)=lower($1)`, [ident])).rows[0];
+  if (!user) {
+    user = (await query(
+      `SELECT ua.*, e.first_name FROM user_accounts ua JOIN employees e ON e.id=ua.employee_id
+       WHERE upper(e.employee_code)=upper($1) LIMIT 1`, [ident])).rows[0];
+  }
+  return user;
+}
+
+const OTP_MINUTES = 10;
+const OTP_MAX_ATTEMPTS = 5;
+const hashOtp = (otp) => createHash('sha256').update(String(otp)).digest('hex');
+
+// POST /auth/forgot-password { email }  (public, rate-limited)
+// Always answers ok so account existence can't be probed. OTP goes through the
+// normal email queue (SendGrid/SMTP in prod, [mailer:DEV] log locally).
+export async function forgotPassword(req, res, next) {
+  try {
+    const ident = (req.body?.email || '').trim();
+    if (!ident) return res.status(400).json({ error: 'Email or Employee ID is required' });
+    const user = await findAccount(ident);
+    if (user && user.status !== 'DISABLED') {
+      const otp = String(randomInt(100000, 1000000)); // 6 digits, crypto-secure
+      await query(`DELETE FROM password_reset_otps WHERE user_id=$1`, [user.id]);
+      await query(
+        `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at)
+         VALUES ($1,$2, now() + ($3 || ' minutes')::interval)`,
+        [user.id, hashOtp(otp), OTP_MINUTES]);
+      await enqueueEmail({
+        to: user.email,
+        subject: 'TRUE HR — your password reset code',
+        html: passwordResetOtpEmail({ name: user.first_name, otp, minutes: OTP_MINUTES }),
+        template: 'password_reset_otp',
+      });
+      await audit(user.id, 'PASSWORD_RESET_REQUESTED', 'user_account', user.id);
+    }
+    res.json({ ok: true, message: 'If the account exists, a reset code has been emailed.' });
+  } catch (e) { next(e); }
+}
+
+// POST /auth/reset-password { email, otp, newPassword }  (public, rate-limited)
+export async function resetPassword(req, res, next) {
+  try {
+    const ident = (req.body?.email || '').trim();
+    const { otp, newPassword } = req.body || {};
+    if (!ident || !otp) return res.status(400).json({ error: 'Email and OTP are required' });
+    if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+
+    const user = await findAccount(ident);
+    const invalid = () => res.status(400).json({ error: 'Invalid or expired code' });
+    if (!user || user.status === 'DISABLED') return invalid();
+
+    const row = (await query(
+      `SELECT * FROM password_reset_otps WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1`, [user.id])).rows[0];
+    if (!row || row.used_at || new Date(row.expires_at) < new Date()) return invalid();
+    if (row.attempts >= OTP_MAX_ATTEMPTS) return res.status(429).json({ error: 'Too many wrong attempts — request a new code' });
+
+    if (hashOtp(otp) !== row.otp_hash) {
+      await query(`UPDATE password_reset_otps SET attempts=attempts+1 WHERE id=$1`, [row.id]);
+      return invalid();
+    }
+
+    const hash = await hashPassword(newPassword);
+    await query(`UPDATE user_accounts SET password_hash=$1, must_change_password=false WHERE id=$2`, [hash, user.id]);
+    await query(`UPDATE password_reset_otps SET used_at=now() WHERE id=$1`, [row.id]);
+    await audit(user.id, 'PASSWORD_RESET', 'user_account', user.id);
+    res.json({ ok: true });
   } catch (e) { next(e); }
 }
 

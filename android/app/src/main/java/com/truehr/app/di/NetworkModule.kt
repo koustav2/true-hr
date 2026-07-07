@@ -1,7 +1,7 @@
 package com.truehr.app.di
 
-import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.truehr.app.BuildConfig
+import com.jakewharton.retrofit2.converter.kotlinx.serialization.asConverterFactory
 import com.truehr.app.data.remote.ApiService
 import com.truehr.app.data.remote.AuthInterceptor
 import dagger.Module

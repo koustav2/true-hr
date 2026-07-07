@@ -1,6 +1,9 @@
 package com.truehr.app.presentation.components
 
+import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
+import androidx.compose.foundation.clickable
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
@@ -13,44 +16,86 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import com.truehr.app.presentation.theme.*
 
 fun initials(name: String): String =
   name.trim().split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }.ifBlank { "U" }
 
+/** Executive navy gradient header with soft glow accents and rounded base. */
 @Composable
 fun GradientHeader(content: @Composable BoxScope.() -> Unit) {
   Box(
     modifier = Modifier
       .fillMaxWidth()
-      .background(Brush.linearGradient(listOf(Green, Color(0xFF1C82B0), Teal)))
-      .statusBarsPadding()
-      .padding(horizontal = 20.dp, vertical = 18.dp),
-    content = content,
-  )
+      .clip(RoundedCornerShape(bottomStart = 26.dp, bottomEnd = 26.dp))
+      .background(Brush.linearGradient(listOf(Navy, NavyMid, NavyBright))),
+  ) {
+    // Decorative glow circles for depth.
+    Box(Modifier.size(190.dp).offset(x = (-60).dp, y = (-80).dp).clip(CircleShape).background(Color.White.copy(alpha = 0.05f)))
+    Box(Modifier.size(150.dp).align(Alignment.TopEnd).offset(x = 45.dp, y = (-40).dp).clip(CircleShape).background(Color.White.copy(alpha = 0.06f)))
+    Box(
+      modifier = Modifier
+        .fillMaxWidth()
+        .statusBarsPadding()
+        .padding(horizontal = 20.dp, vertical = 18.dp),
+      content = content,
+    )
+  }
+}
+
+/** Frosted circular icon button used inside gradient headers. */
+@Composable
+fun HeaderIconButton(icon: ImageVector, contentDescription: String? = null, onClick: () -> Unit) {
+  Box(
+    modifier = Modifier
+      .size(40.dp)
+      .clip(CircleShape)
+      .background(Color.White.copy(alpha = 0.14f))
+      .border(1.dp, Color.White.copy(alpha = 0.18f), CircleShape)
+      .clickable(onClick = onClick),
+    contentAlignment = Alignment.Center,
+  ) {
+    Icon(icon, contentDescription, tint = Surface, modifier = Modifier.size(20.dp))
+  }
 }
 
 @Composable
 fun Avatar(name: String, size: Int = 44) {
   Box(
-    modifier = Modifier.size(size.dp).clip(CircleShape).background(Surface.copy(alpha = 0.25f)),
+    modifier = Modifier
+      .size(size.dp)
+      .clip(CircleShape)
+      .background(Brush.linearGradient(listOf(Color.White.copy(alpha = 0.32f), Color.White.copy(alpha = 0.14f))))
+      .border(1.5.dp, Color.White.copy(alpha = 0.45f), CircleShape),
     contentAlignment = Alignment.Center,
   ) {
-    Text(initials(name), color = Surface, fontWeight = FontWeight.Bold)
+    Text(initials(name), color = Surface, fontWeight = FontWeight.Bold, fontSize = (size * 0.34).sp, letterSpacing = 0.5.sp)
   }
 }
 
 @Composable
 fun SectionTitle(text: String, modifier: Modifier = Modifier) {
-  Text(text, style = MaterialTheme.typography.titleLarge, color = Ink, modifier = modifier.padding(vertical = 6.dp))
+  Row(verticalAlignment = Alignment.CenterVertically, modifier = modifier.padding(vertical = 6.dp)) {
+    Box(Modifier.width(4.dp).height(17.dp).clip(RoundedCornerShape(2.dp)).background(Green))
+    Spacer(Modifier.width(9.dp))
+    Text(text, style = MaterialTheme.typography.titleMedium, color = Ink, fontWeight = FontWeight.Bold)
+  }
 }
 
 @Composable
 fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
-  Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+  Surface(
+    color = Surface,
+    shape = RoundedCornerShape(18.dp),
+    border = BorderStroke(1.dp, Line),
+    shadowElevation = 1.dp,
+    modifier = Modifier.fillMaxWidth(),
+  ) {
     Column(Modifier.padding(18.dp), content = content)
   }
 }
@@ -58,22 +103,28 @@ fun InfoCard(content: @Composable ColumnScope.() -> Unit) {
 @Composable
 fun InfoRow(label: String, value: String?) {
   Column(Modifier.padding(vertical = 7.dp)) {
-    Text(label, color = InkFaint, style = MaterialTheme.typography.labelSmall)
-    Text(value?.ifBlank { "—" } ?: "—", color = Ink, style = MaterialTheme.typography.bodyLarge)
+    Text(label.uppercase(), color = InkFaint, style = MaterialTheme.typography.labelSmall, letterSpacing = 0.8.sp)
+    Spacer(Modifier.height(2.dp))
+    Text(value?.ifBlank { "—" } ?: "—", color = Ink, style = MaterialTheme.typography.bodyLarge, fontWeight = FontWeight.Medium)
   }
 }
 
 @Composable
 fun PrimaryButton(text: String, enabled: Boolean = true, loading: Boolean = false, onClick: () -> Unit, modifier: Modifier = Modifier) {
-  Button(
-    onClick = onClick,
-    enabled = enabled && !loading,
-    shape = RoundedCornerShape(12.dp),
-    colors = ButtonDefaults.buttonColors(containerColor = Green, contentColor = Surface),
-    modifier = modifier.height(50.dp),
+  val active = enabled && !loading
+  Box(
+    modifier = modifier
+      .height(52.dp)
+      .clip(RoundedCornerShape(14.dp))
+      .background(
+        if (active) Brush.horizontalGradient(listOf(GreenDark, Green, NavyBright))
+        else Brush.horizontalGradient(listOf(InkFaint, InkFaint)),
+      )
+      .clickable(enabled = active, onClick = onClick),
+    contentAlignment = Alignment.Center,
   ) {
     if (loading) CircularProgressIndicator(color = Surface, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))
-    else Text(text, fontWeight = FontWeight.SemiBold)
+    else Text(text, color = Surface, style = MaterialTheme.typography.labelLarge, modifier = Modifier.padding(horizontal = 26.dp))
   }
 }
 
@@ -86,8 +137,16 @@ fun AppTextField(value: String, onValueChange: (String) -> Unit, label: String, 
     singleLine = true,
     visualTransformation = visualTransformation,
     trailingIcon = trailing,
-    shape = RoundedCornerShape(12.dp),
-    colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green, focusedLabelColor = Green, cursorColor = Green),
+    shape = RoundedCornerShape(14.dp),
+    colors = OutlinedTextFieldDefaults.colors(
+      focusedBorderColor = Green,
+      unfocusedBorderColor = Line,
+      focusedLabelColor = Green,
+      unfocusedLabelColor = InkFaint,
+      cursorColor = Green,
+      focusedContainerColor = Surface,
+      unfocusedContainerColor = Surface,
+    ),
     modifier = modifier.fillMaxWidth(),
   )
 }
@@ -116,7 +175,7 @@ fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
   Column(Modifier.fillMaxSize().padding(28.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
     Text("⚠️", style = MaterialTheme.typography.headlineSmall)
     Spacer(Modifier.height(8.dp))
-    Text(message, color = InkSoft, style = MaterialTheme.typography.bodyLarge)
+    Text(message, color = InkSoft, style = MaterialTheme.typography.bodyLarge, textAlign = TextAlign.Center)
     if (onRetry != null) { Spacer(Modifier.height(14.dp)); PrimaryButton("Retry", onClick = onRetry) }
   }
 }

@@ -1,14 +1,23 @@
 package com.truehr.app.presentation.navigation
 
+import androidx.compose.foundation.background
+import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.foundation.layout.navigationBarsPadding
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.ui.Modifier
 import androidx.hilt.navigation.compose.hiltViewModel
+import androidx.navigation.NamedNavArgument
+import androidx.navigation.NavBackStackEntry
+import androidx.navigation.NavGraphBuilder
 import androidx.navigation.NavHostController
 import androidx.navigation.compose.NavHost
 import androidx.navigation.compose.composable
 import androidx.navigation.compose.rememberNavController
 import androidx.navigation.navArgument
 import androidx.navigation.NavType
+import com.truehr.app.presentation.theme.Canvas
 import com.truehr.app.presentation.auth.ChangePasswordScreen
 import com.truehr.app.presentation.auth.LoginScreen
 import com.truehr.app.presentation.dashboard.DashboardScreen
@@ -62,6 +71,21 @@ import com.truehr.app.presentation.profile.PfScreen
 import com.truehr.app.presentation.profile.ProfileScreen
 import com.truehr.app.presentation.splash.SplashScreen
 
+/**
+ * Post-login route: keeps content above the system navigation bar while the
+ * canvas colour still paints behind the transparent bar (edge-to-edge).
+ * Splash/Login stay on plain [composable] — they draw full-bleed and pad themselves.
+ */
+private fun NavGraphBuilder.screen(
+  route: String,
+  arguments: List<NamedNavArgument> = emptyList(),
+  content: @Composable (NavBackStackEntry) -> Unit,
+) {
+  composable(route, arguments) { entry ->
+    Box(Modifier.fillMaxSize().background(Canvas).navigationBarsPadding()) { content(entry) }
+  }
+}
+
 @Composable
 fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootViewModel = hiltViewModel()) {
 
@@ -87,27 +111,27 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     composable(Routes.LOGIN) {
       LoginScreen(onLoggedIn = { toDashboard() }, onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD) })
     }
-    composable(Routes.CHANGE_PASSWORD) {
+    screen(Routes.CHANGE_PASSWORD) {
       ChangePasswordScreen(onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
     }
-    composable(Routes.DASHBOARD) {
+    screen(Routes.DASHBOARD) {
       DashboardScreen(onOpen = { route -> nav.navigate(route) }, onLoggedOut = { toLogin() })
     }
-    composable(Routes.PROFILE) { ProfileScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.PF) { PfScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.PROFILE) { ProfileScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.PF) { PfScreen(onBack = { nav.popBackStack() }) }
 
-    composable(Routes.ATTENDANCE) { AttendanceMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.MARK_ATTENDANCE) { MarkAttendanceScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.DAILY_ATTENDANCE) { DailyAttendanceScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.MONTHLY_ATTENDANCE) { MonthlyAttendanceScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_ATTENDANCE) {
+    screen(Routes.ATTENDANCE) { AttendanceMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    screen(Routes.MARK_ATTENDANCE) { MarkAttendanceScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.DAILY_ATTENDANCE) { DailyAttendanceScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.MONTHLY_ATTENDANCE) { MonthlyAttendanceScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_ATTENDANCE) {
       TeamAttendanceScreen(
         onBack = { nav.popBackStack() },
         onOpenDaily = { m -> nav.navigate(Routes.memberDaily(m.employeeId, m.name)) },
         onOpenMonthly = { m -> nav.navigate(Routes.memberMonthly(m.employeeId, m.name)) },
       )
     }
-    composable(
+    screen(
       route = Routes.MEMBER_DAILY,
       arguments = listOf(
         navArgument("eid") { type = NavType.LongType; defaultValue = 0L },
@@ -118,7 +142,7 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
       val name = entry.arguments?.getString("name").orEmpty()
       DailyAttendanceScreen(onBack = { nav.popBackStack() }, employeeId = eid.takeIf { it > 0 }, name = name)
     }
-    composable(
+    screen(
       route = Routes.MEMBER_MONTHLY,
       arguments = listOf(
         navArgument("eid") { type = NavType.LongType; defaultValue = 0L },
@@ -129,83 +153,83 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
       val name = entry.arguments?.getString("name").orEmpty()
       MonthlyAttendanceScreen(onBack = { nav.popBackStack() }, employeeId = eid.takeIf { it > 0 }, name = name)
     }
-    composable(Routes.HOLD_TEAM_ATTENDANCE) { HoldTeamScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.APPLY_MISS_PUNCH) { ApplyMissPunchScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.VIEW_MISS_PUNCH) { MissPunchListScreen("View Miss Punch", teamView = false, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_MISS_PUNCH) { MissPunchListScreen("Team Miss Punch", teamView = true, onBack = { nav.popBackStack() }) }
+    screen(Routes.HOLD_TEAM_ATTENDANCE) { HoldTeamScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.APPLY_MISS_PUNCH) { ApplyMissPunchScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.VIEW_MISS_PUNCH) { MissPunchListScreen("View Miss Punch", teamView = false, onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_MISS_PUNCH) { MissPunchListScreen("Team Miss Punch", teamView = true, onBack = { nav.popBackStack() }) }
 
-    composable(Routes.APPLY_OD) { ApplyOdScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.VIEW_OD) { OdListScreen("View OD", teamView = false, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_OD) { OdListScreen("Team OD", teamView = true, onBack = { nav.popBackStack() }) }
+    screen(Routes.APPLY_OD) { ApplyOdScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.VIEW_OD) { OdListScreen("View OD", teamView = false, onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_OD) { OdListScreen("Team OD", teamView = true, onBack = { nav.popBackStack() }) }
 
-    composable(Routes.LEAVE) { LeaveMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }, onAvailCompOff = { nav.navigate(Routes.AVAIL_COMPOFF) }) }
-    composable(Routes.VIEW_LEAVE) { LeaveListScreen("View Leave", teamView = false, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_LEAVE) { LeaveListScreen("Team Leave", teamView = true, onBack = { nav.popBackStack() }) }
-    composable(Routes.AVAIL_COMPOFF) { CompOffScreen("Avail CompOff", teamView = false, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_COMPOFF) { CompOffScreen("Team CompOff", teamView = true, onBack = { nav.popBackStack() }) }
-    composable(Routes.SALARY) { SalarySlipScreen(onBack = { nav.popBackStack() }, onOpenDetail = { id -> nav.navigate(Routes.salaryDetail(id)) }) }
-    composable(
+    screen(Routes.LEAVE) { LeaveMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    screen(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }, onAvailCompOff = { nav.navigate(Routes.AVAIL_COMPOFF) }) }
+    screen(Routes.VIEW_LEAVE) { LeaveListScreen("View Leave", teamView = false, onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_LEAVE) { LeaveListScreen("Team Leave", teamView = true, onBack = { nav.popBackStack() }) }
+    screen(Routes.AVAIL_COMPOFF) { CompOffScreen("Avail CompOff", teamView = false, onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_COMPOFF) { CompOffScreen("Team CompOff", teamView = true, onBack = { nav.popBackStack() }) }
+    screen(Routes.SALARY) { SalarySlipScreen(onBack = { nav.popBackStack() }, onOpenDetail = { id -> nav.navigate(Routes.salaryDetail(id)) }) }
+    screen(
       route = Routes.SALARY_DETAIL,
       arguments = listOf(navArgument("id") { type = NavType.LongType }),
     ) { e -> PayslipDetailScreen(payslipId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.POLICIES) { PoliciesScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.SUPPORT) { SupportDeskScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(
+    screen(Routes.TEAM) { TeamListScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.ADDRESS_BOOK) { AddressBookScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.POLICIES) { PoliciesScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.SUPPORT) { SupportDeskScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    screen(
       route = Routes.SUPPORT_CREATE,
       arguments = listOf(navArgument("cat") { type = NavType.StringType }),
     ) { e -> CreateTicketScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
-    composable(
+    screen(
       route = Routes.SUPPORT_VIEW,
       arguments = listOf(navArgument("cat") { type = NavType.StringType }),
     ) { e -> ViewTicketsScreen(category = e.arguments?.getString("cat") ?: "HR", onBack = { nav.popBackStack() }) }
-    composable(Routes.TOUR) { TourScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.TOUR_LIVE) { LiveTourScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TOUR_DETAILS) { TourDetailsScreen(onBack = { nav.popBackStack() }, onOpenRoute = { id -> nav.navigate(Routes.tourRoute(id)) }) }
-    composable(
+    screen(Routes.TOUR) { TourScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    screen(Routes.TOUR_LIVE) { LiveTourScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TOUR_DETAILS) { TourDetailsScreen(onBack = { nav.popBackStack() }, onOpenRoute = { id -> nav.navigate(Routes.tourRoute(id)) }) }
+    screen(
       route = Routes.TOUR_ROUTE,
       arguments = listOf(navArgument("id") { type = NavType.LongType }),
     ) { e -> TourRouteScreen(tourId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
-    composable(Routes.GEOTAG) { GeoTagScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.GEOTAG_LIST) { GeoTagListScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TASK_SUMMARY) { TaskSummaryScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.ASSIGN_TASK) { AssignTaskScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_TASK) { TeamTaskScreen(onAssign = { nav.navigate(Routes.ASSIGN_TASK) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.ESS) {
+    screen(Routes.GEOTAG) { GeoTagScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.GEOTAG_LIST) { GeoTagListScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TASK_SUMMARY) { TaskSummaryScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.ASSIGN_TASK) { AssignTaskScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_TASK) { TeamTaskScreen(onAssign = { nav.navigate(Routes.ASSIGN_TASK) }, onBack = { nav.popBackStack() }) }
+    screen(Routes.RESIGNATION) { ResignationScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_RESIGNATION) { TeamResignationScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.ESS) {
       // ESS hub (with NFA/PMS tiles) is flag-gated for this release.
       if (com.truehr.app.core.FeatureFlags.NFA_SUITE) EssScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() })
       else FeatureScreen("My ESS", onBack = { nav.popBackStack() })
     }
-    composable(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.MY_PERFORMANCE) {
+    screen(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.MY_PERFORMANCE) {
       MyPerformanceScreen(onBack = { nav.popBackStack() },
         onCreateKpi = { nav.navigate(Routes.CREATE_KPI) },
         onOpenKpi = { id -> nav.navigate(Routes.kpiDetail(id)) })
     }
-    composable(Routes.CREATE_KPI) { CreateKpiScreen(onBack = { nav.popBackStack() }) }
-    composable(
+    screen(Routes.CREATE_KPI) { CreateKpiScreen(onBack = { nav.popBackStack() }) }
+    screen(
       route = Routes.KPI_DETAIL,
       arguments = listOf(navArgument("id") { type = NavType.LongType }),
     ) { e -> KpiDetailScreen(kpiId = e.arguments?.getLong("id") ?: 0L, onBack = { nav.popBackStack() }) }
-    composable(Routes.TEAM_PMS) { TeamPmsScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.VENDOR_REGISTRATION) { VendorRegistrationScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.UPLOAD_AGREEMENT) { UploadAgreementScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.TEAM_PMS) { TeamPmsScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.VENDOR_REGISTRATION) { VendorRegistrationScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.UPLOAD_AGREEMENT) { UploadAgreementScreen(onBack = { nav.popBackStack() }) }
 
-    composable(Routes.NFA) { NfaMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    composable(Routes.NFA_CREATE) { CreateNfaScreen(onBack = { nav.popBackStack() }) }
-    composable(Routes.NFA_LIST) {
+    screen(Routes.NFA) { NfaMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
+    screen(Routes.NFA_CREATE) { CreateNfaScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.NFA_LIST) {
       NfaListScreen("My NFAs", inbox = false, onBack = { nav.popBackStack() },
         onOpen = { id, act -> nav.navigate(Routes.nfaDetail(id, act)) })
     }
-    composable(Routes.NFA_APPROVALS) {
+    screen(Routes.NFA_APPROVALS) {
       NfaListScreen("NFA Approvals", inbox = true, onBack = { nav.popBackStack() },
         onOpen = { id, act -> nav.navigate(Routes.nfaDetail(id, act)) })
     }
-    composable(
+    screen(
       route = Routes.NFA_DETAIL,
       arguments = listOf(
         navArgument("id") { type = NavType.LongType },
@@ -219,7 +243,7 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
       )
     }
 
-    composable(
+    screen(
       route = Routes.FEATURE,
       arguments = listOf(navArgument("title") { type = NavType.StringType }),
     ) { entry ->

@@ -57,19 +57,28 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
     GradientHeader {
       Column {
         Row(verticalAlignment = Alignment.CenterVertically) {
-          Avatar(header.name, 52)
-          Spacer(Modifier.width(13.dp))
-          Column(Modifier.weight(1f)) {
-            Text(greeting(), color = Surface.copy(alpha = 0.72f), style = MaterialTheme.typography.labelMedium)
-            Text(
-              header.name.ifBlank { "Welcome" },
-              color = Surface,
-              style = MaterialTheme.typography.titleLarge,
-              maxLines = 1,
-              overflow = TextOverflow.Ellipsis,
-            )
-            if (header.designation.isNotBlank()) {
-              Text(header.designation, color = Surface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+          // Avatar + name open My Profile.
+          Row(
+            verticalAlignment = Alignment.CenterVertically,
+            modifier = Modifier
+              .weight(1f)
+              .clip(RoundedCornerShape(14.dp))
+              .clickable { onOpen(Routes.PROFILE) },
+          ) {
+            Avatar(header.name, 52)
+            Spacer(Modifier.width(13.dp))
+            Column(Modifier.weight(1f)) {
+              Text(greeting(), color = Surface.copy(alpha = 0.72f), style = MaterialTheme.typography.labelMedium)
+              Text(
+                header.name.ifBlank { "Welcome" },
+                color = Surface,
+                style = MaterialTheme.typography.titleLarge,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis,
+              )
+              if (header.designation.isNotBlank()) {
+                Text(header.designation, color = Surface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              }
             }
           }
           HeaderIconButton(Icons.Filled.Notifications, "Notifications") {}

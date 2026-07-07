@@ -145,6 +145,10 @@ interface ApiService {
   @GET("policies/{id}/file")
   suspend fun policyFile(@Path("id") id: Long): ResponseBody
 
+  // Dashboard banner carousel (images load via Coil from banners/{id}/image)
+  @GET("banners")
+  suspend fun banners(): List<com.truehr.app.data.remote.dto.BannerDto>
+
   // Tasks
   @GET("tasks")
   suspend fun tasks(

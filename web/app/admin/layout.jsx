@@ -20,6 +20,7 @@ const WORKSPACE = [
   { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, show: can.hr },
   { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, show: can.hr },
   { href: '/admin/policies', label: 'Policies', Icon: IconFile, show: can.hr },
+  { href: '/admin/banners', label: 'App Banners', Icon: IconFile, show: can.hr },
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
   { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, show: can.hr },
 ];

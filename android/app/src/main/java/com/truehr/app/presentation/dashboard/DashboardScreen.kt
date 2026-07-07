@@ -8,6 +8,8 @@ import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
+import androidx.compose.foundation.pager.HorizontalPager
+import androidx.compose.foundation.pager.rememberPagerState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -20,17 +22,22 @@ import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.layout.ContentScale
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import coil.compose.AsyncImage
+import com.truehr.app.BuildConfig
+import com.truehr.app.data.remote.dto.BannerDto
 import com.truehr.app.presentation.components.Avatar
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.HeaderIconButton
 import com.truehr.app.presentation.components.SectionTitle
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.theme.*
+import kotlinx.coroutines.delay
 import java.text.SimpleDateFormat
 import java.util.Calendar
 import java.util.Date
@@ -45,6 +52,7 @@ private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_
 @Composable
 fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: DashboardViewModel = hiltViewModel()) {
   val header by vm.header.collectAsState()
+  val banners by vm.banners.collectAsState()
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
       Column {
@@ -94,11 +102,68 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
       horizontalArrangement = Arrangement.spacedBy(10.dp),
       verticalArrangement = Arrangement.spacedBy(10.dp),
     ) {
+      if (banners.isNotEmpty()) {
+        item(span = { GridItemSpan(maxLineSpan) }) {
+          BannerCarousel(banners)
+        }
+      }
       item(span = { GridItemSpan(maxLineSpan) }) {
         SectionTitle("Workspace")
       }
       items(items) { item ->
         DashboardTile(item) { onOpen(item.route) }
+      }
+    }
+  }
+}
+
+/** Auto-scrolling banner carousel (HR-managed images) with page-dot markers. */
+@Composable
+private fun BannerCarousel(banners: List<BannerDto>) {
+  val pagerState = rememberPagerState(pageCount = { banners.size })
+
+  // Auto-advance every few seconds; keying on settledPage re-arms the timer after
+  // both automatic scrolls and manual swipes.
+  LaunchedEffect(pagerState.settledPage, banners.size) {
+    if (banners.size > 1) {
+      delay(3500)
+      pagerState.animateScrollToPage((pagerState.settledPage + 1) % banners.size)
+    }
+  }
+
+  Box {
+    HorizontalPager(state = pagerState, pageSpacing = 10.dp) { page ->
+      AsyncImage(
+        model = BuildConfig.BASE_URL + "banners/${banners[page].id}/image",
+        contentDescription = "Banner ${page + 1} of ${banners.size}",
+        contentScale = ContentScale.Crop,
+        modifier = Modifier
+          .fillMaxWidth()
+          .height(140.dp)
+          .clip(RoundedCornerShape(18.dp))
+          .background(Color(0xFFE6E9EF)), // placeholder tint while loading
+      )
+    }
+    if (banners.size > 1) {
+      Row(
+        modifier = Modifier
+          .align(Alignment.BottomCenter)
+          .padding(bottom = 9.dp)
+          .clip(RoundedCornerShape(50))
+          .background(Color.Black.copy(alpha = 0.28f))
+          .padding(horizontal = 8.dp, vertical = 4.dp),
+        horizontalArrangement = Arrangement.spacedBy(5.dp),
+        verticalAlignment = Alignment.CenterVertically,
+      ) {
+        repeat(banners.size) { i ->
+          val active = i == pagerState.currentPage
+          Box(
+            Modifier
+              .size(width = if (active) 14.dp else 6.dp, height = 6.dp)
+              .clip(RoundedCornerShape(50))
+              .background(if (active) Color.White else Color.White.copy(alpha = 0.55f)),
+          )
+        }
       }
     }
   }

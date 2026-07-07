@@ -2,6 +2,8 @@ package com.truehr.app.presentation.dashboard
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.truehr.app.data.remote.ApiService
+import com.truehr.app.data.remote.dto.BannerDto
 import com.truehr.app.domain.repository.AuthRepository
 import com.truehr.app.domain.repository.ProfileRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
@@ -16,8 +18,11 @@ data class HeaderState(val name: String = "Employee", val designation: String = 
 class DashboardViewModel @Inject constructor(
   private val profileRepository: ProfileRepository,
   private val authRepository: AuthRepository,
+  // Single read-only call — not worth a repository of its own.
+  private val api: ApiService,
 ) : ViewModel() {
   val header = MutableStateFlow(HeaderState())
+  val banners = MutableStateFlow<List<BannerDto>>(emptyList())
 
   init { load() }
 
@@ -26,6 +31,7 @@ class DashboardViewModel @Inject constructor(
       val p = profileRepository.getProfile()
       header.update { HeaderState(p.fullName, p.designation, p.isManager) }
     } catch (_: Exception) { /* keep defaults */ }
+    try { banners.value = api.banners() } catch (_: Exception) { /* no carousel */ }
   }
 
   fun logout(onDone: () -> Unit) = viewModelScope.launch { authRepository.logout(); onDone() }

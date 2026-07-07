@@ -1028,3 +1028,15 @@ CREATE TABLE IF NOT EXISTS agreements (
 -- so pre-existing duplicate test data can't abort the whole migration.
 -- NOTE: the SUPER_ADMIN enum value is added separately in migrate.js
 -- (ALTER TYPE ... ADD VALUE cannot run inside a multi-statement transaction).
+
+-- App dashboard banners: HR uploads images from the admin portal; the mobile app
+-- shows them in an auto-scrolling carousel above the Workspace grid.
+CREATE TABLE IF NOT EXISTS app_banners (
+  id          BIGSERIAL PRIMARY KEY,
+  image       TEXT NOT NULL,             -- base64 image payload
+  mime        TEXT,
+  filename    TEXT,
+  sort_order  INT NOT NULL DEFAULT 0,
+  uploaded_by BIGINT REFERENCES employees(id),
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);

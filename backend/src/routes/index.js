@@ -12,6 +12,7 @@ import * as compOff from '../controllers/compOffController.js';
 import * as leaveAdmin from '../controllers/leaveAdminController.js';
 import * as support from '../controllers/supportController.js';
 import * as policy from '../controllers/policyController.js';
+import * as banner from '../controllers/bannerController.js';
 import * as tour from '../controllers/tourController.js';
 import * as payroll from '../controllers/payrollController.js';
 import * as dashboard from '../controllers/dashboardController.js';
@@ -81,6 +82,8 @@ r.post('/compoff/:id/review', authenticate, compOff.review);
 // --- Support Desk (HR / IT / Admin) ---
 // --- Policies (employee read) ---
 r.get('/policies', authenticate, policy.list);
+r.get('/banners', authenticate, banner.list);
+r.get('/banners/:id/image', authenticate, banner.image);
 r.get('/policies/:id/file', authenticate, policy.file);
 
 // --- Tour Management (live GPS tracking + geo-tags) ---
@@ -253,5 +256,10 @@ r.delete('/admin/payslips/:id', authenticate, requireStaff, payroll.remove);
 r.get('/admin/policies', authenticate, requireStaff, policy.adminList);
 r.post('/admin/policies', authenticate, requireStaff, policy.create);
 r.delete('/admin/policies/:id', authenticate, requireStaff, policy.remove);
+
+// --- App dashboard banners (HR manage) ---
+r.get('/admin/banners', authenticate, requireStaff, banner.adminList);
+r.post('/admin/banners', authenticate, requireStaff, banner.create);
+r.delete('/admin/banners/:id', authenticate, requireStaff, banner.remove);
 
 export default r;

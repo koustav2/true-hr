@@ -37,7 +37,7 @@ android {
     applicationId = "com.truehr.app"
     minSdk = 24
     targetSdk = 34
-    versionCode = 2
+    versionCode = 3
     versionName = "1.1.0"
     vectorDrawables { useSupportLibrary = true }
 
@@ -76,7 +76,8 @@ android {
 
   buildTypes {
     release {
-      isMinifyEnabled = false
+      isMinifyEnabled = true
+      isShrinkResources = true
       proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")
       if (hasReleaseKeystore) signingConfig = signingConfigs.getByName("release")
     }

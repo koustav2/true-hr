@@ -34,3 +34,7 @@ body {
 /* premium hover lift for cards/tiles that opt in */
 .lift { transition: box-shadow .2s cubic-bezier(.4,0,.2,1), transform .2s cubic-bezier(.4,0,.2,1), border-color .2s; }
 .lift:hover { transform: translateY(-2px); }
+
+/* hide scrollbars where layout provides its own affordance (pill navs) */
+.scrollbar-none { scrollbar-width: none; }
+.scrollbar-none::-webkit-scrollbar { display: none; }

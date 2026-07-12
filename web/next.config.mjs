@@ -2,6 +2,9 @@
 // API proxying is handled at runtime by app/api/[...path]/route.js (reads API_ORIGIN live),
 // because next.config rewrites() are resolved at build time and can't pick up runtime env.
 const nextConfig = {
+  // Production serves the whole app under truehr.co.in/app (the root domain is
+  // a static landing page handled by nginx). Empty in dev — no prefix locally.
+  basePath: process.env.NEXT_PUBLIC_BASE_PATH || '',
   reactStrictMode: true,
   poweredByHeader: false,
   async headers() {

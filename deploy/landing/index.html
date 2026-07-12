@@ -1,0 +1,137 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"/>
+<meta name="viewport" content="width=device-width, initial-scale=1"/>
+<title>TRUE HR — People first. Paperwork automated.</title>
+<meta name="description" content="TRUE HR runs the entire employee journey — offer letter to attendance, leave, expenses, performance and payroll — on the web and in your pocket."/>
+<style>
+  :root{--navy:#0f2557;--blue:#1d4ed8;--green:#16a34a;--ink:#0f172a;--soft:#475569;--faint:#94a3b8;--line:#e9ecf1;--canvas:#f7f8fa}
+  *{margin:0;padding:0;box-sizing:border-box}
+  body{font-family:'Segoe UI',system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;letter-spacing:-.006em}
+  a{text-decoration:none;color:inherit}
+  .wrap{max-width:1100px;margin:0 auto;padding:0 20px}
+  /* nav */
+  header{position:sticky;top:0;z-index:40;background:rgba(255,255,255,.82);backdrop-filter:blur(14px);border-bottom:1px solid var(--line)}
+  .nav{height:64px;display:flex;align-items:center;justify-content:space-between}
+  .logo{font-weight:800;font-size:19px;letter-spacing:-.02em}
+  .logo b{color:var(--blue)} .logo i{color:var(--green);font-style:normal}
+  .nav-links{display:flex;align-items:center;gap:6px}
+  .nav-links a{font-size:14px;font-weight:500;color:var(--soft);padding:8px 12px;border-radius:10px}
+  .nav-links a:hover{color:var(--ink)}
+  .btn{display:inline-flex;align-items:center;gap:8px;font-weight:700;border-radius:999px;transition:transform .15s ease, box-shadow .15s ease}
+  .btn-brand{color:#fff;background:linear-gradient(135deg,#2563eb 0%,#1d8bd6 45%,#16a34a 100%);padding:9px 20px;font-size:14px;box-shadow:0 10px 30px -10px rgba(37,99,235,.35)}
+  .btn-brand:hover{transform:translateY(-1px)}
+  /* hero */
+  .hero{position:relative;overflow:hidden;color:#fff;background:linear-gradient(150deg,var(--navy) 0%,var(--blue) 55%,var(--green) 130%);text-align:center;padding:96px 0 110px}
+  .glow{position:absolute;border-radius:50%;background:rgba(255,255,255,.10);filter:blur(70px);pointer-events:none}
+  .g1{width:380px;height:380px;right:-120px;top:-120px}.g2{width:300px;height:300px;left:-90px;bottom:-60px}
+  .pill{display:inline-block;font-size:12px;font-weight:700;letter-spacing:.14em;text-transform:uppercase;background:rgba(255,255,255,.10);border:1px solid rgba(255,255,255,.25);border-radius:999px;padding:7px 18px}
+  .hero h1{font-size:clamp(38px,6vw,58px);line-height:1.07;font-weight:800;letter-spacing:-.03em;margin-top:26px}
+  .hero p{max-width:620px;margin:20px auto 0;color:rgba(255,255,255,.86);font-size:17px;line-height:1.65}
+  .cta{margin-top:38px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+  .btn-white{background:#fff;color:var(--blue);padding:13px 30px;font-size:15px;box-shadow:0 10px 30px -10px rgba(0,0,0,.35)}
+  .btn-white:hover{transform:translateY(-2px)}
+  .btn-ghost{color:#fff;border:1px solid rgba(255,255,255,.4);padding:13px 30px;font-size:15px;font-weight:600}
+  .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.7)}
+  .chips{margin-top:46px;display:flex;flex-wrap:wrap;gap:10px;justify-content:center}
+  .chip{font-size:13px;background:rgba(255,255,255,.12);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:7px 15px}
+  /* features */
+  .features{padding:76px 0}
+  .features h2{text-align:center;font-size:30px;font-weight:800;letter-spacing:-.02em}
+  .features .sub{text-align:center;color:var(--faint);max-width:560px;margin:12px auto 0;line-height:1.6}
+  .grid{margin-top:48px;display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(280px,1fr))}
+  .card{border:1px solid var(--line);border-radius:16px;padding:26px;background:#fff;box-shadow:0 1px 3px rgba(15,23,42,.05);transition:transform .2s ease,box-shadow .2s ease}
+  .card:hover{transform:translateY(-3px);box-shadow:0 8px 24px -10px rgba(15,23,42,.12)}
+  .ic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;color:#fff;font-size:19px}
+  .card h3{margin-top:16px;font-size:16.5px;font-weight:700}
+  .card p{margin-top:7px;font-size:14px;color:var(--soft);line-height:1.6}
+  /* portals */
+  .portals{background:var(--canvas);border-top:1px solid var(--line);padding:58px 0}
+  .p-grid{display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+  .p-card{background:#fff;border:1px solid var(--line);border-radius:16px;padding:30px;box-shadow:0 1px 3px rgba(15,23,42,.05)}
+  .kicker{font-size:12px;font-weight:700;letter-spacing:.1em;text-transform:uppercase}
+  .p-card h3{margin-top:8px;font-size:20px;font-weight:800}
+  .p-card p{margin-top:9px;font-size:14px;color:var(--soft);line-height:1.65}
+  .p-link{display:inline-block;margin-top:18px;font-size:14px;font-weight:700}
+  /* footer */
+  footer{border-top:1px solid var(--line);padding:30px 0}
+  .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:14px;color:var(--faint)}
+  .foot a{margin-left:20px}.foot a:hover{color:var(--soft)}
+</style>
+</head>
+<body>
+
+<header>
+  <div class="wrap nav">
+    <div class="logo"><b>TRUE</b> <i>KIND</i></div>
+    <nav class="nav-links">
+      <a href="#features">Features</a>
+      <a href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Get the app</a>
+      <a class="btn btn-brand" href="/app/login">Sign in</a>
+    </nav>
+  </div>
+</header>
+
+<section class="hero">
+  <div class="glow g1"></div><div class="glow g2"></div>
+  <div class="wrap" style="position:relative">
+    <span class="pill">True Kind Foundation · HR Platform</span>
+    <h1>People first.<br/>Paperwork automated.</h1>
+    <p>TRUE HR runs the entire employee journey — offer letter to attendance, leave, expenses, performance and payroll — on the web and in your pocket.</p>
+    <div class="cta">
+      <a class="btn btn-white" href="/app/login">Sign in to your portal →</a>
+      <a class="btn btn-ghost" href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Download the Android app</a>
+    </div>
+    <div class="chips">
+      <span class="chip">Automated onboarding</span><span class="chip">E-signed documents</span>
+      <span class="chip">NFA approvals</span><span class="chip">KPI &amp; PMS grades</span><span class="chip">Encrypted PII</span>
+    </div>
+  </div>
+</section>
+
+<section id="features" class="features">
+  <div class="wrap">
+    <h2>Everything HR, one platform</h2>
+    <p class="sub">The same engine powers the admin console, the employee self-service portal and the mobile app — so nothing ever falls out of sync.</p>
+    <div class="grid">
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#0ea5e9,#2563eb)">🕒</span><h3>Attendance &amp; Leave</h3><p>Geo-tagged punches, monthly calendars, miss-punch regularisation, comp-off and multi-level leave approvals.</p></div>
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#10b981,#16a34a)">₹</span><h3>NFA &amp; Settlements</h3><p>Raise expense or advance notes with cascading masters, watch the approval chain live, release payments and settle with a full ledger.</p></div>
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#8b5cf6,#7c3aed)">📈</span><h3>Performance (KPI &amp; PMS)</h3><p>Monthly KPIs with weighted KRAs, self-rating, multi-level PLI review and automatic grades — OAT to SBT.</p></div>
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#f59e0b,#ea580c)">📄</span><h3>Payroll &amp; Payslips</h3><p>Generate, publish and download payslips as PDFs — on the web or in the app.</p></div>
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#14b8a6,#0891b2)">🎧</span><h3>Support &amp; Vendors</h3><p>HR / IT / Admin ticketing, vendor registration with approvals, and agreement tracking.</p></div>
+      <div class="card"><span class="ic" style="background:linear-gradient(135deg,#64748b,#334155)">🛡</span><h3>Enterprise-grade security</h3><p>Encrypted PII at rest, role-based access, audit logging, rate-limited APIs and hardened HTTPS.</p></div>
+    </div>
+  </div>
+</section>
+
+<section class="portals">
+  <div class="wrap p-grid">
+    <div class="p-card">
+      <div class="kicker" style="color:#1d4ed8">For employees</div>
+      <h3>Employee Self-Service</h3>
+      <p>Attendance, leave, NFAs, settlements, performance, payslips, support and more — from any browser, or one tap in the app.</p>
+      <a class="p-link" style="color:#1d4ed8" href="/app/login">Sign in to your ESS portal →</a>
+    </div>
+    <div class="p-card">
+      <div class="kicker" style="color:#15803d">For HR &amp; admins</div>
+      <h3>Admin Console</h3>
+      <p>Onboarding pipeline, approvals, NFA queue and reports, masters, PMS, payroll, policies, banners and audit — all in one console.</p>
+      <a class="p-link" style="color:#15803d" href="/app/login">Sign in to the admin console →</a>
+    </div>
+  </div>
+</section>
+
+<footer>
+  <div class="wrap foot">
+    <span><b style="color:var(--ink)">TRUE HR</b> · © <script>document.write(new Date().getFullYear())</script> True HR Pvt Ltd</span>
+    <span>
+      <a href="/app/privacy">Privacy Policy</a>
+      <a href="/app/terms">Terms &amp; Conditions</a>
+      <a href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Android app</a>
+    </span>
+  </div>
+</footer>
+
+</body>
+</html>

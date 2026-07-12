@@ -62,7 +62,7 @@ android {
     create("prod") {
       dimension = "env"
       buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
-      buildConfigField("String", "WEB_URL", "\"https://truehr.co.in\"")
+      buildConfigField("String", "WEB_URL", "\"https://truehr.co.in/app\"")
     }
     create("staging") {
       dimension = "env"

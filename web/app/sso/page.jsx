@@ -1,5 +1,6 @@
 'use client';
 import { Suspense, useEffect, useState } from 'react';
+import Link from 'next/link';
 import { useSearchParams } from 'next/navigation';
 import { api, setToken, storeAuth } from '@/lib/api.js';
 import { Spinner } from '@/components/ui.jsx';
@@ -17,8 +18,9 @@ function SsoInner() {
       .then((data) => {
         setToken(data.token);
         storeAuth({ token: data.token, user: data.user });
-        // Full reload so the AuthProvider hydrates from storage.
-        window.location.replace(data.user.mustChangePassword ? '/change-password' : '/ess');
+        // Full reload so the AuthProvider hydrates from storage (basePath-aware).
+        const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+        window.location.replace(base + (data.user.mustChangePassword ? '/change-password' : '/ess'));
       })
       .catch((e) => setError(e.message));
   }, [params]);
@@ -29,7 +31,7 @@ function SsoInner() {
         <div>
           <div className="text-lg font-semibold text-ink">Could not sign you in</div>
           <p className="text-sm text-ink-faint mt-1">{error}</p>
-          <a href="/login" className="text-sm text-brand-700 underline mt-3 inline-block">Go to login</a>
+          <Link href="/login" className="text-sm text-brand-700 underline mt-3 inline-block">Go to login</Link>
         </div>
       ) : (
         <div className="flex items-center gap-3 text-ink-soft text-sm">

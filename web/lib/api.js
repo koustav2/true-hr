@@ -22,8 +22,9 @@ async function req(method, path, body) {
   // Session expired/invalid → clear auth and send the user back to login (skip the login call itself).
   if (res.status === 401 && path !== '/auth/login' && typeof window !== 'undefined') {
     storeAuth(null); setToken(null);
-    if (!window.location.pathname.startsWith('/login')) {
-      window.location.assign('/login?expired=1');
+    const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
+    if (!window.location.pathname.startsWith(`${base}/login`)) {
+      window.location.assign(`${base}/login?expired=1`);
     }
   }
   const text = await res.text();

@@ -7,7 +7,8 @@
 #
 # Nginx (installed on the host) terminates HTTPS for truehr.co.in and proxies:
 #   /api  -> 127.0.0.1:4000
-#   /     -> 127.0.0.1:5173
+#   /app  -> 127.0.0.1:5173   (the whole application lives under /app)
+#   /     -> static landing page at /var/www/truehr-landing
 #
 # Run:   docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
 # ============================================================================
@@ -39,7 +40,7 @@ services:
     environment:
       PORT: 4000
       NODE_ENV: production
-      APP_BASE_URL: https://truehr.co.in
+      APP_BASE_URL: https://truehr.co.in/app
       JWT_SECRET: ${JWT_SECRET:?set JWT_SECRET in .env.production}
       PII_ENCRYPTION_KEY: ${PII_ENCRYPTION_KEY:?set PII_ENCRYPTION_KEY (64 hex chars) in .env.production}
       DATABASE_URL: postgres://${POSTGRES_USER:-postgres}:${POSTGRES_PASSWORD}@db:5432/${POSTGRES_DB:-truehr}
@@ -53,13 +54,17 @@ services:
       - "127.0.0.1:4000:4000"   # bound to localhost only; Nginx proxies to it
 
   web:
-    build: ./web
+    build:
+      context: ./web
+      args:
+        NEXT_PUBLIC_BASE_PATH: /app   # inlined at build time (basePath + client redirects)
     container_name: truehr-web
     restart: unless-stopped
     depends_on:
       - backend
     environment:
       API_ORIGIN: http://backend:4000
+      NEXT_PUBLIC_BASE_PATH: /app     # `next start` must see the same basePath
     ports:
       - "127.0.0.1:5173:5173"   # bound to localhost only; Nginx proxies to it
 

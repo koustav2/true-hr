@@ -215,3 +215,27 @@ Restore: `gunzip -c backup.sql.gz | docker compose -f docker-compose.prod.yml ex
 - DB and app containers bind to `127.0.0.1` only; just 22/80/443 are open to the internet.
 - Keep `.env.production` off Git. Rotate `JWT_SECRET` if leaked (logs users out); never rotate `PII_ENCRYPTION_KEY`.
 - Consider creating a non-root sudo user and disabling root SSH login once set up.
+
+## Landing page + /app split (added 2026-07)
+
+`truehr.co.in/` is a static landing page; the whole application (login, /admin,
+/ess, onboarding, SSO) now lives under **`truehr.co.in/app/...`**. The Next.js
+image is built with `basePath /app` (see docker-compose.prod.yml build args).
+Old links (`/login`, `/admin`, `/ess`, emailed onboarding URLs) are 308-redirected
+by nginx, so nothing already sent breaks.
+
+Rollout on the server:
+
+```bash
+cd /opt/truehr && git pull
+sudo mkdir -p /var/www/truehr-landing
+sudo cp deploy/landing/index.html /var/www/truehr-landing/
+sudo cp deploy/nginx/truehr.co.in.conf /etc/nginx/sites-available/truehr.co.in
+sudo nginx -t && sudo systemctl reload nginx
+sudo docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build
+```
+
+Checks: `truehr.co.in` shows the landing · `truehr.co.in/login` redirects to
+`/app/login` · sign in works and all URLs stay under `/app/...` · emails now
+link to `https://truehr.co.in/app/...` (APP_BASE_URL) · the Android **My ESS**
+tile opens `/app/sso` (WEB_URL updated — rebuild the app).

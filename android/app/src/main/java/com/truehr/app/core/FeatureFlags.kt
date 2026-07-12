@@ -3,7 +3,7 @@ package com.truehr.app.core
 // Release switches. The NFA / PMS / vendor suite is fully built but hidden for
 // this release — flip to true to expose it again (dashboard tiles + ESS hub).
 object FeatureFlags {
-  const val NFA_SUITE = true
+  const val NFA_SUITE = false   // NFA / Performance / Team KPI live on the web (My ESS)
 
   // "My ESS" dashboard tile (opens the web employee portal via SSO).
   // Independent of NFA_SUITE so the app release and the web portal can ship separately.

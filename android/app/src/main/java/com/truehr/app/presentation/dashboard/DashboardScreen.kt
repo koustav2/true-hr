@@ -103,7 +103,7 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
         }
       }
     }
-    val items = dashboardItems.filter { header.isManager || it.route != Routes.TEAM }
+    val items = dashboardItems // Team List always visible; non-managers see an empty state
     LazyVerticalGrid(
       columns = GridCells.Fixed(3),
       modifier = Modifier.fillMaxSize(),

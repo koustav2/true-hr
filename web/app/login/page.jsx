@@ -54,7 +54,7 @@ export default function LoginPage() {
           <p className="text-ink-faint text-sm mt-1.5 mb-7">Sign in to the HR admin console.</p>
           {expired && <div className="text-sm text-amber-700 bg-amber-50 border border-amber-100 rounded-lg px-3 py-2 mb-4">Your session expired. Please sign in again.</div>}
           <form onSubmit={submit} className="space-y-4">
-            <Field label="Email"><Input type="email" value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@truehr.example" required /></Field>
+            <Field label="Email or Employee ID"><Input value={email} onChange={(e) => setEmail(e.target.value)} placeholder="you@company.com or TKF5001" required /></Field>
             <Field label="Password"><Input type="password" value={password} onChange={(e) => setPassword(e.target.value)} placeholder="••••••••" required /></Field>
             {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{err}</div>}
             <div className="text-right -mt-1">

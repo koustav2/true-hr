@@ -1,8 +1,11 @@
+// Static assets aren't rewritten by basePath — prefix manually (/app in prod).
+const BASE = process.env.NEXT_PUBLIC_BASE_PATH || '';
+
 export function Logo({ size = 34, light = false, compact = false }) {
   return (
     <div className="flex items-center gap-2.5">
       <img
-        src="/tkf-logo.png" alt="True Kind Foundation"
+        src={`${BASE}/tkf-logo.png`} alt="True Kind Foundation"
         width={size} height={size}
         className="rounded-full shrink-0 object-contain"
         style={{ boxShadow: '0 6px 16px -6px rgba(37,99,235,.45)' }}

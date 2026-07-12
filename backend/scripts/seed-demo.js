@@ -9,8 +9,40 @@
 import zlib from 'zlib';
 import { pool } from '../src/db/pool.js';
 import { hashPassword } from '../src/utils/password.js';
+import * as nfaC from '../src/controllers/nfaController.js';
+import * as setC from '../src/controllers/settlementController.js';
+import * as pmsC from '../src/controllers/pmsController.js';
+import * as supC from '../src/controllers/supportController.js';
+import * as taskC from '../src/controllers/taskController.js';
+import * as venC from '../src/controllers/vendorController.js';
 
 const q = (sql, params) => pool.query(sql, params);
+
+// Drive a controller like an HTTP call (same trick the test scripts use).
+function call(fn, { params = {}, query = {}, body = {}, user }) {
+  return new Promise((resolve) => {
+    const req = { params, query, body, user };
+    const res = { _s: 200, status(s) { this._s = s; return this; }, json(d) { resolve({ status: this._s, data: d }); }, setHeader() {}, send(d) { resolve({ status: this._s, data: d }); } };
+    fn(req, res, (e) => resolve({ status: e.status || 500, data: { error: e.message } }));
+  });
+}
+const asEmp = (id) => ({ sub: null, employeeId: id, role: 'EMPLOYEE' });
+const asHr = (id) => ({ sub: null, employeeId: id, role: 'HR_ADMIN' });
+
+// Approve an NFA through its whole chain: keep acting as whoever the
+// current pending stage resolves to until the instance leaves PENDING.
+async function approveChain(nfaId) {
+  for (let i = 0; i < 8; i++) {
+    const row = (await q(
+      `SELECT ais.approver_employee_id AS aid, ai.status
+         FROM nfas n JOIN approval_instances ai ON ai.id = n.approval_instance_id
+         JOIN approval_instance_stages ais ON ais.instance_id = ai.id AND ais.seq = ai.current_stage_seq
+        WHERE n.id = $1`, [nfaId])).rows[0];
+    if (!row || row.status !== 'PENDING' || !row.aid) return row?.status;
+    await call(nfaC.actOn, { params: { id: nfaId }, body: { action: 'APPROVED', remarks: 'Approved (demo)' }, user: asEmp(row.aid) });
+  }
+  return null;
+}
 
 /* ── tiny PNG writer: solid-colour banner images (1200×400) ── */
 function solidPng(w, h, [r, g, b]) {
@@ -150,6 +182,96 @@ async function main() {
         [solidPng(1200, 400, rgb), `${name.toLowerCase().replace(/\s+/g, '-')}.png`, i + 1]);
     }
     log('banners: 3 sample images (replace via Admin → App Banners)');
+  }
+
+  /* ── 5. Live transactions, so the portal looks like the GreenHR demo ── */
+  const hrEmp = (await q(`SELECT employee_id FROM user_accounts WHERE role='HR_ADMIN' AND employee_id IS NOT NULL LIMIT 1`)).rows[0]?.employee_id || managerId;
+  const already = await q(`SELECT 1 FROM nfas n JOIN approval_instances ai ON ai.id=n.approval_instance_id
+                            WHERE ai.raised_by_employee_id=$1 LIMIT 1`, [employeeId]);
+  if (!already.rowCount) {
+    const proj = (await q(`SELECT p.id, p.business_operation_id op, p.group_company_id gc FROM projects p ORDER BY id LIMIT 1`)).rows[0];
+    const zone = (await q(`SELECT id FROM cost_zones ORDER BY id LIMIT 1`)).rows[0].id;
+    const loc = (await q(`SELECT id FROM office_locations ORDER BY id LIMIT 1`)).rows[0].id;
+    const cv = (await q(`SELECT id FROM clients_vendors ORDER BY id LIMIT 1`)).rows[0].id;
+    const hdr = (await q(`SELECT h.id, h.category_id cat, s.id sub FROM expense_headers h
+                          JOIN expense_subheaders s ON s.header_id=h.id ORDER BY h.id, s.id LIMIT 1`)).rows[0];
+    const due = new Date(Date.now() + 20 * 86400000).toISOString().slice(0, 10);
+    const mkNfa = (purpose, amount, priority = 'MEDIUM') => call(nfaC.create, {
+      body: {
+        raiseFor: 'EXPENSE', businessOperationId: proj.op, groupCompanyId: proj.gc, projectId: proj.id,
+        expenseCategoryId: hdr.cat, zoneId: zone, locationId: loc, clientVendorId: cv,
+        expenseMonth: new Date().getMonth() + 1, paymentType: 'ADVANCE_SELF', billableType: 'NON_BILLABLE',
+        settlementDueDate: due, purpose, description: `${purpose} (demo data)`, priority,
+        lines: [{ headerId: hdr.id, subheaderId: hdr.sub, nfaAmount: amount, logisticAmount: 0 }],
+      },
+      user: asEmp(employeeId),
+    });
+
+    // A: stays PENDING at the Reporting Manager (shows up in manager approvals)
+    const a = await mkNfa('Team uniforms advance', 12000, 'HIGH');
+
+    // B: fully approved + payment released (fills the employee ledger)
+    const b = await mkNfa('Field travel advance — site visit', 8500);
+    await approveChain(b.data.id);
+    const finApprover = (await q(`SELECT approver_employee_id a FROM approver_matrix WHERE role_key='FINANCE' LIMIT 1`)).rows[0]?.a || hrEmp;
+    await call(nfaC.releasePayment, { params: { id: b.data.id }, user: asHr(finApprover) });
+
+    // C: released AND settlement submitted (settlement chain in progress)
+    const c = await mkNfa('Training material purchase', 5000);
+    await approveChain(c.data.id);
+    await call(nfaC.releasePayment, { params: { id: c.data.id }, user: asHr(finApprover) });
+    await call(setC.submit, { params: { id: c.data.id }, body: { amount: 4800, remarks: 'Bills attached (demo)' }, user: asEmp(employeeId) });
+
+    log(`NFAs: ${a.data.nfaCode || '#1'} pending · ${b.data.nfaCode || '#2'} payment released · ${c.data.nfaCode || '#3'} settlement in progress`);
+
+    // KPI/PMS: last month fully graded, current month waiting on the RM
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const kras = [
+      { description: 'Complete assigned field visits and reports on time', weightage: 40 },
+      { description: 'Maintain data accuracy in HRMIS entries', weightage: 35 },
+      { description: 'Support team training sessions', weightage: 25 },
+    ];
+    const k1 = await call(pmsC.createKpi, { body: { year: prev.getFullYear(), month: prev.getMonth() + 1, kras }, user: asEmp(employeeId) });
+    if (k1.status === 201 || k1.status === 200) {
+      const kid = k1.data.id;
+      await call(pmsC.reviewKpi, { params: { id: kid }, body: { action: 'APPROVE' }, user: asEmp(managerId) });
+      const det = await call(pmsC.detail, { params: { id: kid }, user: asEmp(employeeId) });
+      await call(pmsC.submitPms, {
+        params: { id: kid },
+        body: { scores: (det.data.kras || []).map((k) => ({ kraId: k.id, mtdTarget: 100, mtdAchieved: 105, selfRating: 4, selfRemarks: 'Targets met' })) },
+        user: asEmp(employeeId),
+      });
+      const sub = (await q(`SELECT id FROM pms_submissions WHERE kpi_id=$1`, [kid])).rows[0];
+      if (sub) {
+        // rate through whatever stages resolve (unresolved ones auto-bypass)
+        for (let i = 0; i < 5; i++) {
+          const st = (await q(
+            `SELECT ais.approver_employee_id aid, ai.status FROM approval_instances ai
+              JOIN approval_instance_stages ais ON ais.instance_id=ai.id AND ais.seq=ai.current_stage_seq
+             WHERE ai.subject_type='pms' AND ai.subject_id=$1`, [sub.id])).rows[0];
+          if (!st || st.status !== 'PENDING') break;
+          // Unresolved mandatory stage waits for a staff override — rate as HR then.
+          const actor = st.aid ? asEmp(st.aid) : asHr(hrEmp);
+          const r = await call(pmsC.rate, { params: { id: sub.id }, body: { pliRating: 4, pliPct: 110, remarks: 'Good month (demo)' }, user: actor });
+          if (r.status >= 400) break;
+        }
+      }
+      await call(pmsC.createKpi, { body: { year: now.getFullYear(), month: now.getMonth() + 1, kras }, user: asEmp(employeeId) });
+      log('PMS: last month graded (SAT), current month KPI pending with RM');
+    }
+
+    // Support ticket + a task from the manager + an approved vendor
+    await call(supC.create, { body: { category: 'HR', issueType: 'Salary Slip', description: 'Requesting salary slip for last month (demo)' }, user: asEmp(employeeId) });
+    await call(taskC.create, { body: { assignedTo: employeeId, title: 'Prepare monthly MIS report', description: 'Compile the field MIS for review (demo)', dueDate: due }, user: asEmp(managerId) });
+    const v = await call(venC.createVendor, {
+      body: { companyName: 'Sunrise Facility Services', natureOfBusiness: 'Housekeeping & Facility', typeOfCompany: 'Proprietorship', pan: 'ABCDE1234F', contactPerson: 'R. Gupta', contactPhone: '9876543210' },
+      user: asEmp(employeeId),
+    });
+    if (v.data?.id) await call(venC.reviewVendor, { params: { id: v.data.id }, body: { action: 'APPROVED' }, user: asHr(hrEmp) });
+    log('extras: support ticket, assigned task, approved vendor');
+  } else {
+    log('transactions already present — skipped');
   }
 
   console.log(`

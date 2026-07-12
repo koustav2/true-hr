@@ -4,163 +4,199 @@
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
 <title>TRUE HR — People first. Paperwork automated.</title>
-<meta name="description" content="TRUE HR runs the entire employee journey — offer letter to attendance, leave, expenses, performance and payroll — on the web and in your pocket."/>
+<meta name="description" content="TRUE HR runs the entire employee journey — offer letters, attendance, leave, expenses, performance and payroll — on the web and in your pocket."/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
 <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
 <style>
-  :root{--navy:#0b1e4b;--blue:#1d4ed8;--green:#16a34a;--ink:#0f172a;--soft:#475569;--faint:#94a3b8;--line:#e9ecf1;--canvas:#f7f8fa}
+  :root{
+    --blue:#2563eb; --blue-d:#1d4ed8; --green:#16a34a; --navy:#0b1e4b;
+    --ink:#0f172a; --soft:#475569; --faint:#8b95a7; --line:#e7eaf0; --canvas:#f7f8fb;
+    --grad:linear-gradient(135deg,#2563eb 0%,#1d8bd6 45%,#16a34a 100%);
+  }
   *{margin:0;padding:0;box-sizing:border-box}
   html{scroll-behavior:smooth}
-  body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;letter-spacing:-.008em}
+  body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;letter-spacing:-.01em;overflow-x:hidden}
   a{text-decoration:none;color:inherit}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 22px}
+  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
+  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:700;border-radius:999px;transition:transform .18s ease,box-shadow .18s ease;white-space:nowrap}
+  .btn-primary{color:#fff;background:var(--grad);box-shadow:0 12px 28px -10px rgba(37,99,235,.45)}
+  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 36px -12px rgba(37,99,235,.55)}
+  .btn-outline{color:var(--ink);background:#fff;border:1.5px solid var(--line)}
+  .btn-outline:hover{border-color:#c9d2e0;transform:translateY(-2px)}
 
   /* ── nav ── */
-  header{position:sticky;top:0;z-index:40;background:rgba(11,30,75,.72);backdrop-filter:blur(16px);border-bottom:1px solid rgba(255,255,255,.08)}
-  .nav{height:66px;display:flex;align-items:center;justify-content:space-between}
-  .logo{font-weight:800;font-size:19px;color:#fff;letter-spacing:-.02em;display:flex;align-items:center;gap:10px}
-  .logo-mark{width:30px;height:30px;border-radius:9px;background:linear-gradient(135deg,#3b82f6,#16a34a);display:grid;place-items:center;font-size:14px;font-weight:900}
-  .logo i{color:#6ee7a0;font-style:normal}
-  .nav-links{display:flex;align-items:center;gap:4px}
-  .nav-links>a{font-size:14px;font-weight:500;color:rgba(255,255,255,.75);padding:8px 13px;border-radius:10px;transition:color .15s}
-  .nav-links>a:hover{color:#fff}
-  .btn{display:inline-flex;align-items:center;gap:9px;font-weight:700;border-radius:999px;transition:transform .18s ease,box-shadow .18s ease,background .18s ease}
-  .btn-nav{color:#0b1e4b;background:#fff;padding:9px 22px;font-size:14px}
-  .btn-nav:hover{transform:translateY(-1px);box-shadow:0 10px 26px -10px rgba(0,0,0,.5)}
+  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
+  .nav{height:68px;display:flex;align-items:center;justify-content:space-between}
+  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.02em}
+  .logo-mark{width:34px;height:34px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:900;font-size:15px;box-shadow:0 6px 14px -6px rgba(37,99,235,.5)}
+  .logo .t{color:var(--blue-d)} .logo .k{color:var(--green)}
+  .menu{display:flex;align-items:center;gap:2px}
+  .menu .lnk{font-size:14px;font-weight:600;color:var(--soft);padding:9px 14px;border-radius:10px}
+  .menu .lnk:hover{color:var(--ink);background:var(--canvas)}
+  .menu .btn-primary{padding:10px 24px;font-size:14px;margin-left:10px}
 
   /* ── hero ── */
-  .hero{position:relative;overflow:hidden;color:#fff;text-align:center;padding:88px 0 0;
-    background:radial-gradient(1200px 600px at 85% -10%,rgba(59,130,246,.35),transparent 55%),
-               radial-gradient(900px 520px at 0% 110%,rgba(22,163,74,.28),transparent 55%),
-               linear-gradient(165deg,#0b1e4b 0%,#12308f 60%,#0d3b66 100%)}
-  .grain{position:absolute;inset:0;background-image:radial-gradient(rgba(255,255,255,.06) 1px,transparent 1px);background-size:26px 26px;mask-image:linear-gradient(to bottom,rgba(0,0,0,.5),transparent 70%);pointer-events:none}
-  .pill{display:inline-flex;align-items:center;gap:8px;font-size:12px;font-weight:700;letter-spacing:.13em;text-transform:uppercase;background:rgba(255,255,255,.08);border:1px solid rgba(255,255,255,.2);border-radius:999px;padding:8px 18px}
-  .pill .dot{width:7px;height:7px;border-radius:50%;background:#4ade80;box-shadow:0 0 10px #4ade80}
-  .hero h1{font-size:clamp(40px,6.4vw,66px);line-height:1.04;font-weight:900;letter-spacing:-.035em;margin-top:28px}
-  .hero h1 .grad{background:linear-gradient(90deg,#7dd3fc,#6ee7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .hero .sub{max-width:640px;margin:22px auto 0;color:rgba(255,255,255,.82);font-size:17.5px;line-height:1.7}
-  .cta{margin-top:36px;display:flex;flex-wrap:wrap;gap:13px;justify-content:center}
-  .btn-white{background:#fff;color:#12308f;padding:14px 32px;font-size:15px;box-shadow:0 14px 36px -12px rgba(0,0,0,.45)}
-  .btn-white:hover{transform:translateY(-2px)}
-  .btn-ghost{color:#fff;border:1px solid rgba(255,255,255,.35);padding:14px 32px;font-size:15px;font-weight:600}
-  .btn-ghost:hover{background:rgba(255,255,255,.1);border-color:rgba(255,255,255,.65)}
+  .hero{position:relative;padding:76px 0 0;text-align:center;overflow:hidden;
+    background:
+      radial-gradient(640px 420px at 12% -8%, rgba(37,99,235,.14), transparent 60%),
+      radial-gradient(640px 420px at 88% -4%, rgba(22,163,74,.13), transparent 60%),
+      linear-gradient(#fff,#f7f9fc)}
+  .badge{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--blue-d);background:#eef4ff;border:1px solid #dbe7ff;border-radius:999px;padding:8px 18px}
+  .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(22,163,74,.15)}
+  h1{font-size:clamp(38px,6.2vw,64px);line-height:1.06;font-weight:900;letter-spacing:-.035em;margin-top:26px}
+  h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .hero .sub{max-width:600px;margin:22px auto 0;color:var(--soft);font-size:17px;line-height:1.7}
+  .cta{margin-top:34px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+  .cta .btn{padding:15px 34px;font-size:15.5px}
 
-  /* ── product mockup (pure CSS) ── */
-  .mock{position:relative;max-width:940px;margin:66px auto -150px;border-radius:18px;overflow:hidden;text-align:left;
-    background:#fff;border:1px solid rgba(255,255,255,.25);box-shadow:0 40px 90px -30px rgba(2,8,30,.55)}
-  .mock-bar{height:40px;background:#eef2f7;border-bottom:1px solid #e2e8f0;display:flex;align-items:center;gap:7px;padding:0 16px}
-  .mock-bar span{width:11px;height:11px;border-radius:50%}
-  .mock-url{flex:1;max-width:340px;margin-left:12px;background:#fff;border:1px solid #e2e8f0;border-radius:8px;font-size:11.5px;color:#94a3b8;padding:5px 12px}
-  .mock-body{display:grid;grid-template-columns:208px 1fr;min-height:330px}
-  .mock-side{background:linear-gradient(180deg,#0b1e4b,#123070);padding:16px 12px;display:flex;flex-direction:column;gap:5px}
-  .m-nav{font-size:12px;font-weight:600;color:rgba(255,255,255,.66);padding:8px 12px;border-radius:9px}
-  .m-nav.on{background:rgba(255,255,255,.14);color:#fff}
-  .mock-main{background:#f7f8fa;padding:18px}
-  .m-title{font-size:13px;font-weight:800;color:#0f172a;margin-bottom:12px}
-  .m-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px}
-  .m-stat{background:#fff;border:1px solid #e9ecf1;border-radius:12px;padding:12px}
-  .m-stat b{display:block;font-size:19px;letter-spacing:-.02em}
-  .m-stat i{font-style:normal;font-size:10.5px;color:#94a3b8}
-  .m-chart{margin-top:12px;background:#fff;border:1px solid #e9ecf1;border-radius:12px;padding:14px;display:flex;align-items:flex-end;gap:7px;height:120px}
-  .m-chart div{flex:1;border-radius:5px 5px 2px 2px;background:linear-gradient(180deg,#3b82f6,#2563eb)}
-  .m-chart div:nth-child(even){background:linear-gradient(180deg,#34d399,#16a34a)}
-  .m-rows{margin-top:12px;display:grid;gap:7px}
-  .m-row{background:#fff;border:1px solid #e9ecf1;border-radius:10px;padding:9px 13px;display:flex;justify-content:space-between;align-items:center;font-size:11.5px;color:#475569}
-  .tag{font-size:10px;font-weight:700;border-radius:999px;padding:3px 10px}
+  /* ── product preview ── */
+  .shot{position:relative;max-width:960px;margin:64px auto -170px;text-align:left}
+  .shot::before{content:'';position:absolute;inset:-40px -60px auto;height:280px;background:radial-gradient(closest-side,rgba(37,99,235,.18),transparent);filter:blur(30px);z-index:0}
+  .browser{position:relative;z-index:1;border-radius:20px;overflow:hidden;background:#fff;border:1px solid var(--line);
+    box-shadow:0 30px 70px -25px rgba(11,30,75,.28), 0 8px 20px -12px rgba(11,30,75,.15)}
+  .b-bar{height:44px;background:#f4f6fa;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 18px}
+  .b-bar b{width:12px;height:12px;border-radius:50%}
+  .b-url{margin-left:12px;background:#fff;border:1px solid var(--line);border-radius:9px;font-size:12px;color:var(--faint);padding:6px 16px;display:flex;align-items:center;gap:7px}
+  .b-url svg{flex:none}
+  .b-body{display:grid;grid-template-columns:210px 1fr}
+  .b-side{background:linear-gradient(180deg,#0d2456,#153a8f);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
+  .s-item{font-size:12.5px;font-weight:600;color:rgba(255,255,255,.62);padding:9px 13px;border-radius:10px;display:flex;align-items:center;gap:9px}
+  .s-item.on{background:rgba(255,255,255,.16);color:#fff}
+  .s-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6}
+  .b-main{background:var(--canvas);padding:20px}
+  .m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
+  .m-head b{font-size:14.5px}
+  .m-btn{font-size:11px;font-weight:700;color:#fff;background:var(--grad);border-radius:999px;padding:6px 14px}
+  .m-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
+  .m-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
+  .m-stat .v{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
+  .m-stat .v.g{color:var(--green)}
+  .m-stat .l{font-size:11px;color:var(--faint);margin-top:3px}
+  .m-chart{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 16px 12px;height:132px;display:flex;align-items:flex-end;gap:8px}
+  .m-chart i{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#60a5fa,#2563eb)}
+  .m-chart i:nth-child(even){background:linear-gradient(180deg,#4ade80,#16a34a)}
+  .m-rows{margin-top:12px;display:grid;gap:8px}
+  .m-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--soft)}
+  .tag{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px}
   .tag.g{background:#dcfce7;color:#15803d}.tag.a{background:#fef3c7;color:#b45309}.tag.b{background:#dbeafe;color:#1d4ed8}
 
-  /* ── stats ── */
-  .stats{padding:210px 0 26px}
-  .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:14px;text-align:center;border-bottom:1px solid var(--line);padding-bottom:44px}
-  .stats b{font-size:28px;font-weight:800;letter-spacing:-.025em;background:linear-gradient(90deg,#1d4ed8,#16a34a);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .stats i{display:block;font-style:normal;font-size:13px;color:var(--faint);margin-top:3px}
+  /* ── stats strip ── */
+  .strip{background:var(--navy);color:#fff;padding:214px 0 48px;margin-top:0;
+    background-image:radial-gradient(700px 300px at 80% 120%,rgba(37,99,235,.35),transparent 60%)}
+  .strip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:26px;text-align:center}
+  .strip b{font-size:30px;font-weight:800;letter-spacing:-.025em;background:linear-gradient(90deg,#7dd3fc,#6ee7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
+  .strip i{display:block;font-style:normal;font-size:13px;color:rgba(255,255,255,.6);margin-top:5px}
 
   /* ── features ── */
-  .features{padding:72px 0 84px}
-  .features h2{text-align:center;font-size:clamp(28px,3.6vw,36px);font-weight:800;letter-spacing:-.025em}
-  .features .sub{text-align:center;color:var(--faint);max-width:580px;margin:14px auto 0;line-height:1.65}
-  .grid{margin-top:52px;display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
-  .card{position:relative;border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;overflow:hidden;transition:transform .22s ease,box-shadow .22s ease,border-color .22s}
-  .card::before{content:'';position:absolute;inset-inline:0;top:0;height:3px;background:linear-gradient(90deg,var(--c1),transparent 80%);opacity:0;transition:opacity .22s}
-  .card:hover{transform:translateY(-4px);box-shadow:0 16px 40px -18px rgba(15,23,42,.18);border-color:#dbe1ea}
-  .card:hover::before{opacity:1}
-  .ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 8px 18px -8px var(--c1)}
-  .card h3{margin-top:18px;font-size:17px;font-weight:700;letter-spacing:-.01em}
-  .card p{margin-top:8px;font-size:14px;color:var(--soft);line-height:1.65}
+  .features{padding:84px 0 90px;background:#fff}
+  .sec-badge{display:block;text-align:center;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-d)}
+  .features h2{text-align:center;font-size:clamp(27px,3.6vw,36px);font-weight:800;letter-spacing:-.025em;margin-top:12px}
+  .features .sub{text-align:center;color:var(--faint);max-width:560px;margin:14px auto 0;line-height:1.65;font-size:15.5px}
+  .grid{margin-top:54px;display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
+  .card{position:relative;border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;transition:transform .22s ease,box-shadow .22s ease,border-color .22s}
+  .card:hover{transform:translateY(-4px);box-shadow:0 18px 44px -20px rgba(15,23,42,.18);border-color:#d7dee9}
+  .ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 10px 20px -9px var(--c1)}
+  .card h3{margin-top:18px;font-size:17px;font-weight:800;letter-spacing:-.015em}
+  .card p{margin-top:8px;font-size:14px;color:var(--soft);line-height:1.68}
 
   /* ── CTA band ── */
-  .band{margin:0 22px 84px}
-  .band-in{max-width:1076px;margin:0 auto;border-radius:24px;color:#fff;text-align:center;padding:58px 26px;position:relative;overflow:hidden;
-    background:radial-gradient(700px 300px at 90% -20%,rgba(110,231,160,.35),transparent 60%),linear-gradient(135deg,#0b1e4b,#1d4ed8)}
+  .band{padding:0 20px 90px;background:#fff}
+  .band-in{max-width:1080px;margin:0 auto;border-radius:26px;color:#fff;text-align:center;padding:62px 28px;position:relative;overflow:hidden;
+    background:radial-gradient(700px 320px at 88% -30%,rgba(110,231,160,.4),transparent 60%),radial-gradient(500px 260px at 8% 130%,rgba(125,211,252,.35),transparent 60%),linear-gradient(135deg,#0b1e4b,#1d4ed8)}
   .band h2{font-size:clamp(26px,3.4vw,34px);font-weight:800;letter-spacing:-.025em}
-  .band p{color:rgba(255,255,255,.8);margin-top:10px;font-size:15.5px}
+  .band p{color:rgba(255,255,255,.82);margin-top:12px;font-size:15.5px}
+  .band .cta{margin-top:30px}
+  .band .btn-white{background:#fff;color:var(--blue-d);padding:15px 36px;font-size:15.5px;box-shadow:0 16px 36px -14px rgba(0,0,0,.45)}
+  .band .btn-white:hover{transform:translateY(-2px)}
 
   /* ── footer ── */
-  footer{border-top:1px solid var(--line);padding:32px 0}
-  .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:12px;font-size:14px;color:var(--faint)}
-  .foot a{margin-left:22px}.foot a:hover{color:var(--soft)}
+  footer{border-top:1px solid var(--line);padding:34px 0;background:#fff}
+  .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;font-size:14px;color:var(--faint)}
+  .foot-links{display:flex;flex-wrap:wrap;gap:22px}
+  .foot a:hover{color:var(--soft)}
 
-  @media (max-width:720px){
-    .mock-body{grid-template-columns:1fr}.mock-side{display:none}
-    .stats{padding-top:190px}
-    .nav-links>a:not(.btn){display:none}
+  /* ── mobile ── */
+  @media (max-width:760px){
+    .menu .lnk{display:none}
+    .hero{padding-top:56px}
+    .cta .btn{width:100%;max-width:340px}
+    .shot{margin-bottom:-120px}
+    .b-body{grid-template-columns:1fr}
+    .b-side{flex-direction:row;overflow-x:auto;padding:10px 12px}
+    .s-item{white-space:nowrap;padding:7px 12px}
+    .m-stats{grid-template-columns:1fr 1fr}
+    .m-stat:first-child{grid-column:1/-1}
+    .strip{padding-top:170px}
+    .strip-grid{grid-template-columns:1fr 1fr;gap:22px}
   }
 </style>
 </head>
 <body>
 
-<header>
+<div class="topbar">
   <div class="wrap nav">
-    <a class="logo" href="/"><span class="logo-mark">T</span>TRUE <i>HR</i></a>
-    <nav class="nav-links">
-      <a href="#features">Features</a>
-      <a href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Mobile app</a>
-      <a class="btn btn-nav" href="/app/login">Sign in</a>
+    <a class="logo" href="/"><span class="logo-mark">T</span><span><span class="t">TRUE</span> <span class="k">HR</span></span></a>
+    <nav class="menu">
+      <a class="lnk" href="#features">Features</a>
+      <a class="lnk" href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Mobile app</a>
+      <a class="btn btn-primary" href="/app/login">Sign in</a>
     </nav>
   </div>
-</header>
+</div>
 
 <section class="hero">
-  <div class="grain"></div>
-  <div class="wrap" style="position:relative">
-    <span class="pill"><span class="dot"></span>True Kind Foundation · HR Platform</span>
+  <div class="wrap">
+    <span class="badge"><span class="dot"></span>TRUE KIND FOUNDATION · HR PLATFORM</span>
     <h1>People first.<br/><span class="grad">Paperwork automated.</span></h1>
     <p class="sub">One platform for the entire employee journey — offer letters, attendance, leave, expense approvals, performance and payroll. On the web, and in your pocket.</p>
     <div class="cta">
-      <a class="btn btn-white" href="/app/login">Sign in
+      <a class="btn btn-primary" href="/app/login">Sign in to your portal
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M5 12h14M13 6l6 6-6 6"/></svg>
       </a>
-      <a class="btn btn-ghost" href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Get the Android app</a>
+      <a class="btn btn-outline" href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">
+        <svg width="17" height="17" viewBox="0 0 24 24" fill="currentColor"><path d="M3.6 1.8c-.4.2-.6.6-.6 1.1v18.2c0 .5.2.9.6 1.1l10-10.2L3.6 1.8zm12.3 8L5.6 1.2l12.4 7.1-2.1 1.5zm3.8 1.3c.7.5.7 1.7 0 2.2l-2.6 1.5-2.4-2.6 2.4-2.6 2.6 1.5zM5.6 22.8l10.3-8.6 2.1 1.5L5.6 22.8z"/></svg>
+        Get the Android app
+      </a>
     </div>
 
     <!-- product preview -->
-    <div class="mock" aria-hidden="true">
-      <div class="mock-bar">
-        <span style="background:#fca5a5"></span><span style="background:#fcd34d"></span><span style="background:#86efac"></span>
-        <span class="mock-url">truehr.co.in/app/ess</span>
-      </div>
-      <div class="mock-body">
-        <div class="mock-side">
-          <div class="m-nav on">Dashboard</div><div class="m-nav">Attendance</div><div class="m-nav">Leave</div>
-          <div class="m-nav">NFA</div><div class="m-nav">Approvals</div><div class="m-nav">Performance</div><div class="m-nav">Payslips</div>
+    <div class="shot" aria-hidden="true">
+      <div class="browser">
+        <div class="b-bar">
+          <b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b>
+          <span class="b-url">
+            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+            truehr.co.in/app/ess
+          </span>
         </div>
-        <div class="mock-main">
-          <div class="m-title">My Dashboard</div>
-          <div class="m-stats">
-            <div class="m-stat"><b style="color:#16a34a">SAT</b><i>June performance grade</i></div>
-            <div class="m-stat"><b>₹13,500</b><i>Advances received (FY 26-27)</i></div>
-            <div class="m-stat"><b>18 / 25</b><i>Leave balance</i></div>
+        <div class="b-body">
+          <div class="b-side">
+            <div class="s-item on"><span class="s-dot"></span>Dashboard</div>
+            <div class="s-item"><span class="s-dot"></span>Attendance</div>
+            <div class="s-item"><span class="s-dot"></span>Leave</div>
+            <div class="s-item"><span class="s-dot"></span>NFA</div>
+            <div class="s-item"><span class="s-dot"></span>Approvals</div>
+            <div class="s-item"><span class="s-dot"></span>Performance</div>
+            <div class="s-item"><span class="s-dot"></span>Payslips</div>
           </div>
-          <div class="m-chart">
-            <div style="height:45%"></div><div style="height:66%"></div><div style="height:52%"></div><div style="height:80%"></div>
-            <div style="height:60%"></div><div style="height:92%"></div><div style="height:70%"></div><div style="height:84%"></div>
-            <div style="height:58%"></div><div style="height:76%"></div><div style="height:64%"></div><div style="height:88%"></div>
-          </div>
-          <div class="m-rows">
-            <div class="m-row"><span>NFA20260002 · Field travel advance</span><span class="tag g">Payment released</span></div>
-            <div class="m-row"><span>NFA20260001 · Team uniforms</span><span class="tag a">Pending — RM</span></div>
-            <div class="m-row"><span>July KPI · 3 KRAs</span><span class="tag b">With manager</span></div>
+          <div class="b-main">
+            <div class="m-head"><b>My Dashboard</b><span class="m-btn">+ Create NFA</span></div>
+            <div class="m-stats">
+              <div class="m-stat"><div class="v g">SAT · 110%</div><div class="l">June performance grade</div></div>
+              <div class="m-stat"><div class="v">₹13,500</div><div class="l">Advances received (FY 26-27)</div></div>
+              <div class="m-stat"><div class="v">18 / 25</div><div class="l">Leave balance</div></div>
+            </div>
+            <div class="m-chart">
+              <i style="height:45%"></i><i style="height:66%"></i><i style="height:52%"></i><i style="height:80%"></i>
+              <i style="height:60%"></i><i style="height:92%"></i><i style="height:70%"></i><i style="height:84%"></i>
+              <i style="height:58%"></i><i style="height:76%"></i><i style="height:64%"></i><i style="height:88%"></i>
+            </div>
+            <div class="m-rows">
+              <div class="m-row"><span>NFA20260002 · Field travel advance</span><span class="tag g">Payment released</span></div>
+              <div class="m-row"><span>NFA20260001 · Team uniforms</span><span class="tag a">Pending — RM</span></div>
+              <div class="m-row"><span>July KPI · 3 KRAs</span><span class="tag b">With manager</span></div>
+            </div>
           </div>
         </div>
       </div>
@@ -168,8 +204,8 @@
   </div>
 </section>
 
-<section class="stats">
-  <div class="wrap stats-grid">
+<section class="strip">
+  <div class="wrap strip-grid">
     <div><b>13+</b><i>Self-service modules</i></div>
     <div><b>6-stage</b><i>Approval chains</i></div>
     <div><b>Web + App</b><i>One account, every device</i></div>
@@ -179,31 +215,32 @@
 
 <section id="features" class="features">
   <div class="wrap">
+    <span class="sec-badge">Capabilities</span>
     <h2>Everything HR, one platform</h2>
     <p class="sub">The same engine powers the admin console, the employee portal and the mobile app — so nothing ever falls out of sync.</p>
     <div class="grid">
       <div class="card" style="--c1:#0ea5e9;--c2:#2563eb">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
         <h3>Attendance &amp; Leave</h3><p>Geo-tagged punches, monthly calendars, miss-punch regularisation, comp-off and multi-level leave approvals.</p>
       </div>
       <div class="card" style="--c1:#10b981;--c2:#16a34a">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12M6 8h12M6 4c6 0 8 2 8 5s-2 5-8 5l8 6"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12M6 8h12M6 4c6 0 8 2 8 5s-2 5-8 5l8 6"/></svg></span>
         <h3>NFA &amp; Settlements</h3><p>Raise expense or advance notes with cascading masters, watch the approval chain live, release payments and settle with a full ledger.</p>
       </div>
       <div class="card" style="--c1:#8b5cf6;--c2:#7c3aed">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
         <h3>Performance (KPI &amp; PMS)</h3><p>Monthly KPIs with weighted KRAs, self-rating, multi-level PLI review and automatic grades — OAT to SBT.</p>
       </div>
       <div class="card" style="--c1:#f59e0b;--c2:#ea580c">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></span>
         <h3>Payroll &amp; Payslips</h3><p>Generate, publish and download payslips as PDFs — on the web or in the app.</p>
       </div>
       <div class="card" style="--c1:#14b8a6;--c2:#0891b2">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></span>
         <h3>Support &amp; Vendors</h3><p>HR / IT / Admin ticketing, vendor registration with approvals, and agreement tracking.</p>
       </div>
       <div class="card" style="--c1:#64748b;--c2:#334155">
-        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
         <h3>Enterprise-grade security</h3><p>Encrypted PII at rest, role-based access, audit logging, rate-limited APIs and hardened HTTPS.</p>
       </div>
     </div>
@@ -225,7 +262,7 @@
 <footer>
   <div class="wrap foot">
     <span><b style="color:var(--ink)">TRUE HR</b> · © <script>document.write(new Date().getFullYear())</script> True HR Pvt Ltd</span>
-    <span>
+    <span class="foot-links">
       <a href="/app/privacy">Privacy Policy</a>
       <a href="/app/terms">Terms &amp; Conditions</a>
       <a href="https://play.google.com/store/apps/details?id=com.truehr.app" target="_blank" rel="noreferrer">Android app</a>

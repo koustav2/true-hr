@@ -7,5 +7,5 @@ object FeatureFlags {
 
   // "My ESS" dashboard tile (opens the web employee portal via SSO).
   // Independent of NFA_SUITE so the app release and the web portal can ship separately.
-  const val MY_ESS = false
+  const val MY_ESS = true
 }

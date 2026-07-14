@@ -313,3 +313,38 @@ export async function sendBack(req, res, next) {
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
+
+// PATCH /admin/employees/:id  (HR/staff) — edit profile & assignment fields.
+// Whitelisted columns only; identity/PII collected at onboarding stays untouched.
+export async function updateEmployee(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const FIELDS = {
+      firstName: 'first_name', lastName: 'last_name', phone: 'phone',
+      departmentId: 'department_id', designationId: 'designation_id',
+      reportingManagerId: 'reporting_manager_id', functionManagerId: 'function_manager_id',
+      employmentType: 'employment_type', dateOfJoining: 'date_of_joining',
+    };
+    const sets = [], vals = [];
+    for (const [key, col] of Object.entries(FIELDS)) {
+      if (!(key in (req.body || {}))) continue;
+      let v = req.body[key];
+      if (v === '' || v === undefined) v = null;
+      if (['reportingManagerId', 'functionManagerId'].includes(key) && Number(v) === id) {
+        return res.status(400).json({ error: 'An employee cannot be their own manager' });
+      }
+      vals.push(v);
+      sets.push(`${col}=$${vals.length}`);
+    }
+    if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+    if ((req.body.firstName ?? 'x') === null || req.body.firstName === '' ||
+        (req.body.lastName ?? 'x') === null || req.body.lastName === '') {
+      return res.status(400).json({ error: 'Name cannot be empty' });
+    }
+    vals.push(id);
+    const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id`, vals);
+    if (!r.rowCount) return res.status(404).json({ error: 'Employee not found' });
+    await audit(req.user.id, 'EMPLOYEE_UPDATE', 'employee', id, { fields: Object.keys(req.body || {}) });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}

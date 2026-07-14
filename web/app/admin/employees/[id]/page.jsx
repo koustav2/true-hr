@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { api, getStoredAuth } from '@/lib/api.js';
-import { Card, Button, Spinner, Textarea, Modal } from '@/components/ui.jsx';
+import { Card, Button, Spinner, Textarea, Modal, Input, Select, Field } from '@/components/ui.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconArrowLeft, IconCheck, IconFile } from '@/components/icons.jsx';
 
@@ -37,6 +37,9 @@ export default function EmployeeDetailPage() {
   const [preview, setPreview] = useState(null); // { url, mime, label }
   const [resetInfo, setResetInfo] = useState(null); // { email, tempPassword }
   const [resetBusy, setResetBusy] = useState(false);
+  const [edit, setEdit] = useState(null);      // form values while editing
+  const [meta, setMeta] = useState(null);      // { departments, designations, managers }
+  const [saveBusy, setSaveBusy] = useState(false);
 
   const load = () => api.get(`/employees/${id}`).then(setData).catch(() => setData(false));
   useEffect(() => { load(); }, [id]);
@@ -51,6 +54,32 @@ export default function EmployeeDetailPage() {
     setResetBusy(true); setMsg('');
     try { setResetInfo(await api.post(`/admin/employees/${id}/reset-password`)); }
     catch (e) { setMsg(e.message); } finally { setResetBusy(false); }
+  }
+  async function openEdit() {
+    setMsg('');
+    if (!meta) {
+      const [departments, designations, managers] = await Promise.all([
+        api.get('/meta/departments').catch(() => []),
+        api.get('/meta/designations').catch(() => []),
+        api.get('/meta/managers').catch(() => []),
+      ]);
+      setMeta({ departments, designations, managers });
+    }
+    const e = data.employee;
+    setEdit({
+      firstName: e.first_name || '', lastName: e.last_name || '', phone: e.phone || '',
+      departmentId: e.department_id || '', designationId: e.designation_id || '',
+      reportingManagerId: e.reporting_manager_id || '', functionManagerId: e.function_manager_id || '',
+    });
+  }
+  async function saveEdit() {
+    setSaveBusy(true); setMsg('');
+    try {
+      const body = {};
+      for (const [k, v] of Object.entries(edit)) body[k] = v === '' ? null : v;
+      await api.patch(`/admin/employees/${id}`, body);
+      setEdit(null); setMsg('Employee updated.'); await load();
+    } catch (e) { setMsg(e.message); } finally { setSaveBusy(false); }
   }
   async function sendBack() {
     setBusy(true);
@@ -107,6 +136,7 @@ export default function EmployeeDetailPage() {
             <Button variant="outline" size="sm" onClick={viewOfferLetter}><IconFile width={15} height={15} /> Offer letter</Button>
           )}
           <Button variant="soft" size="sm" onClick={viewSheet}><IconFile width={15} height={15} /> Info sheet (PDF)</Button>
+          <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
           {e.onboarding_status === 'ACTIVE' && (
             <Button variant="outline" size="sm" onClick={resetPassword} disabled={resetBusy}>
               {resetBusy ? <Spinner /> : 'Reset password'}

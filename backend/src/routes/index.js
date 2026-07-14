@@ -221,6 +221,7 @@ r.get('/admin/users', authenticate, requireAdmin, users.listUsers);
 r.post('/admin/users', authenticate, requireAdmin, users.createUser);
 r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatus);
 r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
+r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
 r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
 
 // --- Leave configuration (HR) ---

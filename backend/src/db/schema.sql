@@ -1052,3 +1052,13 @@ CREATE TABLE IF NOT EXISTS password_reset_otps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_pwreset_user ON password_reset_otps (user_id, created_at DESC);
+
+-- Supporting documents on vendor registrations & agreements (base64, like policies).
+ALTER TABLE vendor_registrations
+  ADD COLUMN IF NOT EXISTS document TEXT,
+  ADD COLUMN IF NOT EXISTS document_mime TEXT,
+  ADD COLUMN IF NOT EXISTS document_name TEXT;
+ALTER TABLE agreements
+  ADD COLUMN IF NOT EXISTS document TEXT,
+  ADD COLUMN IF NOT EXISTS document_mime TEXT,
+  ADD COLUMN IF NOT EXISTS document_name TEXT;

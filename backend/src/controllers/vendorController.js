@@ -4,6 +4,15 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
+const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5MB per attached document
+function docParams(b) {
+  if (!b.document) return { cols: [], vals: [] };
+  if (Math.floor(String(b.document).length * 3 / 4) > MAX_DOC_BYTES) {
+    const err = new Error('Document larger than 5MB'); err.status = 400; throw err;
+  }
+  return { cols: ['document', 'document_mime', 'document_name'], vals: [b.document, b.documentMime || null, b.documentName || null] };
+}
+
 const isStaff = (u) => STAFF.includes(u.role);
 
 /* ── Vendor registration ─────────────────────────────────────────────────── */
@@ -16,7 +25,7 @@ const V_COLS = ['company_name', 'nature_of_business', 'business_category', 'head
   'contact_person', 'contact_phone', 'contact_email'];
 
 function shapeVendor(r) {
-  const out = { id: r.id, status: r.status, createdAt: r.created_at, associationWith: r.association_name || null };
+  const out = { id: r.id, status: r.status, createdAt: r.created_at, associationWith: r.association_name || null, hasDocument: !!(r.document || r.has_document), documentName: r.document_name || null };
   V_COLS.forEach((c, i) => { out[V_FIELDS[i]] = r[c]; });
   if (r.employee_code) out.registeredBy = { employeeCode: r.employee_code, name: `${r.first_name} ${r.last_name}`.trim() };
   return out;
@@ -27,9 +36,10 @@ export async function createVendor(req, res, next) {
   try {
     const b = req.body || {};
     if (!b.companyName || !String(b.companyName).trim()) return res.status(400).json({ error: 'companyName is required' });
-    const params = [req.user.employeeId, b.associationWithId || null, ...V_FIELDS.map((f) => b[f] || null)];
+    const doc = docParams(b);
+    const params = [req.user.employeeId, b.associationWithId || null, ...V_FIELDS.map((f) => b[f] || null), ...doc.vals];
     const row = (await query(
-      `INSERT INTO vendor_registrations (registered_by, association_with, ${V_COLS.join(', ')})
+      `INSERT INTO vendor_registrations (registered_by, association_with, ${[...V_COLS, ...doc.cols].join(', ')})
        VALUES (${params.map((_, i) => `$${i + 1}`).join(',')}) RETURNING *`, params)).rows[0];
     await audit(req.user.sub, 'VENDOR_REGISTERED', 'vendor_registration', row.id, { companyName: row.company_name });
     res.status(201).json(shapeVendor(row));
@@ -84,7 +94,7 @@ function shapeAgreement(r) {
     client: r.client_name ? { id: r.client_id, name: r.client_name } : null,
     agreementType: r.agreement_type, details: r.details,
     startDate: r.start_date, endDate: r.end_date,
-    documentId: r.document_id, createdAt: r.created_at,
+    documentId: r.document_id, createdAt: r.created_at, hasDocument: !!r.document, documentName: r.document_name || null,
     uploadedBy: r.employee_code ? { employeeCode: r.employee_code, name: `${r.first_name} ${r.last_name}`.trim() } : null,
   };
 }
@@ -102,11 +112,12 @@ export async function createAgreement(req, res, next) {
     const b = req.body || {};
     if (!b.startDate || !b.endDate) return res.status(400).json({ error: 'startDate and endDate are required' });
     if (new Date(b.endDate) < new Date(b.startDate)) return res.status(400).json({ error: 'endDate before startDate' });
+    const doc = docParams(b);
+    const base = [req.user.employeeId, b.projectId || null, b.locationId || null, b.clientId || null,
+       b.agreementType || 'RENT', b.details || null, b.startDate, b.endDate, ...doc.vals];
     const row = (await query(
-      `INSERT INTO agreements (uploaded_by, project_id, location_id, client_id, agreement_type, details, start_date, end_date, document_id)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
-      [req.user.employeeId, b.projectId || null, b.locationId || null, b.clientId || null,
-       b.agreementType || 'RENT', b.details || null, b.startDate, b.endDate, b.documentId || null])).rows[0];
+      `INSERT INTO agreements (uploaded_by, project_id, location_id, client_id, agreement_type, details, start_date, end_date${doc.cols.length ? ', ' + doc.cols.join(', ') : ''})
+       VALUES (${base.map((_, i) => `$${i + 1}`).join(',')}) RETURNING id`, base)).rows[0];
     await audit(req.user.sub, 'AGREEMENT_UPLOADED', 'agreement', row.id, { type: b.agreementType || 'RENT' });
     const full = (await query(`SELECT ${A_COLS} ${A_JOINS} WHERE a.id=$1`, [row.id])).rows[0];
     res.status(201).json(shapeAgreement(full));
@@ -140,3 +151,17 @@ export async function reviewAgreement(req, res, next) {
     res.json(shapeAgreement(full));
   } catch (e) { next(e); }
 }
+
+// GET /vendors/:id/document | /agreements/:id/document — owner or staff.
+async function serveDoc(req, res, next, table, ownerCol) {
+  try {
+    const r = (await query(`SELECT ${ownerCol} AS owner, document, document_mime, document_name FROM ${table} WHERE id=$1`, [req.params.id])).rows[0];
+    if (!r?.document) return res.status(404).json({ error: 'No document attached' });
+    if (!isStaff(req.user) && Number(r.owner) !== Number(req.user.employeeId)) return res.status(403).json({ error: 'Not allowed' });
+    res.setHeader('Content-Type', r.document_mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${(r.document_name || 'document').replace(/[^\x20-\x7E]/g, '_')}"`);
+    res.send(Buffer.from(r.document, 'base64'));
+  } catch (e) { next(e); }
+}
+export const vendorDocument = (req, res, next) => serveDoc(req, res, next, 'vendor_registrations', 'registered_by');
+export const agreementDocument = (req, res, next) => serveDoc(req, res, next, 'agreements', 'uploaded_by');

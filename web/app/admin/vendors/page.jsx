@@ -1,9 +1,21 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, getStoredAuth } from '@/lib/api.js';
 import { Card, Button, Spinner, Empty, ConfirmClick } from '@/components/ui.jsx';
 
 const TABS = ['Vendor Registrations', 'Agreements'];
+
+// Open an auth-protected document in a new tab (blob URL avoids header limits on <a>).
+async function openDoc(url) {
+  const win = window.open('', '_blank');
+  try {
+    const auth = getStoredAuth();
+    const res = await fetch(`/api${url}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+    if (!res.ok) { win?.close(); return; }
+    const blob = URL.createObjectURL(await res.blob());
+    if (win) win.location = blob; else window.location.href = blob;
+  } catch { win?.close(); }
+}
 const TONE = {
   PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
   APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
@@ -65,12 +77,15 @@ function Vendors() {
                   {v.registeredBy && <> · Registered by {v.registeredBy.name}</>}
                 </div>
               </div>
+              <div className="flex gap-2 items-start">
+                {v.hasDocument && <Button size="sm" variant="outline" onClick={() => openDoc(`/vendors/${v.id}/document`)}>Document</Button>}
               {v.status === 'PENDING' && (
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => review(v.id, 'APPROVED')}>Approve</Button>
                   <ConfirmClick onConfirm={() => review(v.id, 'REJECTED')} confirmLabel="Confirm reject?" className="px-3 py-1.5 text-[13px] rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50">Reject</ConfirmClick>
                 </div>
               )}
+              </div>
             </div>
           </Card>
         ))}
@@ -105,12 +120,15 @@ function Agreements() {
                   {a.uploadedBy && <> · Uploaded by {a.uploadedBy.name}</>}
                 </div>
               </div>
+              <div className="flex gap-2 items-start">
+                {a.hasDocument && <Button size="sm" variant="outline" onClick={() => openDoc(`/agreements/${a.id}/document`)}>Document</Button>}
               {a.status === 'PENDING' && (
                 <div className="flex gap-2">
                   <Button size="sm" onClick={() => review(a.id, 'APPROVED')}>Approve</Button>
                   <ConfirmClick onConfirm={() => review(a.id, 'REJECTED')} confirmLabel="Confirm reject?" className="px-3 py-1.5 text-[13px] rounded-lg bg-white border border-rose-200 text-rose-600 hover:bg-rose-50">Reject</ConfirmClick>
                 </div>
               )}
+              </div>
             </div>
           </Card>
         ))}

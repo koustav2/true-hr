@@ -23,6 +23,35 @@ export default function EssVendorsPage() {
   );
 }
 
+
+// Attach a supporting document (PDF/image, max 5MB) as base64.
+function DocPicker({ value, onPick, onClear }) {
+  return (
+    <div className="text-sm">
+      <span className="block text-[13px] font-medium text-ink-soft mb-1.5">Supporting document (PDF/image, optional)</span>
+      {value ? (
+        <div className="flex items-center justify-between gap-2 border border-line rounded-lg px-3 py-2">
+          <span className="truncate text-ink-soft text-xs">{value.documentName}</span>
+          <button onClick={onClear} className="text-xs text-rose-600 shrink-0">remove</button>
+        </div>
+      ) : (
+        <input type="file" accept="application/pdf,image/*" className="block w-full text-xs text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-3 file:py-2 file:text-xs file:font-semibold"
+          onChange={async (e) => {
+            const file = e.target.files?.[0];
+            if (!file) return;
+            if (file.size > 5 * 1024 * 1024) { alert('File larger than 5MB'); e.target.value = ''; return; }
+            const b64 = await new Promise((res, rej) => {
+              const r = new FileReader();
+              r.onload = () => res(String(r.result).split(',')[1]);
+              r.onerror = rej; r.readAsDataURL(file);
+            });
+            onPick({ document: b64, documentMime: file.type, documentName: file.name });
+          }} />
+      )}
+    </div>
+  );
+}
+
 function VendorTab() {
   const [rows, setRows] = useState(null);
   const [f, setF] = useState({});
@@ -56,6 +85,9 @@ function VendorTab() {
           <Field label="Contact person"><Input value={f.contactPerson || ''} onChange={set('contactPerson')} /></Field>
           <Field label="Contact phone"><Input value={f.contactPhone || ''} onChange={set('contactPhone')} /></Field>
         </div>
+        <DocPicker value={f.document ? f : null}
+          onPick={(d) => setF((x) => ({ ...x, ...d }))}
+          onClear={() => setF(({ document, documentMime, documentName, ...rest }) => rest)} />
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         <Button onClick={submit} disabled={busy}>{busy ? 'Registering…' : 'Register Vendor'}</Button>
       </Card>
@@ -122,6 +154,9 @@ function AgreementTab() {
           <Field label="End date" required><Input type="date" value={f.endDate || ''} onChange={set('endDate')} /></Field>
         </div>
         <Field label="Details"><Textarea rows={2} value={f.details || ''} onChange={set('details')} /></Field>
+        <DocPicker value={f.document ? f : null}
+          onPick={(d) => setF((x) => ({ ...x, ...d }))}
+          onClear={() => setF(({ document, documentMime, documentName, ...rest }) => rest)} />
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         <Button onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit Agreement'}</Button>
       </Card>

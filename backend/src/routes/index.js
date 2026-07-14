@@ -220,6 +220,7 @@ r.post('/onboarding/:id/send-back', authenticate, requireStaff, emp.sendBack);
 r.get('/admin/users', authenticate, requireAdmin, users.listUsers);
 r.post('/admin/users', authenticate, requireAdmin, users.createUser);
 r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatus);
+r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
 r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
 
 // --- Leave configuration (HR) ---

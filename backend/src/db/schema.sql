@@ -791,12 +791,12 @@ JOIN (VALUES
   ('NFA_SETTLEMENT', 4, 'FINANCE',           'matrix',        FALSE),
   ('NFA_SETTLEMENT', 5, 'DIRECTOR',          'named_user',    TRUE),
   ('NFA_SETTLEMENT', 6, 'CLOSER',            'named_user',    TRUE),
-  -- Resignation: Rpt Mgr → Functional Head → IT Infra → Office Admin → Finance → HR
+  -- Resignation: Rpt Mgr → Functional Mgr → Business Head → Admin → Finance → HR
   ('RESIGNATION', 1, 'REPORTING_MANAGER', 'manager_chain', FALSE),
   ('RESIGNATION', 2, 'FUNCTIONAL_HEAD',   'manager_chain', TRUE),
-  ('RESIGNATION', 3, 'IT_INFRA',          'named_user',    TRUE),
-  ('RESIGNATION', 4, 'OFFICE_ADMIN',      'named_user',    TRUE),
-  ('RESIGNATION', 5, 'FINANCE',           'named_user',    TRUE),
+  ('RESIGNATION', 3, 'BUSINESS_HEAD',     'matrix',        TRUE),
+  ('RESIGNATION', 4, 'OFFICE_ADMIN',      'matrix',        TRUE),
+  ('RESIGNATION', 5, 'FINANCE',           'matrix',        TRUE),
   ('RESIGNATION', 6, 'HR',                'named_user',    FALSE),
   -- PMS: Matrix Mgr → Reporting Mgr → Functional Mgr → HR (matrix mgr commonly bypassed)
   ('PMS_RATING', 1, 'MATRIX_MANAGER',     'manager_chain', TRUE),

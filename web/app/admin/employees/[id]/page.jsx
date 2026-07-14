@@ -35,6 +35,8 @@ export default function EmployeeDetailPage() {
   const [showSendBack, setShowSendBack] = useState(false);
   const [confirmApprove, setConfirmApprove] = useState(false);
   const [preview, setPreview] = useState(null); // { url, mime, label }
+  const [resetInfo, setResetInfo] = useState(null); // { email, tempPassword }
+  const [resetBusy, setResetBusy] = useState(false);
 
   const load = () => api.get(`/employees/${id}`).then(setData).catch(() => setData(false));
   useEffect(() => { load(); }, [id]);
@@ -44,6 +46,11 @@ export default function EmployeeDetailPage() {
     setBusy(true);
     try { const r = await api.post(`/onboarding/${data.onboarding.id}/approve`); setMsg(`Approved. Employee ID ${r.employeeCode} created; credentials emailed.`); await load(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  }
+  async function resetPassword() {
+    setResetBusy(true); setMsg('');
+    try { setResetInfo(await api.post(`/admin/employees/${id}/reset-password`)); }
+    catch (e) { setMsg(e.message); } finally { setResetBusy(false); }
   }
   async function sendBack() {
     setBusy(true);
@@ -100,6 +107,11 @@ export default function EmployeeDetailPage() {
             <Button variant="outline" size="sm" onClick={viewOfferLetter}><IconFile width={15} height={15} /> Offer letter</Button>
           )}
           <Button variant="soft" size="sm" onClick={viewSheet}><IconFile width={15} height={15} /> Info sheet (PDF)</Button>
+          {e.onboarding_status === 'ACTIVE' && (
+            <Button variant="outline" size="sm" onClick={resetPassword} disabled={resetBusy}>
+              {resetBusy ? <Spinner /> : 'Reset password'}
+            </Button>
+          )}
           <StatusBadge status={e.onboarding_status} />
         </div>
       </div>

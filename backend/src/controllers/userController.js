@@ -1,5 +1,8 @@
 import { query } from '../db/pool.js';
+import { randomInt } from 'crypto';
 import { hashPassword } from '../utils/password.js';
+import { enqueueEmail } from '../services/emailQueue.js';
+import { credentialsEmail } from '../services/emailTemplates.js';
 import { audit } from '../utils/audit.js';
 
 // SUPER_ADMIN: list all staff + employee user accounts
@@ -57,5 +60,35 @@ export async function getAudit(req, res, next) {
        FROM audit_log a LEFT JOIN user_accounts ua ON ua.id = a.actor_user_id
        ORDER BY a.id DESC LIMIT 200`);
     res.json(rows);
+  } catch (e) { next(e); }
+}
+
+// POST /admin/employees/:id/reset-password  (HR/staff)
+// Sets a temp password (returned once for hand-over + emailed), forces change on next login.
+export async function resetEmployeePassword(req, res, next) {
+  try {
+    const emp = (await query(
+      `SELECT id, first_name, employee_code, official_email FROM employees WHERE id=$1`, [req.params.id])).rows[0];
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    const acc = (await query(`SELECT * FROM user_accounts WHERE employee_id=$1`, [emp.id])).rows[0];
+    if (!acc) return res.status(404).json({ error: 'No login account exists for this employee yet' });
+
+    const elevated = ['SUPER_ADMIN', 'IT_ADMIN'];
+    if (elevated.includes(acc.role) && !elevated.includes(req.user.role)) {
+      return res.status(403).json({ error: 'Only IT/Super Admin can reset admin accounts' });
+    }
+
+    const tempPassword = `Thr@${randomInt(100000, 1000000)}`;
+    await query(`UPDATE user_accounts SET password_hash=$1, must_change_password=true WHERE id=$2`,
+      [await hashPassword(tempPassword), acc.id]);
+    await query(`DELETE FROM password_reset_otps WHERE user_id=$1`, [acc.id]);
+    await audit(req.user.id, 'PASSWORD_RESET_BY_STAFF', 'user_account', acc.id, { employeeId: emp.id });
+    await enqueueEmail({
+      to: acc.email,
+      subject: 'TRUE HR — your password has been reset',
+      html: credentialsEmail({ name: emp.first_name, employeeCode: emp.employee_code, officialEmail: acc.email, tempPassword }),
+      template: 'password_reset_by_staff',
+    });
+    res.json({ ok: true, email: acc.email, tempPassword });
   } catch (e) { next(e); }
 }

@@ -1,4 +1,5 @@
 import React from 'react';
+import { createPortal } from 'react-dom';
 export function Button({ as: As = 'button', variant = 'primary', size = 'md', className = '', children, ...props }) {
   const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
   const sizes = { md: 'px-4 py-2.5 text-sm', sm: 'px-3 py-1.5 text-[13px]' };
@@ -44,10 +45,14 @@ export function Spinner({ className = '' }) {
 }
 
 export function Modal({ open, onClose, title, children, actions, tone = 'brand', size = 'md' }) {
-  if (!open) return null;
+  // Portal to <body>: ancestor transforms/filters/overflow can trap `fixed`
+  // elements (seen live: modal backdrop clipped to the admin content area).
+  const [mounted, setMounted] = React.useState(false);
+  React.useEffect(() => { setMounted(true); }, []);
+  if (!open || !mounted) return null;
   const ring = { brand: 'bg-brand-50 text-brand-700', danger: 'bg-rose-50 text-rose-600' }[tone] || 'bg-brand-50 text-brand-700';
   const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
-  return (
+  return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-slate-900/40 backdrop-blur-[2px]" onClick={onClose} />
       <div className={`relative w-full ${widths[size] || widths.md} bg-white rounded-xl2 border border-line shadow-pop animate-in flex flex-col max-h-[90vh]`}>
@@ -62,7 +67,8 @@ export function Modal({ open, onClose, title, children, actions, tone = 'brand',
         {children && <div className={`px-6 ${title ? '' : 'pt-6'} pb-4 text-sm text-ink-soft leading-relaxed overflow-y-auto flex-1`}>{children}</div>}
         {actions && <div className="flex justify-end gap-2.5 px-6 py-4 border-t border-line shrink-0">{actions}</div>}
       </div>
-    </div>
+    </div>,
+    document.body
   );
 }
 

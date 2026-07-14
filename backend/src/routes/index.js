@@ -116,6 +116,11 @@ r.post('/admin/masters/:type', authenticate, requireStaff, masters.create);
 r.put('/admin/masters/:type/:id', authenticate, requireStaff, masters.update);
 r.delete('/admin/masters/:type/:id', authenticate, requireStaff, masters.remove);
 
+// --- Approver matrix (who approves per role/context) ---
+r.get('/admin/approver-matrix', authenticate, requireStaff, approval.matrixList);
+r.post('/admin/approver-matrix', authenticate, requireStaff, approval.matrixSave);
+r.delete('/admin/approver-matrix/:id', authenticate, requireStaff, approval.matrixRemove);
+
 // --- Approval-chain engine (generic: NFA / settlement / resignation / PMS) ---
 r.get('/approvals/pending', authenticate, approval.pending);
 r.get('/approvals/preview', authenticate, approval.preview);

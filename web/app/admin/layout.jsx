@@ -30,6 +30,7 @@ const FINANCE = [
   { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, show: gated },
   { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, show: gated },
   { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, show: gated },
+  { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, show: gated },
   { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, show: gated },
 ];
 const PERFORMANCE = [

@@ -244,6 +244,64 @@ export default function EmployeeDetailPage() {
         )}
       </Card>
 
+      <Modal open={!!edit} onClose={() => setEdit(null)} title="Edit employee" size="lg"
+        actions={<>
+          <Button variant="ghost" onClick={() => setEdit(null)}>Cancel</Button>
+          <Button onClick={saveEdit} disabled={saveBusy}>{saveBusy ? <Spinner /> : 'Save changes'}</Button>
+        </>}>
+        {edit && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="First name" required><Input value={edit.firstName} onChange={(ev) => setEdit({ ...edit, firstName: ev.target.value })} /></Field>
+            <Field label="Last name" required><Input value={edit.lastName} onChange={(ev) => setEdit({ ...edit, lastName: ev.target.value })} /></Field>
+            <Field label="Phone"><Input value={edit.phone} onChange={(ev) => setEdit({ ...edit, phone: ev.target.value })} maxLength={10} inputMode="numeric" /></Field>
+            <Field label="Department">
+              <Select value={edit.departmentId} onChange={(ev) => setEdit({ ...edit, departmentId: ev.target.value })}>
+                <option value="">—</option>
+                {(meta?.departments || []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Designation">
+              <Select value={edit.designationId} onChange={(ev) => setEdit({ ...edit, designationId: ev.target.value })}>
+                <option value="">—</option>
+                {(meta?.designations || []).map((d) => <option key={d.id} value={d.id}>{d.title}{d.grade ? ` (${d.grade})` : ''}</option>)}
+              </Select>
+            </Field>
+            <Field label="Reporting manager">
+              <Select value={edit.reportingManagerId} onChange={(ev) => setEdit({ ...edit, reportingManagerId: ev.target.value })}>
+                <option value="">—</option>
+                {(meta?.managers || []).filter((m) => String(m.id) !== String(id)).map((m) => <option key={m.id} value={m.id}>{m.first_name} {m.last_name}{m.employee_code ? ` · ${m.employee_code}` : ''}</option>)}
+              </Select>
+            </Field>
+            <Field label="Functional manager">
+              <Select value={edit.functionManagerId} onChange={(ev) => setEdit({ ...edit, functionManagerId: ev.target.value })}>
+                <option value="">—</option>
+                {(meta?.managers || []).filter((m) => String(m.id) !== String(id)).map((m) => <option key={m.id} value={m.id}>{m.first_name} {m.last_name}{m.employee_code ? ` · ${m.employee_code}` : ''}</option>)}
+              </Select>
+            </Field>
+            <Field label="Annual CTC (₹)" hint="Needed for Annexure A"><Input type="number" min="0" value={edit.ctc} onChange={(ev) => setEdit({ ...edit, ctc: ev.target.value })} /></Field>
+            <Field label="Date of joining"><Input type="date" value={edit.dateOfJoining} onChange={(ev) => setEdit({ ...edit, dateOfJoining: ev.target.value })} /></Field>
+            <Field label="Location"><Input value={edit.location} onChange={(ev) => setEdit({ ...edit, location: ev.target.value })} /></Field>
+            <Field label="Employment type">
+              <Select value={edit.employmentType} onChange={(ev) => setEdit({ ...edit, employmentType: ev.target.value })}>
+                {['FULL_TIME', 'PART_TIME', 'CONTRACT', 'INTERN'].map((t) => <option key={t} value={t}>{t.replace('_', ' ')}</option>)}
+              </Select>
+            </Field>
+            <Field label="Personal email"><Input value={edit.personalEmail} onChange={(ev) => setEdit({ ...edit, personalEmail: ev.target.value })} /></Field>
+            <Field label="Official email" hint="Also updates the login email"><Input value={edit.officialEmail} onChange={(ev) => setEdit({ ...edit, officialEmail: ev.target.value })} /></Field>
+          </div>
+        )}
+      </Modal>
+
+      <Modal open={!!resetInfo} onClose={() => setResetInfo(null)} title="Password reset" size="sm"
+        actions={<Button onClick={() => setResetInfo(null)}>Done</Button>}>
+        <p>New temporary password for <b className="text-ink">{resetInfo?.email}</b>:</p>
+        <div className="mt-3 flex items-center gap-2">
+          <code className="text-lg font-bold tracking-wider bg-slate-100 border border-line rounded-lg px-4 py-2">{resetInfo?.tempPassword}</code>
+          <Button size="sm" variant="outline" onClick={() => navigator.clipboard?.writeText(resetInfo?.tempPassword || '')}>Copy</Button>
+        </div>
+        <p className="mt-3 text-xs text-ink-faint">It has also been emailed to the employee. They must change it at first login. Share it over a secure channel only.</p>
+      </Modal>
+
       <Modal open={confirmApprove} onClose={() => setConfirmApprove(false)} title="Approve onboarding?"
         actions={<>
           <Button variant="outline" onClick={() => setConfirmApprove(false)}>Cancel</Button>

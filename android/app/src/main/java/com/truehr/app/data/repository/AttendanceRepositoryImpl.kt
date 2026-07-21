@@ -7,6 +7,7 @@ import com.truehr.app.data.remote.dto.AttendanceRecordDto
 import com.truehr.app.data.remote.dto.PunchRequest
 import com.truehr.app.domain.model.AttendanceDay
 import com.truehr.app.domain.model.AttendanceToday
+import com.truehr.app.domain.model.PunchSummary
 import com.truehr.app.domain.model.MonthCell
 import com.truehr.app.domain.model.MonthlyAttendance
 import com.truehr.app.domain.model.TeamMember
@@ -23,7 +24,12 @@ class AttendanceRepositoryImpl @Inject constructor(
 
   override suspend fun todayStatus(): AttendanceToday {
     val d = api.attendanceToday()
-    return AttendanceToday(punchedIn = d.punchedIn, completed = d.completed)
+    return AttendanceToday(
+      punchedIn = d.punchedIn,
+      completed = d.completed,
+      punchIn = d.`in`?.let { PunchSummary(it.at, it.address) },
+      punchOut = d.out?.let { PunchSummary(it.at, it.address) },
+    )
   }
 
   override suspend fun punch(type: String, lat: Double?, lng: Double?, address: String?, photoBase64: String?) {

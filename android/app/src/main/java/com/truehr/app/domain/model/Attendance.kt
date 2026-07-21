@@ -1,7 +1,14 @@
 package com.truehr.app.domain.model
 
 /** Today's punch status for the logged-in employee. */
-data class AttendanceToday(val punchedIn: Boolean, val completed: Boolean)
+data class PunchSummary(val at: String?, val address: String?)
+
+data class AttendanceToday(
+  val punchedIn: Boolean,
+  val completed: Boolean,
+  val punchIn: PunchSummary? = null,
+  val punchOut: PunchSummary? = null,
+)
 
 /** One day's attendance summary (first punch-in and last punch-out). */
 data class AttendanceDay(

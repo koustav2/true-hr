@@ -22,8 +22,8 @@ class AttendanceViewModel @Inject constructor(
 
   val punchedIn = MutableStateFlow(false)
   val completed = MutableStateFlow(false)   // both IN and OUT done today
-  val todayIn = MutableStateFlow<com.truehr.app.data.remote.dto.PunchSummaryDto?>(null)
-  val todayOut = MutableStateFlow<com.truehr.app.data.remote.dto.PunchSummaryDto?>(null)
+  val todayIn = MutableStateFlow<com.truehr.app.domain.model.PunchSummary?>(null)
+  val todayOut = MutableStateFlow<com.truehr.app.domain.model.PunchSummary?>(null)
   val submitting = MutableStateFlow(false)
   val message = MutableStateFlow<String?>(null)
   val daily = MutableStateFlow(UiState<List<AttendanceDay>>())
@@ -32,8 +32,8 @@ class AttendanceViewModel @Inject constructor(
     runCatching { repo.todayStatus() }.onSuccess {
       punchedIn.value = it.punchedIn
       completed.value = it.completed
-      todayIn.value = it.`in`
-      todayOut.value = it.out
+      todayIn.value = it.punchIn
+      todayOut.value = it.punchOut
     }
   }
 

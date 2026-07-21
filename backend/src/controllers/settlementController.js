@@ -54,10 +54,22 @@ export async function submit(req, res, next) {
     const amount = money(b.amount);
     if (amount <= 0) return res.status(400).json({ error: 'amount must be > 0' });
 
+    const docs = Array.isArray(b.documents) ? b.documents : [];
+    if (docs.length > 10) return res.status(400).json({ error: 'Max 10 documents per settlement' });
+    for (const [i, d] of docs.entries()) {
+      if (!d?.file) return res.status(400).json({ error: `documents[${i}]: file is required` });
+      if (Math.floor(String(d.file).length * 3 / 4) > 5 * 1024 * 1024)
+        return res.status(400).json({ error: `${d.filename || `documents[${i}]`}: larger than 5MB` });
+    }
+
     const s = (await query(
       `INSERT INTO nfa_settlements (nfa_id, employee_id, amount, remarks, document_id)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [nfaId, empId, amount, b.remarks || null, b.documentId || null])).rows[0];
+    for (const d of docs) {
+      await query(`INSERT INTO nfa_settlement_docs (settlement_id, document, mime, filename) VALUES ($1,$2,$3,$4)`,
+        [s.id, d.file, d.mime || null, d.filename || null]);
+    }
     const inst = await engine.createInstance('NFA_SETTLEMENT', 'nfa_settlement', s.id, empId, {
       projectId: nfa.project_id, expenseCategoryId: nfa.expense_category_id, zoneId: nfa.zone_id,
     }, req.user.sub);
@@ -144,5 +156,42 @@ export async function adminList(req, res, next) {
       out.push(d);
     }
     res.json(out);
+  } catch (e) { next(e); }
+}
+
+// ── settlement documents ────────────────────────────────────────────────────
+
+const S_STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
+async function canSeeSettlement(user, settlementId) {
+  if (S_STAFF.includes(user.role)) return true;
+  const r = (await query(
+    `SELECT 1 FROM nfa_settlements s
+      LEFT JOIN approval_instance_stages ais ON ais.instance_id = s.approval_instance_id
+     WHERE s.id=$1 AND (s.employee_id=$2 OR ais.approver_employee_id=$2) LIMIT 1`,
+    [settlementId, user.employeeId]));
+  return !!r.rowCount;
+}
+
+// GET /settlements/:id/documents — metadata (owner, chain approvers, staff)
+export async function listDocs(req, res, next) {
+  try {
+    if (!(await canSeeSettlement(req.user, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
+    const rows = (await query(
+      `SELECT id, mime, filename, created_at FROM nfa_settlement_docs WHERE settlement_id=$1 ORDER BY id`, [req.params.id])).rows;
+    res.json(rows.map((r) => ({ id: r.id, mime: r.mime, filename: r.filename, uploadedAt: r.created_at })));
+  } catch (e) { next(e); }
+}
+
+// GET /settlements/:id/documents/:docId — the file
+export async function getDoc(req, res, next) {
+  try {
+    if (!(await canSeeSettlement(req.user, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
+    const r = (await query(
+      `SELECT document, mime, filename FROM nfa_settlement_docs WHERE id=$1 AND settlement_id=$2`,
+      [req.params.docId, req.params.id])).rows[0];
+    if (!r) return res.status(404).json({ error: 'Document not found' });
+    res.setHeader('Content-Type', r.mime || 'application/octet-stream');
+    res.setHeader('Content-Disposition', `inline; filename="${(r.filename || 'document').replace(/[^\x20-\x7E]/g, '_')}"`);
+    res.send(Buffer.from(r.document, 'base64'));
   } catch (e) { next(e); }
 }

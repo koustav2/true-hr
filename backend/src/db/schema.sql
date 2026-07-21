@@ -1065,3 +1065,14 @@ ALTER TABLE agreements
 
 -- District in the client-required address format (Line1/State/District/City/PIN)
 ALTER TABLE employee_addresses ADD COLUMN IF NOT EXISTS district TEXT;
+
+-- Supporting documents attached to a settlement (client req: upload ALL bills as PDF).
+CREATE TABLE IF NOT EXISTS nfa_settlement_docs (
+  id            BIGSERIAL PRIMARY KEY,
+  settlement_id BIGINT NOT NULL REFERENCES nfa_settlements(id) ON DELETE CASCADE,
+  document      TEXT NOT NULL,
+  mime          TEXT,
+  filename      TEXT,
+  created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_settlement_docs ON nfa_settlement_docs(settlement_id);

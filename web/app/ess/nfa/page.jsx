@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { api } from '@/lib/api.js';
+import { api, getStoredAuth } from '@/lib/api.js';
 import { Card, Button, Input, Textarea, Spinner, Empty, Modal } from '@/components/ui.jsx';
 
 const TONE = {
@@ -128,19 +128,61 @@ function NfaDetailModal({ id, onClose, onChanged }) {
   );
 }
 
+// Attached bills on a submitted settlement (visible to owner, approvers, staff).
+function SettlementDocs({ settlementId }) {
+  const [docs, setDocs] = useState([]);
+  useEffect(() => { api.get(`/settlements/${settlementId}/documents`).then(setDocs).catch(() => {}); }, [settlementId]);
+  if (!docs.length) return null;
+  async function open(docId) {
+    const win = window.open('', '_blank');
+    try {
+      const auth = getStoredAuth();
+      const res = await fetch(`/api/settlements/${settlementId}/documents/${docId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+      if (!res.ok) { win?.close(); return; }
+      const url = URL.createObjectURL(await res.blob());
+      if (win) win.location = url; else window.location.href = url;
+    } catch { win?.close(); }
+  }
+  return (
+    <div className="flex flex-wrap gap-1.5">
+      {docs.map((d) => (
+        <button key={d.id} onClick={() => open(d.id)}
+          className="text-[11px] text-brand-700 bg-brand-50 border border-brand-100 rounded-full px-2.5 py-1 hover:bg-brand-100">
+          {d.filename || `Document ${d.id}`}
+        </button>
+      ))}
+    </div>
+  );
+}
+
 // GreenHR "Submit Your Settlement" / "Check Settlement".
 function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
   const [s, setS] = useState(null);
   const [amount, setAmount] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [files, setFiles] = useState([]); // [{ file, mime, filename }]
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const load = () => api.get(`/nfa/${nfaId}/settlement`).then(setS).catch(() => setS(false));
   useEffect(() => { load(); }, [nfaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  async function pickFiles(list) {
+    const out = [];
+    for (const f of Array.from(list || [])) {
+      if (f.size > 5 * 1024 * 1024) { setMsg(`${f.name}: larger than 5MB`); continue; }
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(',')[1]);
+        r.onerror = rej; r.readAsDataURL(f);
+      });
+      out.push({ file: b64, mime: f.type, filename: f.name });
+    }
+    setFiles((x) => [...x, ...out].slice(0, 10));
+  }
+
   async function submit() {
     setBusy(true); setMsg('');
-    try { await api.post(`/nfa/${nfaId}/settlement`, { amount: Number(amount), remarks }); load(); onChanged(); }
+    try { await api.post(`/nfa/${nfaId}/settlement`, { amount: Number(amount), remarks, documents: files }); setFiles([]); load(); onChanged(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
 
@@ -153,6 +195,7 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
       {s && s !== false && s.status !== 'REJECTED' ? (
         <>
           <div className="text-sm flex justify-between"><span className="text-ink-faint">Settlement amount</span><span className="font-medium">{fmtMoney(s.amount)}</span></div>
+          <SettlementDocs settlementId={s.id} />
           {s.approval?.chain.map((st) => (
             <div key={st.seq} className="flex justify-between text-xs border border-line rounded px-2.5 py-1">
               <span>{st.seq}. {st.roleKey.replace(/_/g, ' ')} <span className="text-ink-soft">{st.approver?.name || '—'}</span></span>
@@ -164,6 +207,22 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
         <div className="space-y-2">
           <Input type="number" placeholder="Settlement amount" value={amount} onChange={(e) => setAmount(e.target.value)} />
           <Textarea rows={1} placeholder="Remarks / expense proof notes" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+          <div>
+            <input type="file" accept="application/pdf,image/*" multiple
+              className="block w-full text-xs text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-3 file:py-1.5 file:text-xs file:font-semibold"
+              onChange={(e) => { pickFiles(e.target.files); e.target.value = ''; }} />
+            {files.length > 0 && (
+              <ul className="mt-1.5 space-y-1">
+                {files.map((f, i) => (
+                  <li key={i} className="flex justify-between items-center text-xs text-ink-soft border border-line rounded px-2 py-1">
+                    <span className="truncate">{f.filename}</span>
+                    <button onClick={() => setFiles((x) => x.filter((_, j) => j !== i))} className="text-rose-600 shrink-0 ml-2">remove</button>
+                  </li>
+                ))}
+              </ul>
+            )}
+            <p className="text-[11px] text-ink-faint mt-1">Attach all supporting bills (PDF/image, max 5MB each).</p>
+          </div>
           {msg && <p className="text-sm text-red-600">{msg}</p>}
           <Button size="sm" onClick={submit} disabled={busy || !amount}>{busy ? 'Submitting…' : 'Submit Your Settlement'}</Button>
         </div>

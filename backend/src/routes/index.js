@@ -174,6 +174,8 @@ r.get('/agreements', authenticate, vendor.listAgreements);
 r.post('/agreements', authenticate, vendor.createAgreement);
 r.get('/vendors/:id/document', authenticate, vendor.vendorDocument);
 r.get('/agreements/:id/document', authenticate, vendor.agreementDocument);
+r.get('/settlements/:id/documents', authenticate, settlement.listDocs);
+r.get('/settlements/:id/documents/:docId', authenticate, settlement.getDoc);
 r.post('/admin/agreements/:id/review', authenticate, requireStaff, vendor.reviewAgreement);
 
 // --- Resignation ---

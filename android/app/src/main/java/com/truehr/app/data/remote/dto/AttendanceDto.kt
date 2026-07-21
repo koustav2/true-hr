@@ -22,11 +22,16 @@ data class PunchResponse(
 )
 
 @Serializable
+data class PunchSummaryDto(val at: String? = null, val address: String? = null)
+
+@Serializable
 data class TodayDto(
   val punchedIn: Boolean = false,
   val hasIn: Boolean = false,
   val hasOut: Boolean = false,
   val completed: Boolean = false,
+  val `in`: PunchSummaryDto? = null,
+  val out: PunchSummaryDto? = null,
 )
 
 @Serializable

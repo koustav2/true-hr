@@ -41,6 +41,8 @@ fun MarkAttendanceScreen(onBack: () -> Unit, vm: AttendanceViewModel = hiltViewM
 
   val punchedIn by vm.punchedIn.collectAsState()
   val completed by vm.completed.collectAsState()
+  val todayIn by vm.todayIn.collectAsState()
+  val todayOut by vm.todayOut.collectAsState()
   val submitting by vm.submitting.collectAsState()
   val message by vm.message.collectAsState()
 
@@ -137,6 +139,34 @@ fun MarkAttendanceScreen(onBack: () -> Unit, vm: AttendanceViewModel = hiltViewM
       }
       Spacer(Modifier.height(16.dp))
       Text(status, color = Ink, fontWeight = FontWeight.SemiBold, textAlign = TextAlign.Center)
+      // Client req #20: punch summary (date | time + location) right below the button.
+      listOfNotNull(todayIn?.let { "IN" to it }, todayOut?.let { "OUT" to it }).forEach { (label, punch) ->
+        Spacer(Modifier.height(12.dp))
+        Surface(color = Surface, shape = RoundedCornerShape(12.dp), shadowElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
+          Column(Modifier.padding(horizontal = 14.dp, vertical = 10.dp)) {
+            Text(
+              "Punch $label · " + formatPunchTime(punch.at),
+              fontWeight = FontWeight.SemiBold, color = if (label == "IN") Green else Rose,
+              style = MaterialTheme.typography.bodyMedium,
+            )
+            if (!punch.address.isNullOrBlank()) {
+              Spacer(Modifier.height(2.dp))
+              Text("Attendance Location: ${punch.address}", color = InkSoft, style = MaterialTheme.typography.bodySmall)
+            }
+          }
+        }
+      }
     }
   }
+}
+
+private fun formatPunchTime(iso: String?): String {
+  if (iso.isNullOrBlank()) return ""
+  return try {
+    // minSdk 24: avoid java.time — parse the UTC ISO string with SimpleDateFormat.
+    val parser = java.text.SimpleDateFormat("yyyy-MM-dd'T'HH:mm:ss", java.util.Locale.US)
+    parser.timeZone = java.util.TimeZone.getTimeZone("UTC")
+    val date = parser.parse(iso.substringBefore('.').removeSuffix("Z"))
+    java.text.SimpleDateFormat("dd/MM/yyyy | hh:mm a", java.util.Locale.US).format(date!!)
+  } catch (_: Exception) { iso.take(16).replace("T", " | ") }
 }

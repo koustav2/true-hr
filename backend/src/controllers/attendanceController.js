@@ -49,7 +49,15 @@ export async function today(req, res, next) {
        WHERE employee_id=$1 AND captured_at::date = now()::date GROUP BY type`, [empId])).rows;
     const hasIn = counts.some((c) => c.type === 'IN' && c.n > 0);
     const hasOut = counts.some((c) => c.type === 'OUT' && c.n > 0);
-    res.json({ punchedIn: hasIn && !hasOut, hasIn, hasOut, completed: hasIn && hasOut });
+    // Client req #20: show the punch summary (time + location) right after punching.
+    const punches = (await query(
+      `SELECT type, captured_at, address FROM attendance
+        WHERE employee_id=$1 AND captured_at::date = now()::date ORDER BY captured_at`, [empId])).rows;
+    const pick = (t) => {
+      const r = punches.find((x) => x.type === t);
+      return r ? { at: r.captured_at, address: r.address } : null;
+    };
+    res.json({ punchedIn: hasIn && !hasOut, hasIn, hasOut, completed: hasIn && hasOut, in: pick('IN'), out: pick('OUT') });
   } catch (e) { next(e); }
 }
 

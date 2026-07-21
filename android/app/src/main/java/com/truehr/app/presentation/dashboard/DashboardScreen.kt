@@ -10,6 +10,7 @@ import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.items
 import androidx.compose.foundation.pager.HorizontalPager
 import androidx.compose.foundation.pager.rememberPagerState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
@@ -65,7 +66,16 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
               .clip(RoundedCornerShape(14.dp))
               .clickable { onOpen(Routes.PROFILE) },
           ) {
-            Avatar(header.name, 52)
+            // Photo avatar (falls back to initials while loading / when absent)
+            Box(Modifier.size(52.dp), contentAlignment = Alignment.Center) {
+              Avatar(header.name, 52)
+              AsyncImage(
+                model = BuildConfig.BASE_URL + "me/photo",
+                contentDescription = null,
+                contentScale = ContentScale.Crop,
+                modifier = Modifier.size(52.dp).clip(CircleShape),
+              )
+            }
             Spacer(Modifier.width(13.dp))
             Column(Modifier.weight(1f)) {
               Text(greeting(), color = Surface.copy(alpha = 0.72f), style = MaterialTheme.typography.labelMedium)
@@ -76,8 +86,9 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
                 maxLines = 1,
                 overflow = TextOverflow.Ellipsis,
               )
-              if (header.designation.isNotBlank()) {
-                Text(header.designation, color = Surface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
+              val subtitle = listOf(header.employeeCode, header.designation).filter { it.isNotBlank() }.joinToString(" · ")
+              if (subtitle.isNotBlank()) {
+                Text(subtitle, color = Surface.copy(alpha = 0.8f), style = MaterialTheme.typography.bodyMedium, maxLines = 1, overflow = TextOverflow.Ellipsis)
               }
             }
           }

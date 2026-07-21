@@ -12,7 +12,7 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 import javax.inject.Inject
 
-data class HeaderState(val name: String = "Employee", val designation: String = "", val isManager: Boolean = false)
+data class HeaderState(val name: String = "Employee", val designation: String = "", val isManager: Boolean = false, val employeeCode: String = "")
 
 @HiltViewModel
 class DashboardViewModel @Inject constructor(
@@ -29,7 +29,7 @@ class DashboardViewModel @Inject constructor(
   private fun load() = viewModelScope.launch {
     try {
       val p = profileRepository.getProfile()
-      header.update { HeaderState(p.fullName, p.designation, p.isManager) }
+      header.update { HeaderState(p.fullName, p.designation, p.isManager, p.employeeCode) }
     } catch (_: Exception) { /* keep defaults */ }
     try { banners.value = api.banners() } catch (_: Exception) { /* no carousel */ }
   }

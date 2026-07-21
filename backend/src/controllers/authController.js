@@ -132,6 +132,20 @@ export async function resetPassword(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// GET /me/photo — the onboarding photograph of the logged-in employee.
+export async function myPhoto(req, res, next) {
+  try {
+    if (!req.user.employeeId) return res.status(404).json({ error: 'No employee linked' });
+    const row = (await query(
+      `SELECT data, mime FROM documents WHERE employee_id=$1 AND type='PHOTO' ORDER BY uploaded_at DESC LIMIT 1`,
+      [req.user.employeeId])).rows[0];
+    if (!row?.data) return res.status(404).json({ error: 'No photo' });
+    res.setHeader('Content-Type', row.mime || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(Buffer.from(row.data, 'base64'));
+  } catch (e) { next(e); }
+}
+
 export async function changePassword(req, res, next) {
   try {
     const { newPassword } = req.body;

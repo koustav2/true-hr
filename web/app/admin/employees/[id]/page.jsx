@@ -75,6 +75,9 @@ export default function EmployeeDetailPage() {
       firstName: e.first_name || '', lastName: e.last_name || '', phone: e.phone || '',
       departmentId: e.department_id || '', designationId: e.designation_id || '',
       reportingManagerId: e.reporting_manager_id || '', functionManagerId: e.function_manager_id || '',
+      ctc: e.ctc || '', dateOfJoining: (e.date_of_joining || '').slice(0, 10), location: e.location || '',
+      personalEmail: e.personal_email || '', officialEmail: e.official_email || '',
+      employmentType: e.employment_type || 'FULL_TIME',
     });
   }
   async function saveEdit() {

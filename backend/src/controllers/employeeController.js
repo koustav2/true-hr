@@ -326,6 +326,7 @@ export async function updateEmployee(req, res, next) {
       departmentId: 'department_id', designationId: 'designation_id',
       reportingManagerId: 'reporting_manager_id', functionManagerId: 'function_manager_id',
       employmentType: 'employment_type', dateOfJoining: 'date_of_joining',
+      ctc: 'ctc', location: 'location', personalEmail: 'personal_email', officialEmail: 'official_email',
     };
     const sets = [], vals = [];
     for (const [key, col] of Object.entries(FIELDS)) {
@@ -344,8 +345,12 @@ export async function updateEmployee(req, res, next) {
       return res.status(400).json({ error: 'Name cannot be empty' });
     }
     vals.push(id);
-    const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id`, vals);
+    const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id, official_email`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Employee not found' });
+    // Keep the login account in sync when the official email changes.
+    if (req.body.officialEmail) {
+      await query(`UPDATE user_accounts SET email=$2 WHERE employee_id=$1`, [id, String(req.body.officialEmail).toLowerCase()]);
+    }
     await audit(req.user.id, 'EMPLOYEE_UPDATE', 'employee', id, { fields: Object.keys(req.body || {}) });
     res.json({ ok: true });
   } catch (e) { next(e); }

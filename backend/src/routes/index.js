@@ -153,6 +153,7 @@ r.get('/admin/settlements', authenticate, requireStaff, settlement.adminList);
 r.get('/admin/nfa-dashboard', authenticate, requireStaff, nfaReport.dashboard);
 r.get('/admin/reports/project-expense', authenticate, requireStaff, nfaReport.projectExpense);
 r.get('/admin/reports/client-billing', authenticate, requireStaff, nfaReport.clientBilling);
+r.get('/admin/reports/pending-settlements', authenticate, requireStaff, nfaReport.pendingSettlements);
 r.get('/admin/nfa-export', authenticate, requireStaff, nfaReport.nfaExport);
 
 // --- PMS / KPI ---
@@ -232,6 +233,7 @@ r.post('/admin/users', authenticate, requireAdmin, users.createUser);
 r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatus);
 r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
 r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
+r.post('/admin/employees/:id/generate-offer', authenticate, requireStaff, emp.generateOfferLetter);
 r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
 
 // --- Leave configuration (HR) ---

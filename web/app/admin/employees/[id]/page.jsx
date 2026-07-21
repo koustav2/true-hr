@@ -50,6 +50,11 @@ export default function EmployeeDetailPage() {
     try { const r = await api.post(`/onboarding/${data.onboarding.id}/approve`); setMsg(`Approved. Employee ID ${r.employeeCode} created; credentials emailed.`); await load(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
+  async function generateOffer() {
+    setBusy(true); setMsg('');
+    try { await api.post(`/admin/employees/${id}/generate-offer`); setMsg('Offer letter + Annexure A generated.'); await load(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  }
   async function resetPassword() {
     setResetBusy(true); setMsg('');
     try { setResetInfo(await api.post(`/admin/employees/${id}/reset-password`)); }
@@ -137,6 +142,7 @@ export default function EmployeeDetailPage() {
           )}
           <Button variant="soft" size="sm" onClick={viewSheet}><IconFile width={15} height={15} /> Info sheet (PDF)</Button>
           <Button variant="outline" size="sm" onClick={openEdit}>Edit</Button>
+          <Button variant="outline" size="sm" onClick={generateOffer} disabled={busy}>Generate offer + Annexure A</Button>
           {e.onboarding_status === 'ACTIVE' && (
             <Button variant="outline" size="sm" onClick={resetPassword} disabled={resetBusy}>
               {resetBusy ? <Spinner /> : 'Reset password'}

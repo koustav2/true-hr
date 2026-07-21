@@ -163,3 +163,29 @@ export async function nfaExport(req, res, next) {
     ], 'nfa-report');
   } catch (e) { next(e); }
 }
+
+// GET /admin/reports/pending-settlements?format= — amount pending for settlement (client req #17).
+export async function pendingSettlements(req, res, next) {
+  try {
+    const rows = (await query(
+      `SELECT n.nfa_code, e.employee_code, e.first_name || ' ' || e.last_name AS employee,
+              gc.name AS company, p.name AS project, n.grand_total AS amount_received,
+              COALESCE(n.settlement_status,'PENDING') AS settlement_status,
+              n.settlement_due_date,
+              GREATEST(0, (now()::date - n.settlement_due_date))::int AS days_overdue
+         FROM nfas n
+         JOIN employees e ON e.id=n.employee_id
+         JOIN group_companies gc ON gc.id=n.group_company_id
+         JOIN projects p ON p.id=n.project_id
+        WHERE n.status='PAYMENT_RELEASED' AND COALESCE(n.settlement_status,'PENDING') <> 'CLOSE'
+        ORDER BY n.settlement_due_date NULLS LAST, n.created_at`)).rows
+      .map((r) => ({ ...r, amount_received: Number(r.amount_received) }));
+    await send(res, req, rows, [
+      { key: 'nfa_code', label: 'NFA Code' }, { key: 'employee_code', label: 'Emp Code' },
+      { key: 'employee', label: 'Employee' }, { key: 'company', label: 'Cost To Company' },
+      { key: 'project', label: 'Project' }, { key: 'amount_received', label: 'Amount Pending (₹)' },
+      { key: 'settlement_status', label: 'Settlement Status' },
+      { key: 'settlement_due_date', label: 'Due Date' }, { key: 'days_overdue', label: 'Days Overdue' },
+    ], 'pending-settlements');
+  } catch (e) { next(e); }
+}

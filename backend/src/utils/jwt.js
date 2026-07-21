@@ -1,7 +1,7 @@
 import jwt from 'jsonwebtoken';
 import { config } from '../config/index.js';
 
-export const signToken = (payload) => jwt.sign(payload, config.jwtSecret, { expiresIn: '12h' });
+export const signToken = (payload) => jwt.sign(payload, config.jwtSecret, { expiresIn: '7d' });
 export const verifyToken = (token) => jwt.verify(token, config.jwtSecret);
 
 // Short-lived handoff token for app → web SSO (the "My ESS" tile opens the web

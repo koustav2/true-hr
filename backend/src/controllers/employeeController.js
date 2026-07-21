@@ -1,4 +1,6 @@
 import { query, tx } from '../db/pool.js';
+import { buildOfferLetterPdf } from '../services/offerLetterPdf.js';
+import { PassThrough } from 'stream';
 import { config } from '../config/index.js';
 import { generateMagicToken } from '../utils/tokens.js';
 import { generateTempPassword, hashPassword } from '../utils/password.js';
@@ -347,4 +349,37 @@ export async function updateEmployee(req, res, next) {
     await audit(req.user.id, 'EMPLOYEE_UPDATE', 'employee', id, { fields: Object.keys(req.body || {}) });
     res.json({ ok: true });
   } catch (e) { next(e); }
+}
+
+// POST /admin/employees/:id/generate-offer  (HR) — auto-generate the offer letter
+// + Annexure A (client req #8) and store it where the uploaded letter would live,
+// so the existing view / email flows pick it up unchanged.
+export async function generateOfferLetter(req, res, next) {
+  try {
+    const e = (await query(
+      `SELECT e.*, d.title AS designation, dep.name AS department
+         FROM employees e
+         LEFT JOIN designations d ON d.id = e.designation_id
+         LEFT JOIN departments dep ON dep.id = e.department_id
+        WHERE e.id=$1`, [req.params.id])).rows[0];
+    if (!e) return res.status(404).json({ error: 'Employee not found' });
+    if (!e.ctc) return res.status(400).json({ error: 'Set the CTC first — Annexure A needs it' });
+
+    const stream = new PassThrough();
+    const chunks = [];
+    stream.on('data', (c) => chunks.push(c));
+    const done = new Promise((resolve, reject) => { stream.on('end', resolve); stream.on('error', reject); });
+    buildOfferLetterPdf({
+      name: `${e.first_name} ${e.last_name}`.trim(), designation: e.designation, department: e.department,
+      joiningDate: e.date_of_joining, ctc: e.ctc, location: null,
+    }, stream);
+    await done;
+    const pdf = Buffer.concat(chunks).toString('base64');
+    await query(
+      `UPDATE employees SET offer_letter_data=$2, offer_letter_mime='application/pdf',
+              offer_letter_name=$3 WHERE id=$1`,
+      [e.id, pdf, `offer-letter-${(e.first_name || 'employee').toLowerCase()}.pdf`]);
+    await audit(req.user.id, 'OFFER_LETTER_GENERATED', 'employee', e.id, {});
+    res.json({ ok: true });
+  } catch (e2) { next(e2); }
 }

@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, downloadFile } from '@/lib/api.js';
 import { Card, Button, Input, Spinner, Empty } from '@/components/ui.jsx';
 
-const TABS = ['Dashboard', 'Project-wise Expense', 'Client Billing', 'Settlements'];
+const TABS = ['Dashboard', 'Project-wise Expense', 'Client Billing', 'Settlements', 'Pending Settlement'];
 const fmtMoney = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
 
 export default function NfaReportsPage() {
@@ -25,6 +25,7 @@ export default function NfaReportsPage() {
       {tab === 1 && <ProjectExpenseTab />}
       {tab === 2 && <ClientBillingTab />}
       {tab === 3 && <SettlementsTab />}
+      {tab === 4 && <PendingSettlementTab />}
     </div>
   );
 }
@@ -182,3 +183,46 @@ function SettlementsTab() {
     </div>
   );
 }
+
+// Client req #17: amount pending for settlement against released NFAs.
+function PendingSettlementTab() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { api.get('/admin/reports/pending-settlements').then(setRows).catch(() => setRows([])); }, []);
+  const total = (rows || []).reduce((a, r) => a + Number(r.amount_received || 0), 0);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-ink-soft">Total pending: <b className="text-rose-600">₹{total.toLocaleString('en-IN')}</b></div>
+        <ExportButtons path="/admin/reports/pending-settlements" name="pending-settlements" />
+      </div>
+      <Card className="overflow-x-auto">
+        {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
+          !rows.length ? <Empty title="Nothing pending settlement" /> : (
+          <table className="w-full text-sm min-w-[760px]">
+            <thead className="bg-slate-50/60 text-ink-faint border-b border-line"><tr>
+              <th className="text-left px-4 py-2.5 font-medium">NFA</th>
+              <th className="text-left px-2 py-2.5 font-medium">Employee</th>
+              <th className="text-left px-2 py-2.5 font-medium">Company · Project</th>
+              <th className="text-right px-2 py-2.5 font-medium">Pending (₹)</th>
+              <th className="text-left px-2 py-2.5 font-medium">Status</th>
+              <th className="text-left px-4 py-2.5 font-medium">Due / Overdue</th>
+            </tr></thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r) => (
+                <tr key={r.nfa_code} className="hover:bg-slate-50/70">
+                  <td className="px-4 py-2.5 font-medium text-ink">{r.nfa_code}</td>
+                  <td className="px-2 py-2.5 text-ink-soft">{r.employee} <span className="text-ink-faint text-xs">{r.employee_code}</span></td>
+                  <td className="px-2 py-2.5 text-ink-soft">{r.company} · {r.project}</td>
+                  <td className="px-2 py-2.5 text-right font-semibold">₹{Number(r.amount_received).toLocaleString('en-IN')}</td>
+                  <td className="px-2 py-2.5 text-xs">{r.settlement_status}</td>
+                  <td className="px-4 py-2.5 text-xs">{(r.settlement_due_date || '').slice(0, 10)}{r.days_overdue > 0 && <span className="text-rose-600 font-semibold"> · {r.days_overdue}d overdue</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+

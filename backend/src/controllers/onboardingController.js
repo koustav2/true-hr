@@ -123,7 +123,7 @@ export async function getForm(req, res, next) {
     const ob = (await query(`SELECT state, review_notes FROM onboarding WHERE id=$1`, [t.onboarding_id])).rows[0];
     const uploadedDocs = (await query(`SELECT type, filename FROM documents WHERE employee_id=$1`, [t.employee_id])).rows;
     const profile = (await query(`SELECT profile FROM employees WHERE id=$1`, [t.employee_id])).rows[0]?.profile || {};
-    const addresses = (await query(`SELECT type, line1, line2, city, state, pincode FROM employee_addresses WHERE employee_id=$1`, [t.employee_id])).rows;
+    const addresses = (await query(`SELECT type, line1, line2, city, state, district, pincode FROM employee_addresses WHERE employee_id=$1`, [t.employee_id])).rows;
     res.json({ employee: emp, state: ob.state, reviewNotes: ob.review_notes, uploadedDocs, profile, addresses, submitted: ['DETAILS_SUBMITTED','HR_REVIEW','APPROVED','ACTIVE'].includes(ob.state) });
   } catch (e) { next(e); }
 }
@@ -164,6 +164,19 @@ export async function postDetails(req, res, next) {
     const empId = t.employee_id;
     const { bank = {}, statutory = {}, addresses = [], profile = {} } = req.body;
 
+    // Server-side format validation (client validates too — never trust the form alone).
+    const bad = [];
+    if (bank.accountHolder && !/^[A-Za-z .'-]+$/.test(bank.accountHolder)) bad.push('Account holder name: letters only');
+    if (!/^\d{9,18}$/.test(String(bank.accountNumber || ''))) bad.push('Account number: 9\u201318 digits');
+    if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(bank.ifsc || '').toUpperCase())) bad.push('IFSC: invalid format');
+    if (!/^[A-Z]{5}\d{4}[A-Z]$/.test(String(statutory.pan || '').toUpperCase())) bad.push('PAN: invalid format');
+    if (!/^\d{12}$/.test(String(statutory.aadhaar || ''))) bad.push('Aadhaar: must be 12 digits');
+    const emPhone = profile?.emergencyContact?.phone;
+    if (emPhone && !/^\d{10}$/.test(String(emPhone))) bad.push('Emergency phone: exactly 10 digits');
+    if (bad.length) return res.status(400).json({ error: bad.join(' \u00b7 ') });
+    bank.ifsc = String(bank.ifsc || '').toUpperCase();
+    statutory.pan = String(statutory.pan || '').toUpperCase();
+
     await tx(async (c) => {
       await c.query(
         `INSERT INTO employee_bank (employee_id, account_holder, account_number_enc, ifsc, bank_name, branch)
@@ -182,9 +195,9 @@ export async function postDetails(req, res, next) {
       await c.query(`DELETE FROM employee_addresses WHERE employee_id=$1`, [empId]);
       for (const a of addresses) {
         await c.query(
-          `INSERT INTO employee_addresses (employee_id, type, line1, line2, city, state, pincode, country)
-           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
-          [empId, a.type || 'CURRENT', a.line1 || null, a.line2 || null, a.city || null, a.state || null, a.pincode || null, a.country || 'India']
+          `INSERT INTO employee_addresses (employee_id, type, line1, line2, city, state, district, pincode, country)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9)`,
+          [empId, a.type || 'CURRENT', a.line1 || null, a.line2 || null, a.city || null, a.state || null, a.district || null, a.pincode || null, a.country || 'India']
         );
       }
       await c.query(`UPDATE employees SET profile=$2 WHERE id=$1`, [empId, profile]);

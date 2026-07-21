@@ -1062,3 +1062,6 @@ ALTER TABLE agreements
   ADD COLUMN IF NOT EXISTS document TEXT,
   ADD COLUMN IF NOT EXISTS document_mime TEXT,
   ADD COLUMN IF NOT EXISTS document_name TEXT;
+
+-- District in the client-required address format (Line1/State/District/City/PIN)
+ALTER TABLE employee_addresses ADD COLUMN IF NOT EXISTS district TEXT;

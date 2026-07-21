@@ -59,13 +59,13 @@ function FormInner() {
   // slices
   const [bank, setBank] = useState({ accountHolder: '', accountNumber: '', ifsc: '', bankName: '', branch: '' });
   const [stat, setStat] = useState({ pan: '', aadhaar: '', uan: '', pfNumber: '', esiNumber: '' });
-  const [present, setPresent] = useState({ line1: '', line2: '', city: '', state: '', pincode: '' });
-  const [permanent, setPermanent] = useState({ line1: '', line2: '', city: '', state: '', pincode: '' });
+  const [present, setPresent] = useState({ line1: '', line2: '', city: '', state: '', district: '', pincode: '' });
+  const [permanent, setPermanent] = useState({ line1: '', line2: '', city: '', state: '', district: '', pincode: '' });
   const [sameAddr, setSameAddr] = useState(false);
   const [info, setInfo] = useState({ middleName: '', placeOfBirth: '', maritalStatus: '', weddingDate: '', children: '', bloodGroup: '', religion: '', nationality: 'Indian', physicallyChallenged: 'No', emName: '', emPhone: '' });
   const [ids, setIds] = useState({ passportNumber: '', passportPlace: '', passportValid: '', dlNumber: '', dlPlace: '', dlValid: '' });
   const [languages, setLanguages] = useState([{ name: '', read: false, write: false, speak: false, understand: false }, { name: '', read: false, write: false, speak: false, understand: false }]);
-  const [family, setFamily] = useState(RELATIONS.map((relation) => ({ relation, name: '', dob: '', gender: '' })));
+  const [family, setFamily] = useState(RELATIONS.map((relation) => ({ relation, name: '', dob: '', gender: relation === 'Father' ? 'Male' : relation === 'Mother' ? 'Female' : '' })));
   const [education, setEducation] = useState(COURSES.map((course) => ({ course, specialization: '', institution: '', percentage: '', toYear: '' })));
   const [experienceYears, setExperienceYears] = useState('');
   const [employers, setEmployers] = useState([{ employer: '', reportingManager: '', managerDesignation: '', contactNo: '', hrManager: '', hrContact: '' }]);
@@ -97,8 +97,8 @@ function FormInner() {
         }
         const ad = d.addresses || [];
         const cur = ad.find((a) => a.type === 'CURRENT'); const per = ad.find((a) => a.type === 'PERMANENT');
-        if (cur) setPresent({ line1: cur.line1 || '', line2: cur.line2 || '', city: cur.city || '', state: cur.state || '', pincode: cur.pincode || '' });
-        if (per) setPermanent({ line1: per.line1 || '', line2: per.line2 || '', city: per.city || '', state: per.state || '', pincode: per.pincode || '' });
+        if (cur) setPresent({ line1: cur.line1 || '', line2: cur.line2 || '', city: cur.city || '', state: cur.state || '', district: cur.district || '', pincode: cur.pincode || '' });
+        if (per) setPermanent({ line1: per.line1 || '', line2: per.line2 || '', city: per.city || '', state: per.state || '', district: per.district || '', pincode: per.pincode || '' });
       })
       .catch((e) => setBoot({ error: e.message }));
   }, [token]);
@@ -111,6 +111,20 @@ function FormInner() {
   const upd = (arr, set, i, k, val) => { const next = arr.slice(); next[i] = { ...next[i], [k]: val }; set(next); };
 
   function next() {
+    if (step === 0 && info.emPhone && !/^\d{10}$/.test(info.emPhone)) { setErr('Emergency contact phone must be exactly 10 digits.'); return; }
+    if (step === 1) {
+      if (!/^\d{6}$/.test(present.pincode)) { setErr('PIN code must be exactly 6 digits.'); return; }
+      if (!sameAddr && permanent.pincode && !/^\d{6}$/.test(permanent.pincode)) { setErr('Permanent PIN code must be exactly 6 digits.'); return; }
+    }
+    if (step === 2) {
+      if (!/^[A-Za-z .'-]+$/.test(bank.accountHolder || '')) { setErr('Account holder name can contain letters only.'); return; }
+      if (!/^\d{9,18}$/.test(bank.accountNumber || '')) { setErr('Account number must be 9\u201318 digits (numbers only).'); return; }
+      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc || '').toUpperCase())) { setErr('IFSC looks invalid \u2014 e.g. SBIN0001234.'); return; }
+    }
+    if (step === 3) {
+      if (!/^[A-Z]{5}\d{4}[A-Z]$/.test((stat.pan || '').toUpperCase())) { setErr('PAN looks invalid \u2014 format ABCDE1234F.'); return; }
+      if (!/^\d{12}$/.test(stat.aadhaar || '')) { setErr('Aadhaar must be exactly 12 digits.'); return; }
+    }
     if (step === 6 && !experienceYears) { setErr('Please select your total years of experience.'); return; }
     if (step === 8 && missingDocs.length) { setErr('Please upload all required documents (marked *).'); return; }
     setErr(''); setStep((s) => Math.min(s + 1, STEPS.length - 1));
@@ -176,8 +190,10 @@ function FormInner() {
                 <Field label="Place of birth"><Input value={info.placeOfBirth} onChange={setInfoF('placeOfBirth')} /></Field>
                 <Field label="Blood group"><Select value={info.bloodGroup} onChange={setInfoF('bloodGroup')}><option value="">Select…</option>{BLOOD.map((o) => <option key={o}>{o}</option>)}</Select></Field>
                 <Field label="Marital status"><Select value={info.maritalStatus} onChange={setInfoF('maritalStatus')}><option value="">Select…</option><option>Single</option><option>Married</option><option>Other</option></Select></Field>
+                {info.maritalStatus === 'Married' && (<>
                 <Field label="Date of wedding"><Input type="date" value={info.weddingDate} onChange={setInfoF('weddingDate')} /></Field>
                 <Field label="No. of children"><Input type="number" min="0" value={info.children} onChange={setInfoF('children')} /></Field>
+                </>)}
                 <Field label="Religion"><Select value={info.religion} onChange={setInfoF('religion')}><option value="">Select…</option>{RELIGIONS.map((o) => <option key={o}>{o}</option>)}</Select></Field>
                 <Field label="Nationality"><Select value={info.nationality} onChange={setInfoF('nationality')}>{NATIONALITIES.map((o) => <option key={o}>{o}</option>)}</Select></Field>
                 <Field label="Physically challenged"><Select value={info.physicallyChallenged} onChange={setInfoF('physicallyChallenged')}>{YN.map((o) => <option key={o}>{o}</option>)}</Select></Field>
@@ -185,7 +201,7 @@ function FormInner() {
               <div className="text-[13px] font-semibold uppercase tracking-wider text-ink-faint pt-1">Emergency contact</div>
               <div className={grid2}>
                 <Field label="Contact name"><Input value={info.emName} onChange={setInfoF('emName')} /></Field>
-                <Field label="Contact phone"><Input value={info.emPhone} onChange={setInfoF('emPhone')} /></Field>
+                <Field label="Contact phone" hint="10-digit mobile number"><Input value={info.emPhone} onChange={setInfoF('emPhone')} maxLength={10} inputMode="numeric" /></Field>
               </div>
             </div>
           )}
@@ -199,7 +215,8 @@ function FormInner() {
                   <div className="sm:col-span-2"><Field label="Address line 2"><Input value={present.line2} onChange={setPresF('line2')} /></Field></div>
                   <Field label="City" required><Input value={present.city} onChange={setPresF('city')} /></Field>
                   <Field label="State" required><Input value={present.state} onChange={setPresF('state')} /></Field>
-                  <Field label="Pincode" required><Input value={present.pincode} onChange={setPresF('pincode')} maxLength={6} inputMode="numeric" /></Field>
+                  <Field label="District" required><Input value={present.district} onChange={setPresF('district')} /></Field>
+                  <Field label="PIN code" required><Input value={present.pincode} onChange={setPresF('pincode')} maxLength={6} inputMode="numeric" /></Field>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-ink-soft">
@@ -214,7 +231,8 @@ function FormInner() {
                     <div className="sm:col-span-2"><Field label="Address line 2"><Input value={permanent.line2} onChange={setPermF('line2')} /></Field></div>
                     <Field label="City"><Input value={permanent.city} onChange={setPermF('city')} /></Field>
                     <Field label="State"><Input value={permanent.state} onChange={setPermF('state')} /></Field>
-                    <Field label="Pincode"><Input value={permanent.pincode} onChange={setPermF('pincode')} maxLength={6} inputMode="numeric" /></Field>
+                    <Field label="District"><Input value={permanent.district} onChange={setPermF('district')} /></Field>
+                    <Field label="PIN code"><Input value={permanent.pincode} onChange={setPermF('pincode')} maxLength={6} inputMode="numeric" /></Field>
                   </div>
                 </div>
               )}
@@ -276,7 +294,9 @@ function FormInner() {
                 <div className="space-y-2">
                   {languages.map((l, i) => (
                     <div key={i} className="flex flex-wrap items-center gap-3">
-                      <Input placeholder="Language" value={l.name} onChange={(e) => upd(languages, setLanguages, i, 'name', e.target.value)} className="max-w-[200px]" />
+                      <Select value={l.name} onChange={(e) => upd(languages, setLanguages, i, 'name', e.target.value)} className="max-w-[200px]">
+                        <option value="">Select…</option><option>Hindi</option><option>English</option><option>Others</option>
+                      </Select>
                       {['read', 'write', 'speak', 'understand'].map((k) => (
                         <label key={k} className="flex items-center gap-1.5 text-xs text-ink-soft capitalize">
                           <input type="checkbox" checked={!!l[k]} onChange={(e) => upd(languages, setLanguages, i, k, e.target.checked)} className="h-4 w-4 accent-brand-600" />{k}
@@ -294,12 +314,14 @@ function FormInner() {
               <div className="grid grid-cols-4 gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint px-1">
                 <span>Relation</span><span>Name</span><span>Date of birth</span><span>Gender</span>
               </div>
-              {family.map((f, i) => (
+              {family.map((f, i) => (f.relation === 'Spouse' && info.maritalStatus !== 'Married') ? null : (
                 <div key={f.relation} className="grid grid-cols-4 gap-2 items-center">
                   <div className="text-sm font-medium text-ink">{f.relation}</div>
                   <Input value={f.name} onChange={(e) => upd(family, setFamily, i, 'name', e.target.value)} />
                   <Input type="date" value={f.dob} onChange={(e) => upd(family, setFamily, i, 'dob', e.target.value)} />
-                  <Select value={f.gender} onChange={(e) => upd(family, setFamily, i, 'gender', e.target.value)}><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></Select>
+                  {f.relation === 'Father' || f.relation === 'Mother'
+                    ? <Input value={f.relation === 'Father' ? 'Male' : 'Female'} disabled readOnly />
+                    : <Select value={f.gender} onChange={(e) => upd(family, setFamily, i, 'gender', e.target.value)}><option value="">—</option><option>Female</option><option>Male</option><option>Other</option></Select>}
                 </div>
               ))}
             </div>

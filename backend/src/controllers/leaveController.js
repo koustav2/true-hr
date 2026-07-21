@@ -1,3 +1,4 @@
+import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { query, pool } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
@@ -143,6 +144,8 @@ export async function apply(req, res, next) {
     const { leaveCode, fromDate, toDate, reason, halfDay, certificate, certificateMime } = req.body;
     if (!leaveCode || !fromDate || !toDate) return res.status(400).json({ error: 'leaveCode, fromDate and toDate are required' });
     if (new Date(fromDate) > new Date(toDate)) return res.status(400).json({ error: 'From date cannot be after To date' });
+    const doj = await joiningDate(empId);
+    if (beforeJoining(fromDate, doj)) return res.status(400).json({ error: `Leave cannot start before your joining date (${doj})` });
 
     const lt = (await query(`SELECT id, requires_balance, allow_half_day FROM leave_types WHERE code=$1`, [leaveCode])).rows[0];
     if (!lt) return res.status(400).json({ error: 'Unknown leave type' });

@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { audit } from '../utils/audit.js';
 
 const monthName = (m) => ['January','February','March','April','May','June','July','August','September','October','November','December'][(m || 1) - 1] || '';
@@ -34,6 +35,10 @@ export async function apply(req, res, next) {
       .map((s) => parseInt(s.trim(), 10))
       .filter((n) => Number.isFinite(n) && n >= 1 && n <= 31)
       .map((d) => `${y}-${pad(m)}-${pad(d)}`);
+
+    const doj = await joiningDate(empId);
+    const early = dates.filter((d) => beforeJoining(d, doj));
+    if (early.length) return res.status(400).json({ error: `Dates before your joining date (${doj}) are not allowed: ${early.join(', ')}` });
     if (dates.length) {
       const complete = (await query(
         `SELECT 1 FROM (

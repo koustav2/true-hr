@@ -19,18 +19,20 @@ export async function punch(req, res, next) {
     if (type === 'OUT' && !hasIn) return res.status(409).json({ error: 'Please punch in before punching out.' });
     if (type === 'OUT' && hasOut) return res.status(409).json({ error: 'You have already punched out today.' });
 
+    // Client req #10: a manager hold blocks punch-out until it is released.
+    if (type === 'OUT') {
+      const held = (await query(
+        `SELECT 1 FROM attendance_hold WHERE employee_id=$1 AND hold_date=now()::date AND status='HELD' LIMIT 1`,
+        [empId])).rowCount;
+      if (held) return res.status(409).json({ error: 'Your attendance is on hold by your reporting manager. Please contact them to release it before punching out.' });
+    }
+
     const row = (await query(
       `INSERT INTO attendance (employee_id, type, captured_at, lat, lng, address, photo)
        VALUES ($1,$2, COALESCE($3, now()), $4,$5,$6,$7)
        RETURNING id, type, captured_at, address`,
       [empId, type, capturedAt || null, lat ?? null, lng ?? null, address || null, photo || null]
     )).rows[0];
-
-    // Holds are valid only until the employee punches out — auto-release on OUT.
-    if (type === 'OUT') {
-      await query(`UPDATE attendance_hold SET status='RELEASED', released_at=now()
-                   WHERE employee_id=$1 AND hold_date=now()::date AND status='HELD'`, [empId]);
-    }
 
     await audit(req.user.id, `PUNCH_${type}`, 'attendance', row.id, { lat, lng });
     res.status(201).json({ ok: true, id: row.id, type: row.type, capturedAt: row.captured_at, address: row.address });

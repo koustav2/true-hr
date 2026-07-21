@@ -11,6 +11,8 @@
 // All state changes are recorded in approval_actions and audit_log.
 
 import { query } from '../db/pool.js';
+import { enqueueEmail } from './emailQueue.js';
+import { approvalActionEmail, approvalPendingEmail } from './emailTemplates.js';
 import { audit } from '../utils/audit.js';
 
 export const ACTIONS = ['APPROVED', 'REJECTED', 'QUERY_HOLD'];
@@ -74,6 +76,56 @@ export async function previewChain(flowCode, employeeId, ctx = {}) {
 
 // Open an instance: snapshot the resolved chain, auto-bypass leading unresolved
 // optional stages, and set the first actionable stage to PENDING.
+
+// Human label per flow for notification emails.
+const FLOW_LABELS = {
+  NFA: 'NFA request', NFA_SETTLEMENT: 'NFA settlement',
+  RESIGNATION: 'resignation request', PMS_RATING: 'PMS rating',
+};
+
+// Fire-and-forget notifications: the raiser hears about every action; the next
+// pending approver gets a nudge. Mail failures never break the approval itself.
+async function notify(instanceId, { action = null, actorEmployeeId = null, remarks = '' } = {}) {
+  try {
+    const inst = (await query(
+      `SELECT ai.*, f.code AS flow_code, e.first_name AS r_first, e.official_email AS r_email
+         FROM approval_instances ai
+         JOIN approval_flows f ON f.id = ai.flow_id
+         LEFT JOIN employees e ON e.id = ai.raised_by_employee_id
+        WHERE ai.id=$1`, [instanceId])).rows[0];
+    if (!inst) return;
+    const subjectLabel = FLOW_LABELS[inst.flow_code] || 'approval request';
+    let actorName = null;
+    if (actorEmployeeId) {
+      const a = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [actorEmployeeId])).rows[0];
+      actorName = a ? `${a.first_name} ${a.last_name}`.trim() : null;
+    }
+    if (action && inst.r_email) {
+      await enqueueEmail({
+        to: inst.r_email,
+        subject: `TRUE HR — your ${subjectLabel} was ${action === 'APPROVED' ? 'approved' : action === 'REJECTED' ? 'rejected' : 'queried'}`,
+        html: approvalActionEmail({ name: inst.r_first, subjectLabel, action, actorName, remarks }),
+        template: 'approval_action',
+      });
+    }
+    if (inst.status === 'PENDING') {
+      const nxt = (await query(
+        `SELECT e.first_name, e.official_email FROM approval_instance_stages s
+           JOIN employees e ON e.id = s.approver_employee_id
+          WHERE s.instance_id=$1 AND s.seq=$2 AND s.status='PENDING'`,
+        [instanceId, inst.current_stage_seq])).rows[0];
+      if (nxt?.official_email) {
+        await enqueueEmail({
+          to: nxt.official_email,
+          subject: `TRUE HR — ${subjectLabel} awaiting your approval`,
+          html: approvalPendingEmail({ name: nxt.first_name, subjectLabel, raiserName: inst.r_first }),
+          template: 'approval_pending',
+        });
+      }
+    }
+  } catch (e) { console.warn('[approval-notify] skipped:', e.message); }
+}
+
 export async function createInstance(flowCode, subjectType, subjectId, raisedByEmployeeId, ctx = {}, actorUserId = null) {
   const flow = (await query(`SELECT id FROM approval_flows WHERE code=$1 AND active`, [flowCode])).rows[0];
   if (!flow) throw Object.assign(new Error(`Unknown approval flow ${flowCode}`), { status: 400 });
@@ -173,6 +225,7 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
     result = { done: false, query: true };
   }
   await audit(actorUserId, `APPROVAL_${action}`, inst.subject_type, inst.subject_id, { instanceId, stageSeq: stage.seq, roleKey: stage.role_key });
+  await notify(instanceId, { action, actorEmployeeId, remarks });
   return { ...(await getInstance(instanceId)), ...result };
 }
 
@@ -195,6 +248,7 @@ export async function resubmit(instanceId, raiserEmployeeId, remarks = '', actor
     `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks)
      VALUES ($1,$2,$3,'RESUBMITTED',$4)`, [instanceId, seq, raiserEmployeeId, remarks || null]);
   await audit(actorUserId, 'APPROVAL_RESUBMITTED', inst.subject_type, inst.subject_id, { instanceId });
+  await notify(instanceId); // querying approver gets nudged again
   return getInstance(instanceId);
 }
 

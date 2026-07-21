@@ -130,3 +130,23 @@ export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
     <p style="color:#6b7280;font-size:13px">If you didn't request this, you can safely ignore this email — your password will stay unchanged.</p>
   `);
 }
+
+// ---- Approval-chain notifications (NFA / settlement / resignation / PMS) ----
+const PORTAL = (process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app');
+export function approvalActionEmail({ name, subjectLabel, action, actorName, remarks }) {
+  const tone = action === 'APPROVED' ? '#059669' : action === 'REJECTED' ? '#dc2626' : '#d97706';
+  const verb = action === 'APPROVED' ? 'approved' : action === 'REJECTED' ? 'rejected' : 'put on query / hold';
+  return shell(`${subjectLabel} — ${verb}`, `
+    <p>Dear <strong>${name || 'User'}</strong>,</p>
+    <p>Your <strong>${subjectLabel}</strong> was <strong style="color:${tone}">${verb}</strong>${actorName ? ` by <strong>${actorName}</strong>` : ''}.</p>
+    ${remarks ? `<p style="background:#f8fafc;border-left:3px solid ${tone};padding:10px 14px;border-radius:6px">Remark: ${remarks}</p>` : ''}
+    <p>${btn(`${PORTAL}/ess`, 'Open TRUE HR')}</p>
+  `, tone);
+}
+export function approvalPendingEmail({ name, subjectLabel, raiserName }) {
+  return shell('Approval waiting for you', `
+    <p>Dear <strong>${name || 'Approver'}</strong>,</p>
+    <p>A <strong>${subjectLabel}</strong>${raiserName ? ` raised by <strong>${raiserName}</strong>` : ''} is waiting for your approval.</p>
+    <p>${btn(`${PORTAL}/ess/approvals`, 'Review & approve')}</p>
+  `);
+}

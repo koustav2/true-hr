@@ -189,3 +189,28 @@ export async function pendingSettlements(req, res, next) {
     ], 'pending-settlements');
   } catch (e) { next(e); }
 }
+
+// GET /admin/reports/company-expense?from=&to=&format= — one row per company (client req #17).
+export async function companyExpense(req, res, next) {
+  try {
+    const params = [];
+    const wh = [`n.status IN ('APPROVED','PAYMENT_RELEASED')`];
+    if (req.query.from) { params.push(req.query.from); wh.push(`n.created_at >= $${params.length}`); }
+    if (req.query.to) { params.push(req.query.to); wh.push(`n.created_at < ($${params.length}::date + 1)`); }
+    const rows = (await query(
+      `SELECT gc.name AS company, count(DISTINCT n.id) AS nfas,
+              count(DISTINCT n.employee_id) AS employees,
+              sum(n.total_nfa_amount) AS nfa_amount, sum(n.total_logistic_amount) AS logistic_amount,
+              sum(n.grand_total) AS total_amount
+         FROM nfas n JOIN group_companies gc ON gc.id = n.group_company_id
+        WHERE ${wh.join(' AND ')}
+        GROUP BY gc.name ORDER BY sum(n.grand_total) DESC`, params)).rows
+      .map((r) => ({ ...r, nfas: Number(r.nfas), employees: Number(r.employees),
+        nfa_amount: Number(r.nfa_amount), logistic_amount: Number(r.logistic_amount), total_amount: Number(r.total_amount) }));
+    await send(res, req, rows, [
+      { key: 'company', label: 'Cost To Company' }, { key: 'nfas', label: "NFA's" },
+      { key: 'employees', label: 'Employees' }, { key: 'nfa_amount', label: 'NFA Amount' },
+      { key: 'logistic_amount', label: 'Logistic Amount' }, { key: 'total_amount', label: 'Total Expense' },
+    ], 'company-wise-expense');
+  } catch (e) { next(e); }
+}

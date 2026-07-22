@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import { api, downloadFile } from '@/lib/api.js';
 import { Card, Button, Input, Spinner, Empty } from '@/components/ui.jsx';
 
-const TABS = ['Dashboard', 'Project-wise Expense', 'Client Billing', 'Settlements', 'Pending Settlement'];
+const TABS = ['Dashboard', 'Company-wise', 'Project-wise Expense', 'Client Billing', 'Settlements', 'Pending Settlement'];
 const fmtMoney = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
 
 export default function NfaReportsPage() {
@@ -22,10 +22,11 @@ export default function NfaReportsPage() {
         ))}
       </div>
       {tab === 0 && <DashboardTab />}
-      {tab === 1 && <ProjectExpenseTab />}
-      {tab === 2 && <ClientBillingTab />}
-      {tab === 3 && <SettlementsTab />}
-      {tab === 4 && <PendingSettlementTab />}
+      {tab === 1 && <CompanyTab />}
+      {tab === 2 && <ProjectExpenseTab />}
+      {tab === 3 && <ClientBillingTab />}
+      {tab === 4 && <SettlementsTab />}
+      {tab === 5 && <PendingSettlementTab />}
     </div>
   );
 }
@@ -216,6 +217,48 @@ function PendingSettlementTab() {
                   <td className="px-2 py-2.5 text-right font-semibold">₹{Number(r.amount_received).toLocaleString('en-IN')}</td>
                   <td className="px-2 py-2.5 text-xs">{r.settlement_status}</td>
                   <td className="px-4 py-2.5 text-xs">{(r.settlement_due_date || '').slice(0, 10)}{r.days_overdue > 0 && <span className="text-rose-600 font-semibold"> · {r.days_overdue}d overdue</span>}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        )}
+      </Card>
+    </div>
+  );
+}
+
+// Client req #17: one row per company, totals + Excel export.
+function CompanyTab() {
+  const [rows, setRows] = useState(null);
+  useEffect(() => { api.get('/admin/reports/company-expense').then(setRows).catch(() => setRows([])); }, []);
+  const total = (rows || []).reduce((a, r) => a + Number(r.total_amount || 0), 0);
+  return (
+    <div className="space-y-3">
+      <div className="flex items-center justify-between">
+        <div className="text-sm text-ink-soft">Total expenses: <b className="text-ink">{fmtMoney(total)}</b></div>
+        <ExportButtons path="/admin/reports/company-expense" name="company-wise-expense" />
+      </div>
+      <Card className="overflow-x-auto">
+        {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
+          !rows.length ? <Empty title="No approved NFAs yet" /> : (
+          <table className="w-full text-sm min-w-[640px]">
+            <thead className="bg-slate-50/60 text-ink-faint border-b border-line"><tr>
+              <th className="text-left px-4 py-2.5 font-medium">Cost To Company</th>
+              <th className="text-right px-2 py-2.5 font-medium">NFA's</th>
+              <th className="text-right px-2 py-2.5 font-medium">Employees</th>
+              <th className="text-right px-2 py-2.5 font-medium">NFA Amount</th>
+              <th className="text-right px-2 py-2.5 font-medium">Logistic</th>
+              <th className="text-right px-4 py-2.5 font-medium">Total</th>
+            </tr></thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r) => (
+                <tr key={r.company} className="hover:bg-slate-50/70">
+                  <td className="px-4 py-2.5 font-medium text-ink">{r.company}</td>
+                  <td className="px-2 py-2.5 text-right">{r.nfas}</td>
+                  <td className="px-2 py-2.5 text-right">{r.employees}</td>
+                  <td className="px-2 py-2.5 text-right">{fmtMoney(r.nfa_amount)}</td>
+                  <td className="px-2 py-2.5 text-right">{fmtMoney(r.logistic_amount)}</td>
+                  <td className="px-4 py-2.5 text-right font-semibold">{fmtMoney(r.total_amount)}</td>
                 </tr>
               ))}
             </tbody>

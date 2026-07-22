@@ -154,6 +154,7 @@ r.get('/admin/nfa-dashboard', authenticate, requireStaff, nfaReport.dashboard);
 r.get('/admin/reports/project-expense', authenticate, requireStaff, nfaReport.projectExpense);
 r.get('/admin/reports/client-billing', authenticate, requireStaff, nfaReport.clientBilling);
 r.get('/admin/reports/pending-settlements', authenticate, requireStaff, nfaReport.pendingSettlements);
+r.get('/admin/reports/company-expense', authenticate, requireStaff, nfaReport.companyExpense);
 r.get('/admin/nfa-export', authenticate, requireStaff, nfaReport.nfaExport);
 
 // --- PMS / KPI ---

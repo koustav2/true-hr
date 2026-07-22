@@ -36,6 +36,7 @@ export async function createVendor(req, res, next) {
   try {
     const b = req.body || {};
     if (!b.companyName || !String(b.companyName).trim()) return res.status(400).json({ error: 'companyName is required' });
+    if (b.contactPhone && !/^\d{10}$/.test(String(b.contactPhone))) return res.status(400).json({ error: 'Contact phone must be exactly 10 digits' });
     const doc = docParams(b);
     const params = [req.user.employeeId, b.associationWithId || null, ...V_FIELDS.map((f) => b[f] || null), ...doc.vals];
     const row = (await query(

@@ -25,8 +25,8 @@ export default function UsersPage() {
   const load = () => api.get('/admin/users').then(setRows).catch((e) => { setRows([]); setErr(e.message); });
   useEffect(() => { load(); }, []);
 
-  if (user && !can.admin(user.role)) {
-    return <Card className="p-8 max-w-lg"><p className="text-ink-soft">This area is restricted to IT Admins and Super Admins.</p></Card>;
+  if (user && !can.users(user.role)) {
+    return <Card className="p-8 max-w-lg"><p className="text-ink-soft">This area is restricted to HR, IT and Super Admins.</p></Card>;
   }
 
   async function create(e) {
@@ -42,6 +42,17 @@ export default function UsersPage() {
     try { await api.post(`/admin/users/${u.id}/status`, { status }); await load(); }
     catch (e) { setErr(e.message); }
   }
+  async function changeRole(u, role) {
+    if (!role || role === u.role) return;
+    setErr(''); setMsg('');
+    try {
+      await api.post(`/admin/users/${u.id}/role`, { role });
+      setMsg(`${u.email} is now ${ROLE_LABEL[role] || role}.`);
+      await load();
+    } catch (e) { setErr(e.message); }
+  }
+  // Rows the signed-in admin may modify: never self; super-admin rows only by a super admin.
+  const canEdit = (u) => String(u.id) !== String(user?.id) && (u.role !== 'SUPER_ADMIN' || can.superadmin(user?.role));
 
   return (
     <div className="space-y-6">
@@ -102,7 +113,16 @@ export default function UsersPage() {
                     <div className="text-xs text-ink-faint">{u.email}</div>
                   </td>
                   <td className="px-5 py-3.5">
-                    <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[u.role] || ROLE_BADGE.EMPLOYEE}`}>{ROLE_LABEL[u.role] || u.role}</span>
+                    {canEdit(u) ? (
+                      <Select value={u.role} onChange={(e) => changeRole(u, e.target.value)} className="!w-40 text-xs">
+                        {u.employee_code && <option value="EMPLOYEE">Employee</option>}
+                        <option value="HR_ADMIN">HR Admin</option>
+                        <option value="IT_ADMIN">IT Admin</option>
+                        {can.superadmin(user?.role) && <option value="SUPER_ADMIN">Super Admin</option>}
+                      </Select>
+                    ) : (
+                      <span className={`inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[u.role] || ROLE_BADGE.EMPLOYEE}`}>{ROLE_LABEL[u.role] || u.role}</span>
+                    )}
                   </td>
                   <td className="px-5 py-3.5 hidden md:table-cell text-ink-soft">{u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '—'}</td>
                   <td className="px-5 py-3.5">
@@ -111,7 +131,7 @@ export default function UsersPage() {
                     </span>
                   </td>
                   <td className="px-5 py-3.5 text-right">
-                    {u.role === 'EMPLOYEE' || String(u.id) === String(user?.id) ? (
+                    {!canEdit(u) ? (
                       <span className="text-xs text-ink-faint">—</span>
                     ) : (
                       <Button size="sm" variant={u.status === 'ACTIVE' ? 'outline' : 'soft'} onClick={() => toggle(u)}>

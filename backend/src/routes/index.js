@@ -25,7 +25,7 @@ import * as settlement from '../controllers/settlementController.js';
 import * as nfaReport from '../controllers/nfaReportController.js';
 import * as pms from '../controllers/pmsController.js';
 import * as vendor from '../controllers/vendorController.js';
-import { authenticate, requireStaff, requireAdmin, requireSuperAdmin } from '../middleware/auth.js';
+import { authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin } from '../middleware/auth.js';
 
 const r = Router();
 
@@ -230,9 +230,10 @@ r.post('/onboarding/:id/approve', authenticate, requireStaff, emp.approveOnboard
 r.post('/onboarding/:id/send-back', authenticate, requireStaff, emp.sendBack);
 
 // --- System administration (IT admin + super admin) ---
-r.get('/admin/users', authenticate, requireAdmin, users.listUsers);
-r.post('/admin/users', authenticate, requireAdmin, users.createUser);
-r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatus);
+r.get('/admin/users', authenticate, requireAnyAdmin, users.listUsers);
+r.post('/admin/users', authenticate, requireAnyAdmin, users.createUser);
+r.post('/admin/users/:id/status', authenticate, requireAnyAdmin, users.setUserStatus);
+r.post('/admin/users/:id/role', authenticate, requireAnyAdmin, users.setUserRole);
 r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
 r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
 r.post('/admin/employees/:id/generate-offer', authenticate, requireStaff, emp.generateOfferLetter);

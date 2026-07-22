@@ -37,7 +37,7 @@ const PERFORMANCE = [
   { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, show: gated },
 ];
 const ADMINISTRATION = [
-  { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.admin },
+  { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.users },
   { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, show: can.admin },
 ];
 const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];

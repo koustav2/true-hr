@@ -26,3 +26,5 @@ export const requireStaff = requireRole('HR_ADMIN', 'SUPER_ADMIN');
 export const requireAdmin = requireRole('IT_ADMIN', 'SUPER_ADMIN');
 // Super-admin only.
 export const requireSuperAdmin = requireRole('SUPER_ADMIN');
+// User management — HR admins may also create staff accounts & assign roles.
+export const requireAnyAdmin = requireRole('HR_ADMIN', 'IT_ADMIN', 'SUPER_ADMIN');

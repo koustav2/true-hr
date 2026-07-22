@@ -40,14 +40,43 @@ export async function createUser(req, res, next) {
   } catch (e) { next(e); }
 }
 
-// SUPER_ADMIN: enable / disable an account
+// Enable / disable an account (HR/IT/Super admin; super-admin accounts are
+// protected — only another super admin may touch them).
 export async function setUserStatus(req, res, next) {
   try {
     const { status } = req.body;
     if (!['ACTIVE', 'DISABLED'].includes(status)) return res.status(400).json({ error: 'Invalid status' });
     if (String(req.user.id) === String(req.params.id)) return res.status(400).json({ error: "You can't change your own account status" });
+    const target = (await query(`SELECT role FROM user_accounts WHERE id=$1`, [req.params.id])).rows[0];
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if (target.role === 'SUPER_ADMIN' && req.user.role !== 'SUPER_ADMIN')
+      return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
     await query(`UPDATE user_accounts SET status=$1 WHERE id=$2`, [status, req.params.id]);
     await audit(req.user.id, 'SET_USER_STATUS', 'user_account', req.params.id, { status });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/users/:id/role { role } — promote / demote an existing account.
+// HR or IT admin can assign HR Admin / IT Admin / Employee; only a Super Admin
+// can grant SUPER_ADMIN or change an existing Super Admin's role.
+export async function setUserRole(req, res, next) {
+  try {
+    const { role } = req.body || {};
+    if (!['EMPLOYEE', 'HR_ADMIN', 'IT_ADMIN', 'SUPER_ADMIN'].includes(role))
+      return res.status(400).json({ error: 'Invalid role' });
+    if (String(req.user.id) === String(req.params.id))
+      return res.status(400).json({ error: "You can't change your own role" });
+
+    const target = (await query(`SELECT id, role, employee_id FROM user_accounts WHERE id=$1`, [req.params.id])).rows[0];
+    if (!target) return res.status(404).json({ error: 'User not found' });
+    if ((role === 'SUPER_ADMIN' || target.role === 'SUPER_ADMIN') && req.user.role !== 'SUPER_ADMIN')
+      return res.status(403).json({ error: 'Only a Super Admin can grant or revoke Super Admin' });
+    if (role === 'EMPLOYEE' && !target.employee_id)
+      return res.status(400).json({ error: 'This account has no employee profile — it cannot become an Employee login' });
+
+    await query(`UPDATE user_accounts SET role=$1 WHERE id=$2`, [role, req.params.id]);
+    await audit(req.user.id, 'SET_USER_ROLE', 'user_account', req.params.id, { from: target.role, to: role });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

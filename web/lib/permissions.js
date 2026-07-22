@@ -14,6 +14,8 @@ export const can = {
   admin: (role) => role === 'IT_ADMIN' || role === 'SUPER_ADMIN',
   // Only super admins can create/elevate to super admin
   superadmin: (role) => role === 'SUPER_ADMIN',
+  // User management (accounts & roles) — HR can also assign HR/IT admins
+  users: (role) => role === 'HR_ADMIN' || role === 'IT_ADMIN' || role === 'SUPER_ADMIN',
 };
 
 import { FEATURES } from './flags.js';

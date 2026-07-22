@@ -213,9 +213,9 @@ function FormInner() {
                 <div className={grid2}>
                   <div className="sm:col-span-2"><Field label="Address line 1" required><Input value={present.line1} onChange={setPresF('line1')} /></Field></div>
                   <div className="sm:col-span-2"><Field label="Address line 2"><Input value={present.line2} onChange={setPresF('line2')} /></Field></div>
-                  <Field label="City" required><Input value={present.city} onChange={setPresF('city')} /></Field>
                   <Field label="State" required><Input value={present.state} onChange={setPresF('state')} /></Field>
                   <Field label="District" required><Input value={present.district} onChange={setPresF('district')} /></Field>
+                  <Field label="City" required><Input value={present.city} onChange={setPresF('city')} /></Field>
                   <Field label="PIN code" required><Input value={present.pincode} onChange={setPresF('pincode')} maxLength={6} inputMode="numeric" /></Field>
                 </div>
               </div>
@@ -229,9 +229,9 @@ function FormInner() {
                   <div className={grid2}>
                     <div className="sm:col-span-2"><Field label="Address line 1"><Input value={permanent.line1} onChange={setPermF('line1')} /></Field></div>
                     <div className="sm:col-span-2"><Field label="Address line 2"><Input value={permanent.line2} onChange={setPermF('line2')} /></Field></div>
-                    <Field label="City"><Input value={permanent.city} onChange={setPermF('city')} /></Field>
                     <Field label="State"><Input value={permanent.state} onChange={setPermF('state')} /></Field>
                     <Field label="District"><Input value={permanent.district} onChange={setPermF('district')} /></Field>
+                    <Field label="City"><Input value={permanent.city} onChange={setPermF('city')} /></Field>
                     <Field label="PIN code"><Input value={permanent.pincode} onChange={setPermF('pincode')} maxLength={6} inputMode="numeric" /></Field>
                   </div>
                 </div>

@@ -119,16 +119,50 @@ export function credentialsEmail({ name, employeeCode, officialEmail, tempPasswo
   };
 }
 
-// ---- Forgot-password OTP ----
+// ---- Forgot-password OTP (modern standalone template with company logo) ----
 export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
-  return shell('Password Reset Code', `
-    <p>Dear <strong>${name || 'User'}</strong>,</p>
-    <p>Use the one-time code below to reset your TRUE HR password. It is valid for <strong>${minutes} minutes</strong>.</p>
-    <div style="text-align:center;margin:22px 0">
-      <span style="display:inline-block;background:#f0fdf4;border:1px dashed #059669;color:#065f46;font-size:30px;font-weight:800;letter-spacing:10px;padding:14px 26px;border-radius:12px">${otp}</span>
-    </div>
-    <p style="color:#6b7280;font-size:13px">If you didn't request this, you can safely ignore this email — your password will stay unchanged.</p>
-  `);
+  const logo = `${(process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app').replace(/\/$/, '')}/tkf-logo.png`;
+  return `<!doctype html><html><body style="margin:0;padding:0;background:#eef1f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+  <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:32px 12px">
+    <tr><td align="center">
+      <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="max-width:440px;width:100%">
+        <!-- logo -->
+        <tr><td align="center" style="padding-bottom:18px">
+          <img src="${logo}" width="56" height="56" alt="${COMPANY}" style="border-radius:50%;display:block;border:3px solid #ffffff;box-shadow:0 4px 14px rgba(15,23,42,.12)"/>
+        </td></tr>
+        <!-- card -->
+        <tr><td style="background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,.08)">
+          <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
+            <tr><td style="height:5px;background:linear-gradient(90deg,#2563eb,#16a34a);font-size:0;line-height:0">&nbsp;</td></tr>
+            <tr><td style="padding:34px 36px 30px">
+              <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2563eb">${COMPANY}</p>
+              <h1 style="margin:10px 0 0;font-size:22px;line-height:1.3;color:#0f172a;font-weight:800">Your password reset code</h1>
+              <p style="margin:16px 0 0;font-size:14.5px;line-height:1.7;color:#475569">
+                Hi <strong style="color:#0f172a">${name || 'there'}</strong>, we received a request to reset your TRUE HR password.
+                Enter this code on the reset screen:</p>
+              <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:26px 0 8px">
+                <div style="display:inline-block;background:#f0fdf4;border:2px dashed #16a34a;border-radius:14px;padding:16px 30px">
+                  <span style="font-size:34px;font-weight:800;letter-spacing:10px;color:#065f46;font-family:'Courier New',monospace">${otp}</span>
+                </div>
+              </td></tr></table>
+              <p style="margin:6px 0 0;text-align:center;font-size:12.5px;color:#94a3b8">
+                Valid for <strong style="color:#475569">${minutes} minutes</strong> \u00b7 single use</p>
+              <hr style="border:none;border-top:1px solid #eef0f3;margin:26px 0 18px"/>
+              <p style="margin:0;font-size:12.5px;line-height:1.7;color:#94a3b8">
+                Didn\u2019t request this? You can safely ignore this email \u2014 your password stays unchanged.
+                Never share this code with anyone; the TRUE HR team will never ask for it.</p>
+            </td></tr>
+          </table>
+        </td></tr>
+        <!-- footer -->
+        <tr><td align="center" style="padding:22px 20px 0">
+          <p style="margin:0;font-size:11.5px;line-height:1.7;color:#94a3b8">
+            ${COMPANY} \u00b7 ${ADDRESS}<br/>Support: ${SUPPORT} \u00b7 ${WEBSITE}</p>
+        </td></tr>
+      </table>
+    </td></tr>
+  </table>
+</body></html>`;
 }
 
 // ---- Approval-chain notifications (NFA / settlement / resignation / PMS) ----

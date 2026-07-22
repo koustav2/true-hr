@@ -119,8 +119,9 @@ export function credentialsEmail({ name, employeeCode, officialEmail, tempPasswo
   };
 }
 
-// ---- Forgot-password OTP (modern standalone template with company logo) ----
-export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
+// ---- OTP emails (modern standalone template with company logo) ----
+// Shared by the forgot-password and two-step-login codes.
+function otpEmail({ name, otp, minutes = 10, title, intro, footNote }) {
   const logo = `${(process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app').replace(/\/$/, '')}/tkf-logo.png`;
   return `<!doctype html><html><body style="margin:0;padding:0;background:#eef1f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:32px 12px">
@@ -136,10 +137,9 @@ export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
             <tr><td style="height:5px;background:linear-gradient(90deg,#2563eb,#16a34a);font-size:0;line-height:0">&nbsp;</td></tr>
             <tr><td style="padding:34px 36px 30px">
               <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2563eb">${COMPANY}</p>
-              <h1 style="margin:10px 0 0;font-size:22px;line-height:1.3;color:#0f172a;font-weight:800">Your password reset code</h1>
+              <h1 style="margin:10px 0 0;font-size:22px;line-height:1.3;color:#0f172a;font-weight:800">${title}</h1>
               <p style="margin:16px 0 0;font-size:14.5px;line-height:1.7;color:#475569">
-                Hi <strong style="color:#0f172a">${name || 'there'}</strong>, we received a request to reset your TRUE HR password.
-                Enter this code on the reset screen:</p>
+                Hi <strong style="color:#0f172a">${name || 'there'}</strong>, ${intro}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:26px 0 8px">
                 <div style="display:inline-block;background:#f0fdf4;border:2px dashed #16a34a;border-radius:14px;padding:16px 30px">
                   <span style="font-size:34px;font-weight:800;letter-spacing:10px;color:#065f46;font-family:'Courier New',monospace">${otp}</span>
@@ -149,8 +149,7 @@ export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
                 Valid for <strong style="color:#475569">${minutes} minutes</strong> \u00b7 single use</p>
               <hr style="border:none;border-top:1px solid #eef0f3;margin:26px 0 18px"/>
               <p style="margin:0;font-size:12.5px;line-height:1.7;color:#94a3b8">
-                Didn\u2019t request this? You can safely ignore this email \u2014 your password stays unchanged.
-                Never share this code with anyone; the TRUE HR team will never ask for it.</p>
+                ${footNote} Never share this code with anyone; the TRUE HR team will never ask for it.</p>
             </td></tr>
           </table>
         </td></tr>
@@ -163,6 +162,24 @@ export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
     </td></tr>
   </table>
 </body></html>`;
+}
+
+export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
+  return otpEmail({
+    name, otp, minutes,
+    title: 'Your password reset code',
+    intro: 'we received a request to reset your TRUE HR password. Enter this code on the reset screen:',
+    footNote: 'Didn’t request this? You can safely ignore this email — your password stays unchanged.',
+  });
+}
+
+export function loginOtpEmail({ name, otp, minutes = 10 }) {
+  return otpEmail({
+    name, otp, minutes,
+    title: 'Your sign-in code',
+    intro: 'use this code to finish signing in to TRUE HR:',
+    footNote: 'Didn’t try to sign in? Someone may know your password — please change it right away.',
+  });
 }
 
 // ---- Approval-chain notifications (NFA / settlement / resignation / PMS) ----

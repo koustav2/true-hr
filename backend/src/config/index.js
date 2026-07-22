@@ -33,6 +33,9 @@ export const config = {
   appLoginUrl: process.env.APP_LOGIN_URL || '',
   appDownloadUrl: process.env.APP_DOWNLOAD_URL || 'https://play.google.com/store/apps/details?id=com.truehr.app',
   offerExpiryDays: parseFloat(process.env.OFFER_EXPIRY_DAYS || '3'), // offer link validity (days)
+  // Two-step login: after the password, a 6-digit OTP is emailed and must be
+  // entered to finish signing in. Requires working SMTP — keep off until then.
+  loginOtp: String(process.env.LOGIN_OTP || '').toLowerCase() === 'true',
   mail: {
     from: process.env.MAIL_FROM || 'TRUE HR <no-reply@truehr.example>',
     sendgridApiKey: process.env.SENDGRID_API_KEY || '',

@@ -5,7 +5,26 @@ import { decrypt } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
 import { createHash, randomInt } from 'crypto';
 import { enqueueEmail } from '../services/emailQueue.js';
-import { passwordResetOtpEmail } from '../services/emailTemplates.js';
+import { passwordResetOtpEmail, loginOtpEmail } from '../services/emailTemplates.js';
+
+// Two-step login is read per-request so it can be flipped without a rebuild
+// (and toggled inside tests). Needs working SMTP — keep off until then.
+const loginOtpEnabled = () => String(process.env.LOGIN_OTP || '').toLowerCase() === 'true';
+const maskEmail = (e) => {
+  const [u, d] = String(e || '').split('@');
+  if (!d) return e;
+  return `${u[0] || ''}${'*'.repeat(Math.max(u.length - 2, 1))}${u.length > 1 ? u[u.length - 1] : ''}@${d}`;
+};
+
+async function issueSession(res, user) {
+  await query(`UPDATE user_accounts SET last_login_at=now() WHERE id=$1`, [user.id]);
+  const token = signToken({ id: user.id, role: user.role, employeeId: user.employee_id });
+  await audit(user.id, 'LOGIN', 'user_account', user.id);
+  res.json({
+    token,
+    user: { id: user.id, email: user.email, role: user.role, mustChangePassword: user.must_change_password },
+  });
+}
 
 export async function login(req, res, next) {
   try {
@@ -22,13 +41,53 @@ export async function login(req, res, next) {
     const ok = await verifyPassword(password || '', user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
-    await query(`UPDATE user_accounts SET last_login_at=now() WHERE id=$1`, [user.id]);
-    const token = signToken({ id: user.id, role: user.role, employeeId: user.employee_id });
-    await audit(user.id, 'LOGIN', 'user_account', user.id);
-    res.json({
-      token,
-      user: { id: user.id, email: user.email, role: user.role, mustChangePassword: user.must_change_password },
-    });
+    // Password OK. With two-step login on, email a code instead of a session.
+    if (loginOtpEnabled()) {
+      const first = (await query(`SELECT first_name FROM employees WHERE id=$1`, [user.employee_id])).rows[0]?.first_name;
+      const otp = String(randomInt(100000, 1000000));
+      await query(`DELETE FROM password_reset_otps WHERE user_id=$1 AND purpose='LOGIN'`, [user.id]);
+      await query(
+        `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, purpose)
+         VALUES ($1,$2, now() + ($3 || ' minutes')::interval, 'LOGIN')`,
+        [user.id, hashOtp(otp), OTP_MINUTES]);
+      await enqueueEmail({
+        to: user.email,
+        subject: 'TRUE HR — your sign-in code',
+        html: loginOtpEmail({ name: first, otp, minutes: OTP_MINUTES }),
+        template: 'login_otp',
+      });
+      await audit(user.id, 'LOGIN_OTP_SENT', 'user_account', user.id);
+      return res.json({ otpRequired: true, email: maskEmail(user.email), minutes: OTP_MINUTES });
+    }
+
+    await issueSession(res, user);
+  } catch (e) { next(e); }
+}
+
+// POST /auth/login/verify-otp { email, otp } — completes two-step login.
+export async function loginVerifyOtp(req, res, next) {
+  try {
+    const ident = (req.body?.email || '').trim();
+    const otp = String(req.body?.otp || '').trim();
+    if (!ident || !otp) return res.status(400).json({ error: 'Email and code are required' });
+
+    const user = await findAccount(ident);
+    const invalid = () => res.status(400).json({ error: 'Invalid or expired code' });
+    if (!user || user.status === 'DISABLED') return invalid();
+
+    const row = (await query(
+      `SELECT * FROM password_reset_otps WHERE user_id=$1 AND purpose='LOGIN'
+       ORDER BY created_at DESC LIMIT 1`, [user.id])).rows[0];
+    if (!row || row.used_at || new Date(row.expires_at) < new Date()) return invalid();
+    if (row.attempts >= OTP_MAX_ATTEMPTS) return res.status(429).json({ error: 'Too many wrong attempts — sign in again for a new code' });
+
+    if (hashOtp(otp) !== row.otp_hash) {
+      await query(`UPDATE password_reset_otps SET attempts=attempts+1 WHERE id=$1`, [row.id]);
+      return invalid();
+    }
+
+    await query(`UPDATE password_reset_otps SET used_at=now() WHERE id=$1`, [row.id]);
+    await issueSession(res, user);
   } catch (e) { next(e); }
 }
 
@@ -85,10 +144,10 @@ export async function forgotPassword(req, res, next) {
     const user = await findAccount(ident);
     if (user && user.status !== 'DISABLED') {
       const otp = String(randomInt(100000, 1000000)); // 6 digits, crypto-secure
-      await query(`DELETE FROM password_reset_otps WHERE user_id=$1`, [user.id]);
+      await query(`DELETE FROM password_reset_otps WHERE user_id=$1 AND purpose='RESET'`, [user.id]);
       await query(
-        `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at)
-         VALUES ($1,$2, now() + ($3 || ' minutes')::interval)`,
+        `INSERT INTO password_reset_otps (user_id, otp_hash, expires_at, purpose)
+         VALUES ($1,$2, now() + ($3 || ' minutes')::interval, 'RESET')`,
         [user.id, hashOtp(otp), OTP_MINUTES]);
       await enqueueEmail({
         to: user.email,
@@ -115,7 +174,8 @@ export async function resetPassword(req, res, next) {
     if (!user || user.status === 'DISABLED') return invalid();
 
     const row = (await query(
-      `SELECT * FROM password_reset_otps WHERE user_id=$1 ORDER BY created_at DESC LIMIT 1`, [user.id])).rows[0];
+      `SELECT * FROM password_reset_otps WHERE user_id=$1 AND purpose='RESET'
+       ORDER BY created_at DESC LIMIT 1`, [user.id])).rows[0];
     if (!row || row.used_at || new Date(row.expires_at) < new Date()) return invalid();
     if (row.attempts >= OTP_MAX_ATTEMPTS) return res.status(429).json({ error: 'Too many wrong attempts — request a new code' });
 

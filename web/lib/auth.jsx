@@ -16,13 +16,22 @@ export function AuthProvider({ children }) {
     setReady(true);
   }, []);
 
-  async function login(email, password) {
-    const data = await api.post('/auth/login', { email, password });
+  function establish(data) {
     setToken(data.token);
     const a = { token: data.token, user: data.user };
     storeAuth(a);
     setAuth(a);
     return data.user;
+  }
+  async function login(email, password) {
+    const data = await api.post('/auth/login', { email, password });
+    // Two-step login: server emailed a code instead of a session.
+    if (data.otpRequired) return { otpRequired: true, maskedEmail: data.email };
+    return establish(data);
+  }
+  async function verifyLoginOtp(email, otp) {
+    const data = await api.post('/auth/login/verify-otp', { email, otp });
+    return establish(data);
   }
   function logout() { setToken(null); storeAuth(null); setAuth(null); }
   function patchUser(patch) {
@@ -34,7 +43,7 @@ export function AuthProvider({ children }) {
   }
 
   return (
-    <AuthCtx.Provider value={{ auth, user: auth?.user, login, logout, patchUser, ready }}>
+    <AuthCtx.Provider value={{ auth, user: auth?.user, login, verifyLoginOtp, logout, patchUser, ready }}>
       {children}
     </AuthCtx.Provider>
   );

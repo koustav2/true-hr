@@ -29,6 +29,9 @@ interface ApiService {
   @POST("auth/login")
   suspend fun login(@Body body: LoginRequest): LoginResponse
 
+  @POST("auth/login/verify-otp")
+  suspend fun loginVerifyOtp(@Body body: com.truehr.app.data.remote.dto.LoginOtpRequest): LoginResponse
+
   @POST("auth/forgot-password")
   suspend fun forgotPassword(@Body body: com.truehr.app.data.remote.dto.ForgotPasswordRequest): com.truehr.app.data.remote.dto.OkResponse
 

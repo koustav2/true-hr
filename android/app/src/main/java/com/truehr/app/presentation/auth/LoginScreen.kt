@@ -111,32 +111,68 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, onForgotPasswo
         .offset(y = (-30).dp),
     ) {
       Column(Modifier.padding(horizontal = 22.dp, vertical = 26.dp)) {
-        Text("Welcome back", style = MaterialTheme.typography.headlineSmall, color = Ink)
-        Spacer(Modifier.height(3.dp))
-        Text("Sign in to your account to continue", style = MaterialTheme.typography.bodyMedium, color = InkSoft)
-        Spacer(Modifier.height(22.dp))
-
-        AppTextField(s.email, vm::onEmail, "Username")
-        Spacer(Modifier.height(14.dp))
-        AppTextField(
-          s.password, vm::onPassword, "Password",
-          visualTransformation = if (s.showPassword) VisualTransformation.None else PasswordVisualTransformation(),
-          trailing = {
-            IconButton(onClick = vm::toggleShow) {
-              Icon(if (s.showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null, tint = InkFaint)
+        if (s.otpStage) {
+          // Two-step login: enter the code that was emailed after the password.
+          Text("Check your email", style = MaterialTheme.typography.headlineSmall, color = Ink)
+          Spacer(Modifier.height(3.dp))
+          Text(
+            "We emailed a 6-digit sign-in code to ${s.maskedEmail ?: "your email"}. It expires in 10 minutes.",
+            style = MaterialTheme.typography.bodyMedium, color = InkSoft,
+          )
+          Spacer(Modifier.height(22.dp))
+          AppTextField(
+            s.otp, vm::onOtp, "6-digit code",
+            keyboardOptions = androidx.compose.foundation.text.KeyboardOptions(
+              keyboardType = androidx.compose.ui.text.input.KeyboardType.NumberPassword,
+            ),
+          )
+          s.error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium)
+          }
+          s.info?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = Green, style = MaterialTheme.typography.bodyMedium)
+          }
+          Spacer(Modifier.height(16.dp))
+          PrimaryButton(if (s.loading) "" else "Verify & Sign In", loading = s.loading, onClick = vm::verifyOtp, modifier = Modifier.fillMaxWidth())
+          Spacer(Modifier.height(6.dp))
+          Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            TextButton(onClick = vm::backToPassword, contentPadding = PaddingValues(horizontal = 4.dp)) {
+              Text("Back", color = InkFaint, style = MaterialTheme.typography.labelLarge)
             }
-          },
-        )
-        s.error?.let {
+            TextButton(onClick = { vm.login(resend = true) }, enabled = !s.loading, contentPadding = PaddingValues(horizontal = 4.dp)) {
+              Text("Resend code", color = Green, style = MaterialTheme.typography.labelLarge)
+            }
+          }
+        } else {
+          Text("Welcome back", style = MaterialTheme.typography.headlineSmall, color = Ink)
+          Spacer(Modifier.height(3.dp))
+          Text("Sign in to your account to continue", style = MaterialTheme.typography.bodyMedium, color = InkSoft)
+          Spacer(Modifier.height(22.dp))
+
+          AppTextField(s.email, vm::onEmail, "Username")
+          Spacer(Modifier.height(14.dp))
+          AppTextField(
+            s.password, vm::onPassword, "Password",
+            visualTransformation = if (s.showPassword) VisualTransformation.None else PasswordVisualTransformation(),
+            trailing = {
+              IconButton(onClick = vm::toggleShow) {
+                Icon(if (s.showPassword) Icons.Filled.VisibilityOff else Icons.Filled.Visibility, contentDescription = null, tint = InkFaint)
+              }
+            },
+          )
+          s.error?.let {
+            Spacer(Modifier.height(10.dp))
+            Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium)
+          }
+          Spacer(Modifier.height(6.dp))
+          TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 4.dp)) {
+            Text("Forgot Password?", color = Green, style = MaterialTheme.typography.labelLarge)
+          }
           Spacer(Modifier.height(10.dp))
-          Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium)
+          PrimaryButton(if (s.loading) "" else "Sign In", loading = s.loading, onClick = { vm.login() }, modifier = Modifier.fillMaxWidth())
         }
-        Spacer(Modifier.height(6.dp))
-        TextButton(onClick = onForgotPassword, modifier = Modifier.align(Alignment.End), contentPadding = PaddingValues(horizontal = 4.dp)) {
-          Text("Forgot Password?", color = Green, style = MaterialTheme.typography.labelLarge)
-        }
-        Spacer(Modifier.height(10.dp))
-        PrimaryButton(if (s.loading) "" else "Sign In", loading = s.loading, onClick = vm::login, modifier = Modifier.fillMaxWidth())
       }
     }
 

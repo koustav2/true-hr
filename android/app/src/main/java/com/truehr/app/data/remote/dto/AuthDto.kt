@@ -14,7 +14,16 @@ data class UserDto(
 )
 
 @Serializable
-data class LoginResponse(val token: String, val user: UserDto)
+data class LoginResponse(
+  val token: String? = null,
+  val user: UserDto? = null,
+  // Two-step login: set when the server emailed a sign-in code instead.
+  val otpRequired: Boolean = false,
+  val email: String? = null,
+)
+
+@Serializable
+data class LoginOtpRequest(val email: String, val otp: String)
 
 @Serializable
 data class ChangePasswordRequest(val newPassword: String)

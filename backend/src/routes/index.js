@@ -31,6 +31,7 @@ const r = Router();
 
 // --- Auth ---
 r.post('/auth/login', auth.login);
+r.post('/auth/login/verify-otp', auth.loginVerifyOtp); // shares the /api/auth/login rate limit (prefix match)
 r.post('/auth/forgot-password', auth.forgotPassword);
 r.post('/auth/reset-password', auth.resetPassword);
 r.post('/auth/change-password', authenticate, auth.changePassword);

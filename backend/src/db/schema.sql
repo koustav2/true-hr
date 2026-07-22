@@ -1052,6 +1052,8 @@ CREATE TABLE IF NOT EXISTS password_reset_otps (
   created_at TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_pwreset_user ON password_reset_otps (user_id, created_at DESC);
+-- The same table also backs two-step login codes; purpose keeps them apart.
+ALTER TABLE password_reset_otps ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'RESET';
 
 -- Supporting documents on vendor registrations & agreements (base64, like policies).
 ALTER TABLE vendor_registrations

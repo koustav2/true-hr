@@ -103,3 +103,38 @@ export function ConfirmClick({ onConfirm, children, confirmLabel = 'Sure?', clas
     </button>
   );
 }
+// Type-ahead picker: search options by any text (name / Employee ID) and pick one.
+// options: [{ id, ... }], getLabel(option) → display string. Empty value allowed.
+export function SearchPicker({ value, onChange, options = [], getLabel, placeholder = 'Type a name or Employee ID…' }) {
+  const [q, setQ] = React.useState('');
+  const [open, setOpen] = React.useState(false);
+  const sel = options.find((o) => String(o.id) === String(value || ''));
+  const list = q ? options.filter((o) => getLabel(o).toLowerCase().includes(q.toLowerCase())) : options;
+  return (
+    <div className="relative">
+      <input
+        className={inputCls}
+        value={open ? q : (sel ? getLabel(sel) : '')}
+        placeholder={sel && !open ? undefined : placeholder}
+        onFocus={() => { setOpen(true); setQ(''); }}
+        onBlur={() => setTimeout(() => setOpen(false), 150)}
+        onChange={(e) => { setQ(e.target.value); setOpen(true); }}
+      />
+      {open && (
+        <div className="absolute z-30 mt-1 w-full max-h-60 overflow-y-auto bg-white border border-line rounded-xl shadow-pop animate-in">
+          <button type="button" onMouseDown={(e) => { e.preventDefault(); onChange(''); setOpen(false); }}
+            className="block w-full text-left px-3.5 py-2 text-sm text-ink-faint hover:bg-slate-50">— None —</button>
+          {list.slice(0, 60).map((o) => (
+            <button type="button" key={o.id}
+              onMouseDown={(e) => { e.preventDefault(); onChange(String(o.id)); setOpen(false); }}
+              className={`block w-full text-left px-3.5 py-2 text-sm hover:bg-brand-50 ${String(o.id) === String(value) ? 'bg-brand-50 text-brand-700 font-medium' : 'text-ink'}`}>
+              {getLabel(o)}
+            </button>
+          ))}
+          {!list.length && <div className="px-3.5 py-2.5 text-sm text-ink-faint">No match for “{q}”</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+

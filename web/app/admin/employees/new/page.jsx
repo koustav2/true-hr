@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
-import { Button, Input, Select, Field, Spinner } from '@/components/ui.jsx';
+import { Button, Input, Select, Field, Spinner, SearchPicker } from '@/components/ui.jsx';
 import SectionCard from '@/components/SectionCard.jsx';
 import PdfDropzone from '@/components/PdfDropzone.jsx';
 import { IconArrowLeft, IconUser, IconBriefcase, IconFile } from '@/components/icons.jsx';
@@ -99,17 +99,13 @@ export default function NewEmployeePage() {
               {meta.designations.map((d) => <option key={d.id} value={d.id}>{d.title}</option>)}
             </Select>
           </Field>
-          <Field label="Reporting manager">
-            <Select value={f.reportingManagerId} onChange={set('reportingManagerId')}>
-              <option value="">Select…</option>
-              {meta.managers.map((m) => <option key={m.id} value={m.id}>{mgrLabel(m)}</option>)}
-            </Select>
+          <Field label="Reporting manager" hint="Optional — search by name or Employee ID">
+            <SearchPicker value={f.reportingManagerId} onChange={(v) => setF((x) => ({ ...x, reportingManagerId: v }))}
+              options={meta.managers} getLabel={mgrLabel} />
           </Field>
-          <Field label="Functional manager">
-            <Select value={f.functionManagerId} onChange={set('functionManagerId')}>
-              <option value="">Select…</option>
-              {managersBy('functional').map((m) => <option key={m.id} value={m.id}>{mgrLabel(m)}</option>)}
-            </Select>
+          <Field label="Functional manager" hint="Optional — search by name or Employee ID">
+            <SearchPicker value={f.functionManagerId} onChange={(v) => setF((x) => ({ ...x, functionManagerId: v }))}
+              options={meta.managers} getLabel={mgrLabel} />
           </Field>
           <Field label="Employment type">
             <Select value={f.employmentType} onChange={set('employmentType')}>

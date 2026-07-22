@@ -314,7 +314,7 @@ function FormInner() {
               <div className="grid grid-cols-4 gap-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint px-1">
                 <span>Relation</span><span>Name</span><span>Date of birth</span><span>Gender</span>
               </div>
-              {family.map((f, i) => (f.relation === 'Spouse' && info.maritalStatus !== 'Married') ? null : (
+              {family.map((f, i) => (['Spouse', 'Child 1', 'Child 2'].includes(f.relation) && info.maritalStatus !== 'Married') ? null : (
                 <div key={f.relation} className="grid grid-cols-4 gap-2 items-center">
                   <div className="text-sm font-medium text-ink">{f.relation}</div>
                   <Input value={f.name} onChange={(e) => upd(family, setFamily, i, 'name', e.target.value)} />

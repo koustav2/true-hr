@@ -22,6 +22,10 @@ export async function createEmployee(req, res, next) {
     const b = req.body;
     if (!b.firstName || !b.lastName || !b.personalEmail || !b.officialEmail)
       return res.status(400).json({ error: 'firstName, lastName, personalEmail, officialEmail are required' });
+    if (!/^[A-Za-z .'-]+$/.test(b.firstName) || !/^[A-Za-z .'-]+$/.test(b.lastName))
+      return res.status(400).json({ error: 'Employee name can contain letters only' });
+    if (b.phone && !/^\d{10}$/.test(String(b.phone)))
+      return res.status(400).json({ error: 'Mobile number must be exactly 10 digits' });
 
     // official_email is a unique secondary key
     const dupe = await query(`SELECT 1 FROM employees WHERE lower(official_email)=lower($1)`, [b.officialEmail]);
@@ -344,6 +348,12 @@ export async function updateEmployee(req, res, next) {
         (req.body.lastName ?? 'x') === null || req.body.lastName === '') {
       return res.status(400).json({ error: 'Name cannot be empty' });
     }
+    for (const k of ['firstName', 'lastName']) {
+      if (req.body[k] && !/^[A-Za-z .'-]+$/.test(req.body[k]))
+        return res.status(400).json({ error: 'Employee name can contain letters only' });
+    }
+    if (req.body.phone && !/^\d{10}$/.test(String(req.body.phone)))
+      return res.status(400).json({ error: 'Mobile number must be exactly 10 digits' });
     vals.push(id);
     const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id, official_email`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Employee not found' });

@@ -39,7 +39,10 @@ export default function NewEmployeePage() {
   }, []);
 
   async function submit(e) {
-    e.preventDefault(); setErr(''); setSaving(true);
+    e.preventDefault();
+    if (!/^[A-Za-z .'-]+$/.test(f.firstName || '') || !/^[A-Za-z .'-]+$/.test(f.lastName || '')) { setErr('Employee name can contain letters only.'); return; }
+    if (f.phone && !/^\d{10}$/.test(f.phone)) { setErr('Mobile number must be exactly 10 digits.'); return; }
+    setErr(''); setSaving(true);
     try {
       const payload = { ...f };
       ['departmentId','designationId','reportingManagerId','functionManagerId','dob','dateOfJoining']

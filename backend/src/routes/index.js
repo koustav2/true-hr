@@ -234,6 +234,8 @@ r.post('/admin/users/:id/status', authenticate, requireAdmin, users.setUserStatu
 r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
 r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
 r.post('/admin/employees/:id/generate-offer', authenticate, requireStaff, emp.generateOfferLetter);
+r.post('/admin/employees/:id/documents', authenticate, requireStaff, emp.uploadEmployeeDocument);
+r.patch('/admin/employees/:id/bank-statutory', authenticate, requireStaff, emp.updateBankStatutory);
 r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
 
 // --- Leave configuration (HR) ---

@@ -6,7 +6,7 @@ import { generateMagicToken } from '../utils/tokens.js';
 import { generateTempPassword, hashPassword } from '../utils/password.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { offerEmail, credentialsEmail } from '../services/emailTemplates.js';
-import { decrypt, mask } from '../utils/crypto.js';
+import { decrypt, encrypt, mask } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
 import { buildPersonalInfoSheet } from '../services/personalInfoSheet.js';
 
@@ -387,4 +387,68 @@ export async function generateOfferLetter(req, res, next) {
     await audit(req.user.id, 'OFFER_LETTER_GENERATED', 'employee', e.id, {});
     res.json({ ok: true });
   } catch (e2) { next(e2); }
+}
+
+// POST /admin/employees/:id/documents { type, file, mime, filename }  (HR)
+// Upload or replace an employee document (client req #2 — "other documents").
+export async function uploadEmployeeDocument(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { type, file, mime, filename } = req.body || {};
+    if (!type || !file) return res.status(400).json({ error: 'type and file are required' });
+    if (Math.floor(String(file).length * 3 / 4) > 8 * 1024 * 1024) return res.status(400).json({ error: 'File larger than 8MB' });
+    const emp = (await query(`SELECT id FROM employees WHERE id=$1`, [id])).rows[0];
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    await query(`DELETE FROM documents WHERE employee_id=$1 AND type=$2`, [id, type]); // replace-on-upload
+    const row = (await query(
+      `INSERT INTO documents (employee_id, type, filename, mime, data) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
+      [id, type, filename || null, mime || null, file])).rows[0];
+    await audit(req.user.id, 'EMPLOYEE_DOC_UPLOAD', 'document', row.id, { employeeId: id, type });
+    res.status(201).json({ ok: true, id: row.id });
+  } catch (e) { next(e); }
+}
+
+// PATCH /admin/employees/:id/bank-statutory  (HR) — edit "authorised details".
+// Same format rules as onboarding; PII re-encrypted at rest.
+export async function updateBankStatutory(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const { bank = {}, statutory = {} } = req.body || {};
+    const bad = [];
+    if (bank.accountNumber && !/^\d{9,18}$/.test(String(bank.accountNumber))) bad.push('Account number: 9\u201318 digits');
+    if (bank.ifsc && !/^[A-Z]{4}0[A-Z0-9]{6}$/.test(String(bank.ifsc).toUpperCase())) bad.push('IFSC: invalid format');
+    if (statutory.pan && !/^[A-Z]{5}\d{4}[A-Z]$/.test(String(statutory.pan).toUpperCase())) bad.push('PAN: invalid format');
+    if (statutory.aadhaar && !/^\d{12}$/.test(String(statutory.aadhaar))) bad.push('Aadhaar: must be 12 digits');
+    if (bad.length) return res.status(400).json({ error: bad.join(' \u00b7 ') });
+
+    if (Object.keys(bank).length) {
+      await query(
+        `INSERT INTO employee_bank (employee_id, account_holder, account_number_enc, ifsc, bank_name, branch)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (employee_id) DO UPDATE SET
+           account_holder = COALESCE(EXCLUDED.account_holder, employee_bank.account_holder),
+           account_number_enc = COALESCE(EXCLUDED.account_number_enc, employee_bank.account_number_enc),
+           ifsc = COALESCE(EXCLUDED.ifsc, employee_bank.ifsc),
+           bank_name = COALESCE(EXCLUDED.bank_name, employee_bank.bank_name),
+           branch = COALESCE(EXCLUDED.branch, employee_bank.branch)`,
+        [id, bank.accountHolder || null, bank.accountNumber ? encrypt(bank.accountNumber) : null,
+         bank.ifsc ? String(bank.ifsc).toUpperCase() : null, bank.bankName || null, bank.branch || null]);
+    }
+    if (Object.keys(statutory).length) {
+      await query(
+        `INSERT INTO employee_statutory (employee_id, pan_enc, aadhaar_enc, uan, pf_number, esi_number)
+         VALUES ($1,$2,$3,$4,$5,$6)
+         ON CONFLICT (employee_id) DO UPDATE SET
+           pan_enc = COALESCE(EXCLUDED.pan_enc, employee_statutory.pan_enc),
+           aadhaar_enc = COALESCE(EXCLUDED.aadhaar_enc, employee_statutory.aadhaar_enc),
+           uan = COALESCE(EXCLUDED.uan, employee_statutory.uan),
+           pf_number = COALESCE(EXCLUDED.pf_number, employee_statutory.pf_number),
+           esi_number = COALESCE(EXCLUDED.esi_number, employee_statutory.esi_number)`,
+        [id, statutory.pan ? encrypt(String(statutory.pan).toUpperCase()) : null,
+         statutory.aadhaar ? encrypt(statutory.aadhaar) : null,
+         statutory.uan || null, statutory.pfNumber || null, statutory.esiNumber || null]);
+    }
+    await audit(req.user.id, 'EMPLOYEE_BANK_STATUTORY_UPDATE', 'employee', id, { bank: Object.keys(bank), statutory: Object.keys(statutory) });
+    res.json({ ok: true });
+  } catch (e) { next(e); }
 }

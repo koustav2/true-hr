@@ -50,6 +50,33 @@ export default function EmployeeDetailPage() {
     try { const r = await api.post(`/onboarding/${data.onboarding.id}/approve`); setMsg(`Approved. Employee ID ${r.employeeCode} created; credentials emailed.`); await load(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
+  const [bs, setBs] = useState(null); // bank/statutory edit form
+  const [bsBusy, setBsBusy] = useState(false);
+  async function saveBankStatutory() {
+    setBsBusy(true); setMsg('');
+    try {
+      const clean = (o) => Object.fromEntries(Object.entries(o).filter(([, v]) => v !== ''));
+      await api.patch(`/admin/employees/${id}/bank-statutory`, {
+        bank: clean({ accountHolder: bs.accountHolder, accountNumber: bs.accountNumber, ifsc: bs.ifsc, bankName: bs.bankName, branch: bs.branch }),
+        statutory: clean({ pan: bs.pan, aadhaar: bs.aadhaar, uan: bs.uan, pfNumber: bs.pfNumber, esiNumber: bs.esiNumber }),
+      });
+      setBs(null); setMsg('Bank & statutory details updated.'); await load();
+    } catch (e2) { setMsg(e2.message); } finally { setBsBusy(false); }
+  }
+  async function uploadDoc(type, fileObj) {
+    if (!fileObj) return;
+    if (fileObj.size > 8 * 1024 * 1024) { setMsg('File larger than 8MB.'); return; }
+    setMsg('');
+    try {
+      const b64 = await new Promise((res, rej) => {
+        const r = new FileReader();
+        r.onload = () => res(String(r.result).split(',')[1]);
+        r.onerror = rej; r.readAsDataURL(fileObj);
+      });
+      await api.post(`/admin/employees/${id}/documents`, { type, file: b64, mime: fileObj.type, filename: fileObj.name });
+      setMsg('Document uploaded.'); await load();
+    } catch (e2) { setMsg(e2.message); }
+  }
   async function generateOffer() {
     setBusy(true); setMsg('');
     try { await api.post(`/admin/employees/${id}/generate-offer`); setMsg('Offer letter + Annexure A generated.'); await load(); }
@@ -192,7 +219,11 @@ export default function EmployeeDetailPage() {
         </Card>
 
         <Card className="p-6">
-          <h2 className="font-semibold text-ink mb-3">Bank & statutory <span className="text-xs font-normal text-ink-faint">(PII masked)</span></h2>
+          <div className="flex items-center justify-between mb-3">
+            <h2 className="font-semibold text-ink">Bank & statutory <span className="text-xs font-normal text-ink-faint">(PII masked)</span></h2>
+            <button onClick={() => setBs({ accountHolder: bank?.account_holder || '', accountNumber: '', ifsc: bank?.ifsc || '', bankName: bank?.bank_name || '', branch: bank?.branch || '', pan: '', aadhaar: '', uan: statutory?.uan || '', pfNumber: statutory?.pf_number || '', esiNumber: statutory?.esi_number || '' })}
+              className="text-xs font-medium text-brand-700 hover:underline">Edit</button>
+          </div>
           <Row label="Account holder" value={bank?.account_holder} />
           <Row label="Account number" value={bank?.account_number_masked} />
           <Row label="IFSC" value={bank?.ifsc} />
@@ -230,19 +261,58 @@ export default function EmployeeDetailPage() {
         ) : (
           <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-2.5">
             {documents.map((d) => (
-              <button key={d.id} type="button" onClick={() => viewDocument(d.id, DOC_LABELS[d.type] || d.type)}
-                className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2.5 text-left hover:border-brand-300 hover:bg-slate-50 transition-colors">
+              <div key={d.id} className="flex items-center gap-3 rounded-xl border border-line bg-white px-3 py-2.5 hover:border-brand-300 transition-colors">
                 <span className="grid place-items-center h-9 w-9 rounded-lg bg-slate-100 text-ink-faint shrink-0"><IconFile width={16} height={16} /></span>
-                <span className="min-w-0 flex-1">
+                <button type="button" onClick={() => viewDocument(d.id, DOC_LABELS[d.type] || d.type)} className="min-w-0 flex-1 text-left">
                   <span className="block text-sm font-medium text-ink truncate">{DOC_LABELS[d.type] || d.type}</span>
                   <span className="block text-xs text-ink-faint truncate">{d.filename || (d.mime === 'application/pdf' ? 'PDF' : 'Image')}</span>
-                </span>
-                <span className="text-brand-700 text-xs font-medium">View</span>
-              </button>
+                </button>
+                <button type="button" onClick={() => viewDocument(d.id, DOC_LABELS[d.type] || d.type)} className="text-brand-700 text-xs font-medium shrink-0">View</button>
+                <label className="text-xs font-medium text-ink-soft hover:text-ink cursor-pointer shrink-0">
+                  Replace
+                  <input type="file" accept="application/pdf,image/*" className="hidden"
+                    onChange={(ev) => { uploadDoc(d.type, ev.target.files?.[0]); ev.target.value = ''; }} />
+                </label>
+              </div>
             ))}
           </div>
         )}
+        {/* upload any missing document type */}
+        <div className="mt-4 flex flex-wrap items-center gap-2 text-sm">
+          <span className="text-ink-faint text-xs">Add / replace by type:</span>
+          {Object.entries(DOC_LABELS).filter(([t]) => !documents.some((d) => d.type === t)).map(([t, label]) => (
+            <label key={t} className="text-xs font-medium text-brand-700 bg-brand-50 border border-brand-100 rounded-full px-3 py-1.5 cursor-pointer hover:bg-brand-100">
+              + {label}
+              <input type="file" accept="application/pdf,image/*" className="hidden"
+                onChange={(ev) => { uploadDoc(t, ev.target.files?.[0]); ev.target.value = ''; }} />
+            </label>
+          ))}
+        </div>
       </Card>
+
+      <Modal open={!!bs} onClose={() => setBs(null)} title="Edit bank & statutory" size="lg"
+        actions={<>
+          <Button variant="ghost" onClick={() => setBs(null)}>Cancel</Button>
+          <Button onClick={saveBankStatutory} disabled={bsBusy}>{bsBusy ? <Spinner /> : 'Save'}</Button>
+        </>}>
+        {bs && (
+          <div className="grid sm:grid-cols-2 gap-3">
+            <Field label="Account holder"><Input value={bs.accountHolder} onChange={(ev) => setBs({ ...bs, accountHolder: ev.target.value })} /></Field>
+            <Field label="Account number" hint={`Current: ${bank?.account_number_masked || '—'} — leave blank to keep`}>
+              <Input inputMode="numeric" value={bs.accountNumber} onChange={(ev) => setBs({ ...bs, accountNumber: ev.target.value.replace(/\D/g, '') })} /></Field>
+            <Field label="IFSC"><Input value={bs.ifsc} onChange={(ev) => setBs({ ...bs, ifsc: ev.target.value.toUpperCase() })} maxLength={11} /></Field>
+            <Field label="Bank name"><Input value={bs.bankName} onChange={(ev) => setBs({ ...bs, bankName: ev.target.value })} /></Field>
+            <Field label="Branch"><Input value={bs.branch} onChange={(ev) => setBs({ ...bs, branch: ev.target.value })} /></Field>
+            <Field label="PAN" hint={`Current: ${statutory?.pan_masked || '—'} — leave blank to keep`}>
+              <Input value={bs.pan} onChange={(ev) => setBs({ ...bs, pan: ev.target.value.toUpperCase() })} maxLength={10} /></Field>
+            <Field label="Aadhaar" hint={`Current: ${statutory?.aadhaar_masked || '—'} — leave blank to keep`}>
+              <Input inputMode="numeric" value={bs.aadhaar} onChange={(ev) => setBs({ ...bs, aadhaar: ev.target.value.replace(/\D/g, '') })} maxLength={12} /></Field>
+            <Field label="UAN"><Input value={bs.uan} onChange={(ev) => setBs({ ...bs, uan: ev.target.value })} /></Field>
+            <Field label="PF number"><Input value={bs.pfNumber} onChange={(ev) => setBs({ ...bs, pfNumber: ev.target.value })} /></Field>
+            <Field label="ESI number"><Input value={bs.esiNumber} onChange={(ev) => setBs({ ...bs, esiNumber: ev.target.value })} /></Field>
+          </div>
+        )}
+      </Modal>
 
       <Modal open={!!edit} onClose={() => setEdit(null)} title="Edit employee" size="lg"
         actions={<>

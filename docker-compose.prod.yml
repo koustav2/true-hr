@@ -50,6 +50,7 @@ services:
       SMTP_PORT: ${SMTP_PORT:-587}
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
+      LOGIN_OTP: ${LOGIN_OTP:-false}   # two-step login (email OTP after password)
     ports:
       - "127.0.0.1:4000:4000"   # bound to localhost only; Nginx proxies to it
 

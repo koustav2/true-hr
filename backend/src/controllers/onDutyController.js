@@ -1,3 +1,4 @@
+import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
@@ -35,6 +36,8 @@ export async function apply(req, res, next) {
     let dayType = String(req.body.dayType || 'FULL').toUpperCase();
     if (!fromDate || !toDate) return res.status(400).json({ error: 'fromDate and toDate are required' });
     if (new Date(fromDate) > new Date(toDate)) return res.status(400).json({ error: 'fromDate cannot be after toDate' });
+    const doj = await joiningDate(empId);
+    if (beforeJoining(fromDate, doj)) return res.status(400).json({ error: `On-duty cannot start before your joining date (${doj})` });
     if (!['FULL', 'HALF'].includes(dayType)) dayType = 'FULL';
 
     // Block OD if attendance is already COMPLETE (punched in AND out) on any day in the range.

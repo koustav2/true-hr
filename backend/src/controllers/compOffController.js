@@ -1,3 +1,4 @@
+import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
@@ -62,6 +63,8 @@ export async function apply(req, res, next) {
     if (!empId) return res.status(404).json({ error: 'No employee linked to this account' });
     const { onDutyId, leaveDate, remark } = req.body;
     if (!onDutyId || !leaveDate) return res.status(400).json({ error: 'onDutyId and leaveDate are required' });
+    const doj = await joiningDate(empId);
+    if (beforeJoining(leaveDate, doj)) return res.status(400).json({ error: `Comp-off cannot be taken before your joining date (${doj})` });
 
     const od = (await query(
       `SELECT id, employee_id, status, (from_date + ${COMPOFF_VALID_DAYS}) AS expiry_date

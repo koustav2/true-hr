@@ -42,7 +42,8 @@ export async function login(req, res, next) {
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
 
     // Password OK. With two-step login on, email a code instead of a session.
-    if (loginOtpEnabled()) {
+    // Employees only — HR / IT admin / super-admin sign in with password alone.
+    if (loginOtpEnabled() && user.role === 'EMPLOYEE') {
       const first = (await query(`SELECT first_name FROM employees WHERE id=$1`, [user.employee_id])).rows[0]?.first_name;
       const otp = String(randomInt(100000, 1000000));
       await query(`DELETE FROM password_reset_otps WHERE user_id=$1 AND purpose='LOGIN'`, [user.id]);

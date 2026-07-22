@@ -60,6 +60,14 @@ async function main() {
   r = await call(auth.loginVerifyOtp, { body: { email, otp } });
   check('verify: otp cannot be reused → 400', r.status === 400);
 
+  // Staff roles skip the OTP even with the flag on.
+  const hrEmail = `hr.${RUN}@t.t`;
+  await query(
+    `INSERT INTO user_accounts (email, password_hash, role, status)
+     VALUES ($1,$2,'HR_ADMIN','ACTIVE')`, [hrEmail, await hashPassword('MyPass@123')]);
+  r = await call(auth.login, { body: { email: hrEmail, password: 'MyPass@123' } });
+  check('HR admin: no otp, token directly', r.status === 200 && !!r.data.token && !r.data.otpRequired);
+
   // Employee-code identifier works end to end.
   r = await call(auth.login, { body: { email: `${RUN}E`, password: 'MyPass@123' } });
   check('employee code: otp challenge', r.status === 200 && r.data.otpRequired);

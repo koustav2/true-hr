@@ -38,3 +38,14 @@ body {
 /* hide scrollbars where layout provides its own affordance (pill navs) */
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
+
+/* prominent section/page titles: brand-gradient accent bar underneath */
+.page-title { position: relative; padding-bottom: 10px; }
+.page-title::after {
+  content: '';
+  position: absolute;
+  left: 0; bottom: 0;
+  height: 4px; width: 44px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #2563eb, #16a34a);
+}

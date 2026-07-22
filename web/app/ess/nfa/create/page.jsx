@@ -97,7 +97,7 @@ export default function CreateNfaPage() {
 
   return (
     <div className="space-y-5 max-w-4xl">
-      <h1 className="text-xl font-bold text-ink">Create NFA</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Create NFA</h1>
 
       <Card className="p-4">
         <div className="font-semibold text-sm text-ink mb-3">Project Details</div>

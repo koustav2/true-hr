@@ -20,7 +20,7 @@ export default function MyPerformancePage() {
     return (
       <div className="space-y-4">
         <div className="flex items-center justify-between">
-          <h1 className="text-xl font-bold text-ink">Team KPI & PMS Approvals</h1>
+          <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Team KPI & PMS Approvals</h1>
           <Button size="sm" variant="outline" onClick={() => setTab(0)}>← My Performance</Button>
         </div>
         <TeamTab />
@@ -31,7 +31,7 @@ export default function MyPerformancePage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ink">My Performance — {year}</h1>
+        <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">My Performance — {year}</h1>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setTab(1)}>Team Approvals</Button>
           <Button size="sm" onClick={() => setCreating(true)}>Submit KPI</Button>

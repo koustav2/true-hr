@@ -10,7 +10,7 @@ export default function PayslipsPage() {
   const dl = (r) => downloadFile(`/payslips/${r.id}/pdf`, `payslip-${r.year}-${String(r.month).padStart(2, '0')}.pdf`).catch((e) => setMsg(e.message));
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-ink">Salary Slips</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Salary Slips</h1>
       {msg && <p className="text-sm text-red-600">{msg}</p>}
       {!rows ? <Spinner /> : !rows.length ? <Empty title="No published payslips yet" /> : (
         <Card className="p-0">

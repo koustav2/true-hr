@@ -38,7 +38,7 @@ export default function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold text-ink tracking-tight">Employees</h1>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Employees</h1>
           <p className="text-ink-faint text-sm mt-0.5">{rows ? `${rows.length} total` : 'Loading…'}</p>
         </div>
         <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>

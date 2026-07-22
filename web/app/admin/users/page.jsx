@@ -47,7 +47,7 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold text-ink tracking-tight">Users &amp; roles</h1>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Users &amp; roles</h1>
           <p className="text-ink-faint text-sm mt-0.5">Manage HR and Super Admin accounts.</p>
         </div>
         <Button onClick={() => { setShow((s) => !s); setErr(''); setMsg(''); }}><IconPlus width={16} height={16} /> Add user</Button>

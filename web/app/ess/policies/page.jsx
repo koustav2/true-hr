@@ -9,7 +9,7 @@ export default function PoliciesPage() {
   useEffect(() => { api.get('/policies').then(setRows).catch(() => setRows([])); }, []);
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-ink">Policies & Formats</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Policies & Formats</h1>
       {msg && <p className="text-sm text-red-600">{msg}</p>}
       {!rows ? <Spinner /> : !rows.length ? <Empty title="No policies uploaded yet" /> : (
         <div className="grid sm:grid-cols-2 gap-3">

@@ -33,7 +33,7 @@ export default function ResignationsPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-bold text-ink tracking-tight">Resignations</h1>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Resignations</h1>
           <p className="text-ink-faint text-sm mt-0.5">Review and act on employee resignation requests.</p>
         </div>
         <Field label="Status">

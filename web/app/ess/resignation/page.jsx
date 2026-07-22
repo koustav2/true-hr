@@ -10,7 +10,7 @@ export default function ResignationPage() {
   const [tab, setTab] = useState(0);
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-ink">Resignation</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Resignation</h1>
       <div className="flex gap-1.5 border-b border-line">
         {['My Resignation', 'Team'].map((t, i) => (
           <button key={t} onClick={() => setTab(i)}

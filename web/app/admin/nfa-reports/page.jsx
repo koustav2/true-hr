@@ -11,7 +11,7 @@ export default function NfaReportsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">NFA Reports</h1>
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">NFA Reports</h1>
         <p className="text-ink-faint text-sm mt-0.5">FY analytics, expense rollups, client billing and settlement register — with Excel export.</p>
       </div>
       <div className="flex gap-1.5 border-b border-line overflow-x-auto">

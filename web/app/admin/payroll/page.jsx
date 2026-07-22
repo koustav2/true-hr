@@ -96,7 +96,7 @@ export default function PayrollPage() {
     <div className="space-y-5">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="text-[26px] font-bold text-ink tracking-tight">Payroll</h1>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Payroll</h1>
           <p className="text-ink-faint text-sm mt-0.5">Set each employee's salary structure, then generate and publish monthly payslips.</p>
         </div>
         <Button variant="outline" onClick={openTemplate}>Company default</Button>

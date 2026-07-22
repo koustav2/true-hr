@@ -46,7 +46,7 @@ export default function ApproversPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">Approvers</h1>
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Approvers</h1>
         <p className="text-ink-faint text-sm mt-0.5">
           Assign who approves each stage of the NFA and resignation chains. Leave project, category and
           zone blank to apply everywhere — a more specific row overrides the blanket one. Stages with no

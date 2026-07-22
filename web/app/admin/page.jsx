@@ -52,7 +52,7 @@ export default function DashboardPage() {
     <div className="space-y-7">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="text-[26px] font-bold text-ink tracking-tight">Welcome back</h1>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Welcome back</h1>
           <p className="text-ink-faint text-sm mt-0.5">Here's what's happening across True HR today.</p>
         </div>
         <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>

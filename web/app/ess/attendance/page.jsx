@@ -10,7 +10,7 @@ export default function AttendancePage() {
   const [tab, setTab] = useState(0);
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-ink">Attendance</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Attendance</h1>
       <p className="text-xs text-ink-faint">Punch in/out needs camera + GPS, so punching stays in the mobile app — everything else works here.</p>
       <div className="flex gap-1.5 border-b border-line">
         {['Monthly', 'Daily punches', 'Miss-Punch'].map((t, i) => (

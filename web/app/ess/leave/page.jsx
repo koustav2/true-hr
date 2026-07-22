@@ -17,7 +17,7 @@ export default function LeavePage() {
   const [tab, setTab] = useState(0);
   return (
     <div className="space-y-4">
-      <h1 className="text-xl font-bold text-ink">Leave Management</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Leave Management</h1>
       <div className="flex gap-1.5 border-b border-line overflow-x-auto">
         {['Apply Leave', 'My Leaves', 'Comp-Off', 'Team Approvals'].map((t, i) => (
           <button key={t} onClick={() => setTab(i)}

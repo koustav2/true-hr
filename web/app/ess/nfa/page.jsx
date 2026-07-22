@@ -26,7 +26,7 @@ export default function MyNfasPage() {
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
-        <h1 className="text-xl font-bold text-ink">My NFAs</h1>
+        <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">My NFAs</h1>
         <Link href="/ess/nfa/create"><Button size="sm">Create NFA</Button></Link>
       </div>
       <div className="flex gap-2 flex-wrap">

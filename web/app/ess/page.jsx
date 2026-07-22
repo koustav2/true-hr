@@ -46,7 +46,7 @@ export default function EssDashboard() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[22px] font-bold text-ink tracking-tight">My Dashboard</h1>
+        <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">My Dashboard</h1>
         <p className="text-sm text-ink-faint mt-0.5">Everything you need, in one place.</p>
       </div>
 

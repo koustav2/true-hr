@@ -69,7 +69,7 @@ export default function BannersAdminPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">App Banners</h1>
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">App Banners</h1>
         <p className="text-ink-faint text-sm mt-0.5">
           Images shown in the auto-scrolling banner on the app dashboard (above Workspace).
           Wide images work best — roughly 3:1, e.g. 1200×400. Max {MAX_MB}MB each.

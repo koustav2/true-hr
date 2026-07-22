@@ -41,7 +41,7 @@ function AcceptInner() {
     return <Center><Card className="max-w-md w-full p-10 text-center">
       <div className="flex justify-center mb-6"><Logo size={40} /></div>
       <div className="mx-auto grid place-items-center h-14 w-14 rounded-full bg-rose-50 text-rose-600 text-2xl mb-4">✕</div>
-      <h1 className="text-xl font-bold text-ink">Offer declined</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Offer declined</h1>
       <p className="text-ink-soft mt-2 text-sm">You have declined this offer. Our HR team has been notified. If this was a mistake, please contact HR.</p>
     </Card></Center>;
   }

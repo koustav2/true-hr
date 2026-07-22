@@ -18,7 +18,7 @@ export default function ApprovalsPage() {
 
   return (
     <div className="space-y-6">
-      <h1 className="text-xl font-bold text-ink">Approvals waiting on me</h1>
+      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Approvals waiting on me</h1>
 
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-ink-soft uppercase tracking-wide">NFAs</h2>

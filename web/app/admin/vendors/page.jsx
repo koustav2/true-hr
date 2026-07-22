@@ -27,7 +27,7 @@ export default function VendorsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">Vendors & Agreements</h1>
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Vendors & Agreements</h1>
         <p className="text-ink-faint text-sm mt-0.5">Vendor registrations (statutory details) and rent/service agreements awaiting approval.</p>
       </div>
       <div className="flex gap-1.5 border-b border-line">

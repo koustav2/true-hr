@@ -30,7 +30,7 @@ export default function NfaAdminPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="text-[26px] font-bold text-ink tracking-tight">NFA — Note For Approval</h1>
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">NFA — Note For Approval</h1>
         <p className="text-ink-faint text-sm mt-0.5">Expense / advance requests, approval chains and payment release.</p>
       </div>
 

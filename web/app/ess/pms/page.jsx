@@ -12,14 +12,30 @@ export default function MyPerformancePage() {
   const [rows, setRows] = useState(null);
   const [creating, setCreating] = useState(false);
   const [openId, setOpenId] = useState(null);
+  const [tab, setTab] = useState(0);
   const load = () => api.get(`/kpi?year=${year}`).then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
+
+  if (tab === 1) {
+    return (
+      <div className="space-y-4">
+        <div className="flex items-center justify-between">
+          <h1 className="text-xl font-bold text-ink">Team KPI & PMS Approvals</h1>
+          <Button size="sm" variant="outline" onClick={() => setTab(0)}>← My Performance</Button>
+        </div>
+        <TeamTab />
+      </div>
+    );
+  }
 
   return (
     <div className="space-y-4">
       <div className="flex items-center justify-between">
         <h1 className="text-xl font-bold text-ink">My Performance — {year}</h1>
-        <Button size="sm" onClick={() => setCreating(true)}>Submit KPI</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setTab(1)}>Team Approvals</Button>
+          <Button size="sm" onClick={() => setCreating(true)}>Submit KPI</Button>
+        </div>
       </div>
       <Card className="p-0 overflow-x-auto">
         {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
@@ -189,3 +205,150 @@ function KpiDetailModal({ id, onClose, onChanged }) {
     </Modal>
   );
 }
+
+/* ── Reporting-manager side (client req #18): KPI approvals + PMS ratings ── */
+
+function TeamTab() {
+  const [kpis, setKpis] = useState(null);
+  const [ratings, setRatings] = useState(null);
+  const [review, setReview] = useState(null); // kpi row being reviewed
+  const [rating, setRating] = useState(null); // pending-rating row
+  const load = () => {
+    api.get('/kpi/team-pending').then(setKpis).catch(() => setKpis([]));
+    api.get('/pms/pending').then(setRatings).catch(() => setRatings([]));
+  };
+  useEffect(() => { load(); }, []);
+  return (
+    <div className="space-y-5">
+      <div>
+        <div className="font-semibold text-sm text-ink mb-2">KPIs waiting for your approval</div>
+        {!kpis ? <Spinner /> : !kpis.length ? <Empty title="No KPIs pending" subtitle="Your team's monthly KPIs appear here for approval." /> : (
+          <div className="space-y-2">
+            {kpis.map((k) => (
+              <Card key={k.id} className="p-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div>
+                  <div className="font-medium text-ink">{k.employee?.name} <span className="text-xs text-ink-faint">{k.employee?.employeeCode} · {k.employee?.designation || ''}</span></div>
+                  <div className="text-xs text-ink-faint">{MONTHS[k.month - 1]} {k.year} · {k.status.replace('_', ' ')}</div>
+                </div>
+                <Button size="sm" onClick={() => setReview(k)}>Review</Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+      <div>
+        <div className="font-semibold text-sm text-ink mb-2">PMS ratings waiting for you</div>
+        {!ratings ? <Spinner /> : !ratings.length ? <Empty title="No ratings pending" subtitle="Submitted PMS forms reach you here when it's your stage in the chain." /> : (
+          <div className="space-y-2">
+            {ratings.map((r) => (
+              <Card key={r.submissionId} className="p-3 flex flex-wrap items-center justify-between gap-2 text-sm">
+                <div>
+                  <div className="font-medium text-ink">{r.employee?.name} <span className="text-xs text-ink-faint">{r.employee?.employeeCode}</span></div>
+                  <div className="text-xs text-ink-faint">{MONTHS[r.month - 1]} {r.year} · your stage: {r.stage.roleKey.replace(/_/g, ' ')} · self rating {r.selfRating ?? '—'}</div>
+                </div>
+                <Button size="sm" onClick={() => setRating(r)}>Rate</Button>
+              </Card>
+            ))}
+          </div>
+        )}
+      </div>
+      {review && <ReviewKpiModal row={review} onClose={() => setReview(null)} onDone={() => { setReview(null); load(); }} />}
+      {rating && <RatePmsModal row={rating} onClose={() => setRating(null)} onDone={() => { setRating(null); load(); }} />}
+    </div>
+  );
+}
+
+// KPI detail + Approve / Discuss for the reporting manager.
+function ReviewKpiModal({ row, onClose, onDone }) {
+  const [d, setD] = useState(null);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => { api.get(`/kpi/${row.id}`).then(setD).catch((e) => setMsg(e.message)); }, [row.id]);
+  async function act(action) {
+    setBusy(true); setMsg('');
+    try { await api.post(`/kpi/${row.id}/review`, { action }); onDone(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  }
+  return (
+    <Modal open onClose={onClose} title={`${row.employee?.name} — ${MONTHS[row.month - 1]} ${row.year}`} size="lg"
+      actions={<>
+        <Button variant="ghost" onClick={onClose}>Close</Button>
+        <Button variant="outline" onClick={() => act('DISCUSS')} disabled={busy}>Discuss</Button>
+        <Button onClick={() => act('APPROVE')} disabled={busy}>{busy ? <Spinner /> : 'Approve KPI'}</Button>
+      </>}>
+      {!d ? <div className="p-6 flex justify-center"><Spinner /></div> : (
+        <div className="space-y-2 max-h-[60vh] overflow-y-auto pr-1">
+          {d.kras.map((k) => (
+            <div key={k.id} className="border border-line rounded-lg px-3 py-2 text-sm flex justify-between gap-3">
+              <span className="text-ink-soft">KRA {k.seq}. {k.description}</span>
+              <span className="font-semibold shrink-0">{k.weightage}%</span>
+            </div>
+          ))}
+          <p className="text-xs text-ink-faint">Total weightage: {d.kras.reduce((a, k) => a + Number(k.weightage), 0)}% · Approve locks the KPI; Discuss sends it back to the employee.</p>
+          {msg && <p className="text-sm text-red-600">{msg}</p>}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
+// PMS rating at the manager's stage — shows KRAs + self scores + the chain, records PLI.
+function RatePmsModal({ row, onClose, onDone }) {
+  const [d, setD] = useState(null);
+  const [pliRating, setPliRating] = useState('4');
+  const [pliPct, setPliPct] = useState('100');
+  const [remarks, setRemarks] = useState('');
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  useEffect(() => { if (row.kpiId) api.get(`/kpi/${row.kpiId}`).then(setD).catch(() => setD(false)); }, [row.kpiId]);
+  async function submit() {
+    setBusy(true); setMsg('');
+    try { await api.post(`/pms/${row.submissionId}/rate`, { pliRating: Number(pliRating), pliPct: Number(pliPct), remarks }); onDone(); }
+    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+  }
+  return (
+    <Modal open onClose={onClose} title={`Rate — ${row.employee?.name} · ${MONTHS[row.month - 1]} ${row.year}`} size="lg"
+      actions={<>
+        <Button variant="ghost" onClick={onClose}>Cancel</Button>
+        <Button onClick={submit} disabled={busy}>{busy ? <Spinner /> : 'Submit rating'}</Button>
+      </>}>
+      <div className="space-y-3 max-h-[60vh] overflow-y-auto pr-1">
+        {d && d !== false && (
+          <>
+            {d.kras.map((k) => {
+              const sc = d.pms?.scores?.find((x) => x.kraId === k.id);
+              return (
+                <div key={k.id} className="border border-line rounded-lg px-3 py-2 text-xs space-y-0.5">
+                  <div className="text-sm text-ink-soft">KRA {k.seq}. {k.description} <b>({k.weightage}%)</b></div>
+                  {sc && <div className="text-ink-faint">Target {sc.mtdTarget || '—'} · Achieved {sc.mtdAchieved || '—'} · Self {sc.selfRating}{sc.selfRemarks ? ` — “${sc.selfRemarks}”` : ''}</div>}
+                </div>
+              );
+            })}
+            {!!d.pms?.levelRatings?.length && (
+              <div className="space-y-1">
+                <div className="font-semibold text-sm">Approval chain</div>
+                {d.pms.levelRatings.map((l) => (
+                  <div key={l.roleKey} className="flex justify-between text-xs border border-line rounded px-2.5 py-1">
+                    <span>{l.roleKey.replace(/_/g, ' ')} <span className="text-ink-soft">{l.ratedBy || ''}</span></span>
+                    <span className="font-medium">{l.pliPct ? `PLI ${Number(l.pliPct).toFixed(0)}% (rating ${l.pliRating})` : 'Pending'}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </>
+        )}
+        <div className="grid sm:grid-cols-2 gap-2">
+          <Field label="PLI rating (1–5)" required>
+            <Select value={pliRating} onChange={(e) => setPliRating(e.target.value)}>
+              {[['5', '5 — OAT'], ['4', '4 — SAT'], ['3', '3 — AT'], ['2', '2 — BT'], ['1', '1 — SBT']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+            </Select>
+          </Field>
+          <Field label="PLI %" required><Input type="number" min="0" max="200" value={pliPct} onChange={(e) => setPliPct(e.target.value)} /></Field>
+        </div>
+        <Field label="Remarks"><Input value={remarks} onChange={(e) => setRemarks(e.target.value)} /></Field>
+        {msg && <p className="text-sm text-red-600">{msg}</p>}
+      </div>
+    </Modal>
+  );
+}
+

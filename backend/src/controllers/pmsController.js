@@ -248,14 +248,14 @@ export async function pendingRatings(req, res, next) {
     if (!items.length) return res.json([]);
     const ids = items.map((x) => x.subjectId);
     const rows = (await query(
-      `SELECT s.id, s.self_rating, k.year, k.month, e.employee_code, e.first_name, e.last_name
+      `SELECT s.id, s.kpi_id, s.self_rating, k.year, k.month, e.employee_code, e.first_name, e.last_name
          FROM pms_submissions s JOIN kpis k ON k.id=s.kpi_id JOIN employees e ON e.id=k.employee_id
         WHERE s.id = ANY($1::bigint[])`, [ids])).rows;
     const byId = Object.fromEntries(rows.map((r) => [r.id, r]));
     res.json(items.map((x) => {
       const r = byId[x.subjectId];
       return {
-        submissionId: x.subjectId, stage: { seq: x.stageSeq, roleKey: x.roleKey },
+        submissionId: x.subjectId, kpiId: r?.kpi_id, stage: { seq: x.stageSeq, roleKey: x.roleKey },
         year: r?.year, month: r?.month, selfRating: r?.self_rating,
         employee: r ? { employeeCode: r.employee_code, name: `${r.first_name} ${r.last_name}`.trim() } : null,
       };

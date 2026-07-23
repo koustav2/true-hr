@@ -35,6 +35,9 @@ data class ApproverDto(
   val employeeCode: String? = null,
   val name: String? = null,
   val email: String? = null,
+  val stage: String? = null,   // e.g. "Reporting Manager"
+  val seq: Int? = null,
+  val status: String? = null,  // PENDING | APPROVED | REJECTED | BYPASSED | null (not applied yet)
 )
 
 @Serializable

@@ -28,7 +28,7 @@ class ResignationRepositoryImpl @Inject constructor(
       employee = c.employee?.let {
         ResignationEmployee(it.employeeCode, it.name, it.designation, it.vertical, it.location, it.noticePeriodDays)
       },
-      approvers = c.approvers.map { Approver(it.employeeCode, it.name, it.email) },
+      approvers = c.approvers.map { Approver(it.employeeCode, it.name, it.email, it.stage, it.status) },
       current = c.current?.toModel(),
     )
   }

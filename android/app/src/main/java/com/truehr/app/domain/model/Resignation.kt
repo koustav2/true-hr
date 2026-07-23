@@ -1,6 +1,12 @@
 package com.truehr.app.domain.model
 
-data class Approver(val employeeCode: String?, val name: String?, val email: String?)
+data class Approver(
+  val employeeCode: String?,
+  val name: String?,
+  val email: String?,
+  val stage: String? = null,   // e.g. "Reporting Manager"
+  val status: String? = null,  // PENDING | APPROVED | REJECTED | BYPASSED | null
+)
 
 data class ResignationEmployee(
   val employeeCode: String?,

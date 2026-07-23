@@ -15,6 +15,8 @@ import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
@@ -80,15 +82,49 @@ private fun Body(ctx: com.truehr.app.domain.model.ResignationContext, submitting
       ResignForm(emp?.noticePeriodDays ?: 30, submitting, context) { rd, lwd, reason -> vm.apply(rd, lwd, reason) }
     }
 
-    // Approvals
+    // Approvals — GreenHR-style stage table: role → approver → status
     if (ctx.approvers.isNotEmpty()) {
       Section("Approvals") {
-        ctx.approvers.forEach { a ->
-          Column(Modifier.fillMaxWidth().padding(vertical = 6.dp)) {
-            Text(listOfNotNull(a.employeeCode, a.name).joinToString(" - ").ifBlank { "—" }, fontWeight = FontWeight.SemiBold, color = Ink, style = MaterialTheme.typography.bodyMedium)
-            Text(a.email ?: "—", color = InkSoft, style = MaterialTheme.typography.bodySmall)
+        ctx.approvers.forEachIndexed { i, a ->
+          Row(
+            Modifier.fillMaxWidth().padding(vertical = 8.dp),
+            verticalAlignment = Alignment.CenterVertically,
+          ) {
+            Text(
+              a.stage ?: "Approver",
+              modifier = Modifier.width(126.dp),
+              fontWeight = FontWeight.SemiBold, color = InkSoft,
+              style = MaterialTheme.typography.bodySmall,
+            )
+            Column(Modifier.weight(1f)) {
+              Text(
+                listOfNotNull(a.employeeCode, a.name).joinToString(" - ")
+                  .ifBlank { "Not assigned" },
+                fontWeight = FontWeight.SemiBold, color = if (a.name != null) Ink else InkFaint,
+                style = MaterialTheme.typography.bodyMedium,
+              )
+              a.email?.let { Text(it, color = InkSoft, style = MaterialTheme.typography.bodySmall) }
+            }
+            a.status?.let { st ->
+              val (bg, fg) = when (st) {
+                "APPROVED" -> Color(0xFFDCFCE7) to Color(0xFF15803D)
+                "REJECTED" -> Color(0xFFFEE2E2) to Color(0xFFB91C1C)
+                "BYPASSED" -> Color(0xFFF1F5F9) to Color(0xFF64748B)
+                "PENDING" -> Color(0xFFFEF3C7) to Color(0xFFB45309)
+                else -> Color(0xFFF1F5F9) to Color(0xFF64748B)
+              }
+              Text(
+                st.lowercase().replaceFirstChar { it.uppercase() },
+                color = fg,
+                style = MaterialTheme.typography.labelSmall,
+                modifier = Modifier
+                  .clip(RoundedCornerShape(999.dp))
+                  .background(bg)
+                  .padding(horizontal = 10.dp, vertical = 4.dp),
+              )
+            }
           }
-          HorizontalDivider(color = Line)
+          if (i != ctx.approvers.lastIndex) HorizontalDivider(color = Line)
         }
       }
     }

@@ -50,21 +50,60 @@ export async function context(req, res, next) {
         WHERE e.id=$1`, [empId])).rows[0];
     if (!e) return res.status(404).json({ error: 'Employee not found' });
 
-    const mgrIds = [e.reporting_manager_id, e.function_manager_id, e.operational_manager_id].filter(Boolean);
-    let approvers = [];
-    if (mgrIds.length) {
-      approvers = (await query(
-        `SELECT DISTINCT employee_code, first_name, last_name, official_email
-           FROM employees WHERE id = ANY($1::bigint[]) ORDER BY first_name`, [mgrIds])).rows
-        .map((m) => ({ employeeCode: m.employee_code, name: `${m.first_name} ${m.last_name}`.trim(), email: m.official_email }));
-    }
     const current = (await query(
-      `SELECT ${REQ_COLS} FROM resignations r
+      `SELECT ${REQ_COLS}, r.approval_instance_id FROM resignations r
          JOIN employees e ON e.id=r.employee_id
          LEFT JOIN designations d ON d.id=e.designation_id
          LEFT JOIN departments dep ON dep.id=e.department_id
         WHERE r.employee_id=$1 AND r.status<>'WITHDRAWN'
         ORDER BY r.applied_at DESC LIMIT 1`, [empId])).rows[0];
+
+    // GreenHR-style stage-wise approver table: role → code, name & live status.
+    const STAGE_LABELS = {
+      REPORTING_MANAGER: 'Reporting Manager', FUNCTIONAL_HEAD: 'Functional Manager',
+      BUSINESS_HEAD: 'Business Head', OFFICE_ADMIN: 'Office Admin',
+      FINANCE: 'Finance', HR: 'Human Resource',
+    };
+    const stageLabel = (k) => STAGE_LABELS[k] || String(k).replace(/_/g, ' ');
+    let approvers = [];
+    if (current?.approval_instance_id) {
+      // Running / finished chain — real per-stage status.
+      const inst = await engine.getInstance(current.approval_instance_id);
+      approvers = (inst?.chain || []).map((s) => ({
+        stage: stageLabel(s.roleKey), seq: s.seq, status: s.status,
+        employeeCode: s.approver?.employeeCode || null,
+        name: s.approver?.name || null, email: s.approver?.email || null,
+      }));
+    } else {
+      // Not applied yet — preview: resolve each configured stage like the engine will.
+      const stages = (await query(
+        `SELECT s.seq, s.role_key, s.resolver_type, s.default_approver_employee_id
+           FROM approval_flow_stages s JOIN approval_flows f ON f.id=s.flow_id
+          WHERE f.code='RESIGNATION' ORDER BY s.seq`)).rows;
+      for (const st of stages) {
+        let aid = null;
+        if (st.resolver_type === 'manager_chain') {
+          aid = st.role_key === 'REPORTING_MANAGER' ? e.reporting_manager_id
+            : st.role_key === 'FUNCTIONAL_HEAD' ? e.function_manager_id
+            : e.operational_manager_id;
+        } else if (st.resolver_type === 'matrix') {
+          aid = (await query(
+            `SELECT approver_employee_id FROM approver_matrix WHERE role_key=$1
+              ORDER BY (project_id IS NULL)::int + (expense_category_id IS NULL)::int + (zone_id IS NULL)::int ASC
+              LIMIT 1`, [st.role_key])).rows[0]?.approver_employee_id || null;
+        } else {
+          aid = st.default_approver_employee_id;
+        }
+        const a = aid ? (await query(
+          `SELECT employee_code, first_name, last_name, official_email FROM employees WHERE id=$1`, [aid])).rows[0] : null;
+        approvers.push({
+          stage: stageLabel(st.role_key), seq: st.seq, status: null,
+          employeeCode: a?.employee_code || null,
+          name: a ? `${a.first_name} ${a.last_name}`.trim() : null,
+          email: a?.official_email || null,
+        });
+      }
+    }
 
     res.json({
       employee: {

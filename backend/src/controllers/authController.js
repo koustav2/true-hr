@@ -37,9 +37,13 @@ export async function login(req, res, next) {
         `SELECT ua.* FROM user_accounts ua JOIN employees e ON e.id=ua.employee_id
          WHERE upper(e.employee_code)=upper($1) LIMIT 1`, [ident])).rows[0];
     }
-    if (!user || user.status === 'DISABLED') return res.status(401).json({ error: 'Invalid credentials' });
+    if (!user) return res.status(401).json({ error: 'Invalid credentials' });
     const ok = await verifyPassword(password || '', user.password_hash);
     if (!ok) return res.status(401).json({ error: 'Invalid credentials' });
+    // Right password but blocked account (e.g. resignation submitted) — be clear.
+    if (user.status === 'DISABLED') {
+      return res.status(403).json({ error: 'Your account has been disabled. Please contact HR to restore access.' });
+    }
 
     // Password OK. With two-step login on, email a code instead of a session.
     // Employees only — HR / IT admin / super-admin sign in with password alone.

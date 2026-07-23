@@ -39,9 +39,25 @@ fun ResignationScreen(onBack: () -> Unit, vm: ResignationViewModel = hiltViewMod
   val s by vm.context.collectAsState()
   val submitting by vm.submitting.collectAsState()
   val message by vm.message.collectAsState()
+  val blocked by vm.blocked.collectAsState()
 
   LaunchedEffect(Unit) { vm.loadContext() }
   LaunchedEffect(message) { message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeMessage() } }
+
+  if (blocked) {
+    AlertDialog(
+      onDismissRequest = {},
+      title = { Text("Resignation submitted") },
+      text = {
+        Text(
+          "As per company policy, your account has now been blocked from the system. " +
+            "Your resignation will move through the approval chain. " +
+            "Please contact HR if you need access restored.",
+        )
+      },
+      confirmButton = { TextButton(onClick = { vm.acknowledgeBlocked() }) { Text("OK") } },
+    )
+  }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -138,6 +154,29 @@ private fun ResignForm(noticeDays: Int, submitting: Boolean, context: android.co
   var resignText by remember { mutableStateOf(SHOW.format(resignCal.time)) }
   var lwdText by remember { mutableStateOf(SHOW.format(lwdCal.time)) }
   var reason by remember { mutableStateOf("") }
+  var confirmOpen by remember { mutableStateOf(false) }
+
+  if (confirmOpen) {
+    AlertDialog(
+      onDismissRequest = { confirmOpen = false },
+      title = { Text("Before you submit") },
+      text = {
+        Text(
+          "The moment you submit your resignation, your account will be BLOCKED from the " +
+            "entire system (app and web). Only HR can restore access.\n\n" +
+            "Please make sure you have already downloaded everything you need — salary slips, " +
+            "offer letter and your personal documents — before continuing.",
+        )
+      },
+      confirmButton = {
+        TextButton(onClick = {
+          confirmOpen = false
+          onSubmit(ISO.format(resignCal.time), ISO.format(lwdCal.time), reason)
+        }) { Text("I understand — Submit", color = Rose) }
+      },
+      dismissButton = { TextButton(onClick = { confirmOpen = false }) { Text("Cancel") } },
+    )
+  }
 
   fun pick(cal: Calendar, onSet: () -> Unit) {
     DatePickerDialog(context, { _, y, m, d -> cal.set(y, m, d); onSet() },
@@ -158,8 +197,13 @@ private fun ResignForm(noticeDays: Int, submitting: Boolean, context: android.co
       modifier = Modifier.fillMaxWidth(),
     )
     Spacer(Modifier.height(16.dp))
+    Text(
+      "Note: submitting blocks your account from the whole system immediately — download your salary slips, offer letter and documents first.",
+      color = InkFaint, style = MaterialTheme.typography.bodySmall,
+    )
+    Spacer(Modifier.height(10.dp))
     Button(
-      onClick = { if (reason.isNotBlank()) onSubmit(ISO.format(resignCal.time), ISO.format(lwdCal.time), reason) },
+      onClick = { if (reason.isNotBlank()) confirmOpen = true },
       enabled = !submitting && reason.isNotBlank(),
       shape = RoundedCornerShape(12.dp),
       colors = ButtonDefaults.buttonColors(containerColor = Pink, contentColor = Surface),

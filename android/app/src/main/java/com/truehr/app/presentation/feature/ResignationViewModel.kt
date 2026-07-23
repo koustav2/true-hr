@@ -29,12 +29,16 @@ class ResignationViewModel @Inject constructor(
   val submitting = MutableStateFlow(false)
   val message = MutableStateFlow<String?>(null)
   val done = MutableStateFlow(false)
+  // Client policy: submitting a resignation blocks the account immediately.
+  // We show a farewell dialog, then the next API call 401s → global logout.
+  val blocked = MutableStateFlow(false)
   fun apply(resignationDate: String, lastWorkingDate: String, reason: String) = viewModelScope.launch {
     submitting.value = true; message.value = null
-    try { repo.apply(resignationDate, lastWorkingDate, reason.ifBlank { null }); done.value = true; loadContext() }
+    try { repo.apply(resignationDate, lastWorkingDate, reason.ifBlank { null }); done.value = true; blocked.value = true }
     catch (e: Exception) { message.value = e.apiMessage("Could not submit resignation") }
     finally { submitting.value = false }
   }
+  fun acknowledgeBlocked() { blocked.value = false; loadContext() } // context call 401s → auto logout
   fun withdraw(id: Long) = viewModelScope.launch {
     submitting.value = true; message.value = null
     try { repo.withdraw(id); loadContext() }

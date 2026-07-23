@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, storeAuth, setToken } from '@/lib/api.js';
 import { Card, Button, Input, Textarea, Spinner, Empty, Field } from '@/components/ui.jsx';
 
 const TONE = { PENDING: 'text-amber-700', APPROVED: 'text-emerald-700', REJECTED: 'text-rose-700', WITHDRAWN: 'text-ink-faint' };
@@ -46,6 +46,7 @@ function Mine() {
   const [rows, setRows] = useState(null);
   const [f, setF] = useState({ resignationDate: new Date().toISOString().slice(0, 10), lastWorkingDate: '', reason: '' });
   const [msg, setMsg] = useState('');
+  const [confirming, setConfirming] = useState(false);
   const load = () => {
     api.get('/resignation/context').then(setCtx).catch(() => setCtx(false));
     api.get('/resignation').then(setRows).catch(() => setRows([]));
@@ -54,8 +55,18 @@ function Mine() {
   const active = (rows || []).find((r) => ['PENDING', 'APPROVED'].includes(r.status));
 
   async function apply() {
-    setMsg('');
-    try { await api.post('/resignation', f); load(); } catch (e) { setMsg(e.message); }
+    setMsg(''); setConfirming(false);
+    try {
+      const r = await api.post('/resignation', f);
+      if (r.accountBlocked) {
+        // The account is disabled from this moment — end the session cleanly.
+        alert('Your resignation has been submitted. As per policy, your account is now blocked; contact HR if you need access restored.');
+        setToken(null); storeAuth(null);
+        window.location.assign(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/login`);
+        return;
+      }
+      load();
+    } catch (e) { setMsg(e.message); }
   }
   async function withdraw(id) { try { await api.post(`/resignation/${id}/withdraw`); load(); } catch (e) { setMsg(e.message); } }
 
@@ -77,7 +88,23 @@ function Mine() {
           </div>
           <Field label="Reason"><Textarea rows={2} value={f.reason} onChange={(e) => setF({ ...f, reason: e.target.value })} /></Field>
           {msg && <p className="text-sm text-red-600">{msg}</p>}
-          <Button onClick={apply} disabled={!f.lastWorkingDate}>Submit Resignation</Button>
+          {!confirming ? (
+            <Button onClick={() => setConfirming(true)} disabled={!f.lastWorkingDate}>Submit Resignation</Button>
+          ) : (
+            <div className="rounded-xl border border-amber-200 bg-amber-50 p-3.5 space-y-2.5">
+              <div className="text-sm font-semibold text-amber-800">Please read before submitting</div>
+              <p className="text-xs text-amber-800 leading-relaxed">
+                The moment you submit your resignation, your account is <b>blocked from the entire system</b> —
+                app and web — and only HR can restore access. Before submitting, please download everything
+                you need: <b>salary slips, offer letter, and personal documents</b>. Your resignation will then
+                move through the approval chain shown below.
+              </p>
+              <div className="flex gap-2">
+                <Button variant="danger" size="sm" onClick={apply}>I understand — submit</Button>
+                <Button variant="outline" size="sm" onClick={() => setConfirming(false)}>Cancel</Button>
+              </div>
+            </div>
+          )}
         </Card>
       )}
       {!rows ? <Spinner /> : !rows.length ? <Empty title="No resignation history" /> :

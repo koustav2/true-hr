@@ -4,6 +4,7 @@ import { hashPassword } from '../utils/password.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { credentialsEmail } from '../services/emailTemplates.js';
 import { audit } from '../utils/audit.js';
+import { invalidateAccountStatus } from '../middleware/auth.js';
 
 // SUPER_ADMIN: list all staff + employee user accounts
 export async function listUsers(req, res, next) {
@@ -52,6 +53,7 @@ export async function setUserStatus(req, res, next) {
     if (target.role === 'SUPER_ADMIN' && req.user.role !== 'SUPER_ADMIN')
       return res.status(403).json({ error: 'Only a Super Admin can change a Super Admin account' });
     await query(`UPDATE user_accounts SET status=$1 WHERE id=$2`, [status, req.params.id]);
+    invalidateAccountStatus(req.params.id);
     await audit(req.user.id, 'SET_USER_STATUS', 'user_account', req.params.id, { status });
     res.json({ ok: true });
   } catch (e) { next(e); }

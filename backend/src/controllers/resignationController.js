@@ -1,6 +1,7 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
+import { invalidateAccountStatus } from '../middleware/auth.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 
@@ -147,8 +148,23 @@ export async function apply(req, res, next) {
       console.warn('[resignation] approval chain not created:', err.message);
     }
     await audit(req.user.id, 'RESIGNATION_APPLY', 'resignation', row.id, {});
-    res.status(201).json({ ok: true, id: row.id });
+    // Client policy: applying a resignation blocks the account from the whole
+    // system immediately. Only HR/admin can re-enable it (Users & roles), and a
+    // rejection/withdrawal re-enables it automatically. The disclaimer shown
+    // before submission tells the employee to download payslips/documents first.
+    await query(`UPDATE user_accounts SET status='DISABLED' WHERE employee_id=$1`, [empId]);
+    invalidateAccountStatus(req.user.id);
+    await audit(req.user.id, 'ACCOUNT_BLOCKED_ON_RESIGNATION', 'user_account', req.user.id, { resignationId: row.id });
+    res.status(201).json({ ok: true, id: row.id, accountBlocked: true });
   } catch (e) { next(e); }
+}
+
+// Re-activate the account when a resignation dies (rejected / withdrawn).
+async function reenableAccount(employeeId, actorUserId, reason) {
+  const acc = (await query(
+    `UPDATE user_accounts SET status='ACTIVE' WHERE employee_id=$1 RETURNING id`, [employeeId])).rows[0];
+  if (acc) invalidateAccountStatus(acc.id);
+  await audit(actorUserId, 'ACCOUNT_REENABLED', 'user_account', acc?.id || null, { employeeId, reason });
 }
 
 // GET /resignation/:id/chain — the 6-stage approval trail.
@@ -183,6 +199,7 @@ export async function actOn(req, res, next) {
       await query(`UPDATE resignations SET status='APPROVED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || null]);
     } else if (inst.status === 'REJECTED') {
       await query(`UPDATE resignations SET status='REJECTED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || inst.statusLabel]);
+      await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
     }
     await audit(req.user.id, `RESIGNATION_${action}`, 'resignation', id, { stage: inst.currentStageSeq });
     res.json({ status: inst.status === 'PENDING' ? 'PENDING' : inst.status, approval: inst });
@@ -213,6 +230,7 @@ export async function withdraw(req, res, next) {
     if (row.status !== 'PENDING') return res.status(409).json({ error: 'Only a pending resignation can be withdrawn' });
     await query(`UPDATE resignations SET status='WITHDRAWN', reviewed_at=now() WHERE id=$1`, [req.params.id]);
     await audit(req.user.id, 'RESIGNATION_WITHDRAW', 'resignation', req.params.id, {});
+    await reenableAccount(empId, req.user.id, 'resignation withdrawn');
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -252,6 +270,7 @@ export async function review(req, res, next) {
     await query(`UPDATE resignations SET status=$1, reviewed_by=$2, review_note=$3, reviewed_at=now() WHERE id=$4`,
       [decision, managerId, note, id]);
     await audit(req.user.id, `RESIGNATION_${decision}`, 'resignation', id, { note });
+    if (decision === 'REJECTED') await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -281,12 +300,13 @@ export async function adminReview(req, res, next) {
     const decision = String(req.body.decision || '').toUpperCase();
     const note = req.body.note || null;
     if (!['APPROVED', 'REJECTED'].includes(decision)) return res.status(400).json({ error: 'decision must be APPROVED or REJECTED' });
-    const r = (await query(`SELECT status FROM resignations WHERE id=$1`, [id])).rows[0];
+    const r = (await query(`SELECT employee_id, status FROM resignations WHERE id=$1`, [id])).rows[0];
     if (!r) return res.status(404).json({ error: 'Resignation not found' });
     if (r.status !== 'PENDING') return res.status(409).json({ error: 'This request has already been reviewed' });
     await query(`UPDATE resignations SET status=$1, reviewed_by=$2, review_note=$3, reviewed_at=now() WHERE id=$4`,
       [decision, req.user.employeeId || null, note, id]);
     await audit(req.user.id, `RESIGNATION_${decision}`, 'resignation', id, { note, byHr: true });
+    if (decision === 'REJECTED') await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

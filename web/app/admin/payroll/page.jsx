@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api, getStoredAuth } from '@/lib/api.js';
-import { Card, Button, Input, Select, Field, Modal, Spinner } from '@/components/ui.jsx';
+import { Card, Button, Input, Select, Field, Modal, Spinner, ConfirmClick } from '@/components/ui.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
 const daysInMonth = (y, m) => new Date(y, m, 0).getDate();
@@ -21,7 +21,11 @@ export default function PayrollPage() {
   const [year, setYear] = useState(now.getFullYear());
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [sheet, setSheet] = useState(null);
+  const [summary, setSummary] = useState(null);
+  const [q, setQ] = useState('');
   const [msg, setMsg] = useState('');
+  const [runMsg, setRunMsg] = useState(null); // { generated, skipped } after Generate all
+  const [bulkBusy, setBulkBusy] = useState(false);
 
   const [structFor, setStructFor] = useState(null); // {employeeId, name}
   const [struct, setStruct] = useState(null);
@@ -47,9 +51,41 @@ export default function PayrollPage() {
 
   const load = () => {
     setSheet(null);
-    api.get(`/admin/payslips?year=${year}&month=${month}`).then((r) => setSheet(r.rows || [])).catch(() => setSheet([]));
+    api.get(`/admin/payslips?year=${year}&month=${month}`)
+      .then((r) => { setSheet(r.rows || []); setSummary(r.summary || null); })
+      .catch(() => { setSheet([]); setSummary(null); });
   };
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [year, month]);
+  useEffect(() => { load(); setRunMsg(null); /* eslint-disable-next-line */ }, [year, month]);
+
+  // ── Bulk run actions ──
+  async function generateAll() {
+    setBulkBusy(true); setMsg(''); setRunMsg(null);
+    try {
+      const r = await api.post('/admin/payslips/generate-all', { year, month });
+      setRunMsg(r);
+      load();
+    } catch (e) { setMsg(e.message); } finally { setBulkBusy(false); }
+  }
+  async function publishAll() {
+    setBulkBusy(true); setMsg('');
+    try {
+      const r = await api.post('/admin/payslips/publish-all', { year, month });
+      setRunMsg({ published: r.published });
+      load();
+    } catch (e) { setMsg(e.message); } finally { setBulkBusy(false); }
+  }
+  async function downloadBankSheet() {
+    try {
+      const auth = getStoredAuth();
+      const res = await fetch(`/api/admin/payslips/export?year=${year}&month=${month}`,
+        { headers: { Authorization: `Bearer ${auth?.token}` } });
+      if (!res.ok) throw new Error('Export failed');
+      const url = URL.createObjectURL(await res.blob());
+      const a = document.createElement('a');
+      a.href = url; a.download = `bank-advice-${year}-${String(month).padStart(2, '0')}.csv`;
+      a.click(); URL.revokeObjectURL(url);
+    } catch (e) { setMsg(e.message); }
+  }
 
   async function openStructure(row) {
     setStructFor(row); setStruct(null);
@@ -63,14 +99,15 @@ export default function PayrollPage() {
   }
 
   function openGenerate(row) {
-    setGenFor(row); setGen({ daysPaid: daysInMonth(year, month), arrears: 0, bonus: 0, tds: 0 });
+    setGenFor(row); setGen({ daysPaid: '', arrears: 0, bonus: 0, tds: 0 }); // blank = auto proration
   }
   async function runGenerate() {
     setGenBusy(true);
     try {
       await api.post('/admin/payslips/generate', {
         employeeId: genFor.employeeId, year, month,
-        daysPaid: Number(gen.daysPaid), arrears: Number(gen.arrears), bonus: Number(gen.bonus), tds: Number(gen.tds),
+        daysPaid: gen.daysPaid === '' ? null : Number(gen.daysPaid),
+        arrears: Number(gen.arrears), bonus: Number(gen.bonus), tds: Number(gen.tds),
       });
       setGenFor(null); load();
     } catch (e) { setMsg(e.message); } finally { setGenBusy(false); }
@@ -103,12 +140,64 @@ export default function PayrollPage() {
       </div>
       {msg && <p className="text-sm text-rose-600">{msg}</p>}
 
+      {/* Run summary */}
+      {summary && (
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+          {[
+            ['Employees', summary.employees, 'text-ink'],
+            ['Structures set', summary.withStructure, summary.withStructure < summary.employees ? 'text-amber-600' : 'text-ink'],
+            ['Generated', summary.generated, 'text-ink'],
+            ['Published', summary.published, 'text-emerald-700'],
+            ['Published net pay', `₹${inr(summary.publishedNetTotal)}`, 'text-emerald-700'],
+          ].map(([label, value, tone]) => (
+            <Card key={label} className="p-4">
+              <div className="text-xs text-ink-faint">{label}</div>
+              <div className={`text-xl font-extrabold tracking-tight mt-0.5 ${tone}`}>{value}</div>
+            </Card>
+          ))}
+        </div>
+      )}
+
       <Card className="p-4">
         <div className="flex items-end gap-3 flex-wrap">
           <Field label="Month"><Select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</Select></Field>
           <Field label="Year"><Select value={year} onChange={(e) => setYear(Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</Select></Field>
+          <Field label="Search"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or employee ID" /></Field>
           <Button variant="ghost" onClick={load}>Refresh</Button>
+          <div className="flex-1" />
+          <div className="flex items-end gap-2 flex-wrap">
+            <ConfirmClick onConfirm={generateAll} confirmLabel="Run payroll for the whole month?"
+              className="rounded-xl bg-brand-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-brand-700 disabled:opacity-50">
+              {bulkBusy ? 'Working…' : 'Generate all'}
+            </ConfirmClick>
+            {summary?.draft > 0 && (
+              <ConfirmClick onConfirm={publishAll} confirmLabel={`Publish ${summary.draft} draft(s) & email employees?`}
+                className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 disabled:opacity-50">
+                Publish all + notify
+              </ConfirmClick>
+            )}
+            {summary?.published > 0 && (
+              <Button variant="outline" onClick={downloadBankSheet}>Bank sheet (CSV)</Button>
+            )}
+          </div>
         </div>
+        <p className="text-xs text-ink-faint mt-3">
+          Generate all prorates automatically — mid-month joiners and approved exits by date, and approved
+          Leave-Without-Pay days are deducted. Published payslips are locked and skipped. Publishing emails
+          each employee that their payslip is ready.
+        </p>
+        {runMsg && (
+          <div className="mt-3 text-sm rounded-xl bg-slate-50 border border-line px-4 py-3 space-y-1">
+            {runMsg.generated != null && <div className="text-emerald-700 font-medium">Generated {runMsg.generated} payslip{runMsg.generated === 1 ? '' : 's'}.</div>}
+            {runMsg.published != null && <div className="text-emerald-700 font-medium">Published {runMsg.published} payslip{runMsg.published === 1 ? '' : 's'} — employees notified by email.</div>}
+            {runMsg.skipped?.length > 0 && (
+              <div className="text-ink-soft">
+                Skipped {runMsg.skipped.length}:{' '}
+                {runMsg.skipped.map((s) => `${s.name} (${s.reason})`).join('; ')}
+              </div>
+            )}
+          </div>
+        )}
       </Card>
 
       <Card className="overflow-hidden">
@@ -124,7 +213,7 @@ export default function PayrollPage() {
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
-              {sheet.map((r) => (
+              {sheet.filter((r) => !q || `${r.name} ${r.employeeCode || ''}`.toLowerCase().includes(q.toLowerCase())).map((r) => (
                 <tr key={r.employeeId} className="hover:bg-slate-50/70">
                   <td className="px-5 py-3"><div className="text-ink font-medium">{r.name}</div><div className="text-ink-faint text-xs">{r.employeeCode}</div></td>
                   <td className="px-5 py-3 text-ink-soft">{r.hasStructure ? inr(r.monthlyCtc) : <span className="text-amber-600">No structure</span>}</td>
@@ -184,7 +273,9 @@ export default function PayrollPage() {
       <Modal open={!!genFor} onClose={() => setGenFor(null)} title={`Generate payslip — ${genFor?.name || ''}`}
         actions={<><Button variant="ghost" onClick={() => setGenFor(null)}>Cancel</Button><Button onClick={runGenerate} disabled={genBusy}>{genBusy ? <Spinner /> : 'Generate draft'}</Button></>}>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label={`Days paid (of ${daysInMonth(year, month)})`}><Input type="number" value={gen.daysPaid} onChange={(e) => setGen({ ...gen, daysPaid: e.target.value })} /></Field>
+          <Field label={`Days paid (of ${daysInMonth(year, month)})`} hint="Blank = auto (joining/exit dates & LWP)">
+            <Input type="number" value={gen.daysPaid} placeholder="Auto" onChange={(e) => setGen({ ...gen, daysPaid: e.target.value })} />
+          </Field>
           <Field label="Arrears"><Input type="number" value={gen.arrears} onChange={(e) => setGen({ ...gen, arrears: e.target.value })} /></Field>
           <Field label="Bonus / Incentive"><Input type="number" value={gen.bonus} onChange={(e) => setGen({ ...gen, bonus: e.target.value })} /></Field>
           <Field label="TDS"><Input type="number" value={gen.tds} onChange={(e) => setGen({ ...gen, tds: e.target.value })} /></Field>

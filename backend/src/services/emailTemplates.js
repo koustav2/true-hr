@@ -182,6 +182,19 @@ export function loginOtpEmail({ name, otp, minutes = 10 }) {
   });
 }
 
+// ---- Payslip published ----
+export function payslipPublishedEmail({ name, monthName, year, netPay }) {
+  const amount = `₹${Number(netPay || 0).toLocaleString('en-IN')}`;
+  return shell(`Payslip for ${monthName} ${year}`, `
+    <p>Dear <strong>${name || 'Employee'}</strong>,</p>
+    <p>Your salary slip for <strong>${monthName} ${year}</strong> has been published.</p>
+    <table style="width:100%;border-collapse:collapse;margin:10px 0 14px;font-size:14px">
+      <tr><td style="padding:7px 0;color:#6b7280;width:150px">Pay period</td><td style="font-weight:700">${monthName} ${year}</td></tr>
+      <tr><td style="padding:7px 0;color:#6b7280">Net pay</td><td style="font-weight:700;color:#059669">${amount}</td></tr>
+    </table>
+    <p>You can view and download the PDF from <strong>ESS → Salary Slips</strong> on the web portal or the mobile app.</p>`);
+}
+
 // ---- Approval-chain notifications (NFA / settlement / resignation / PMS) ----
 const PORTAL = (process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app');
 export function approvalActionEmail({ name, subjectLabel, action, actorName, remarks }) {

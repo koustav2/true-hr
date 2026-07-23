@@ -269,6 +269,9 @@ r.get('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll
 r.put('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.setStructure);
 r.get('/admin/payslips', authenticate, requireStaff, payroll.adminList);
 r.post('/admin/payslips/generate', authenticate, requireStaff, payroll.generate);
+r.post('/admin/payslips/generate-all', authenticate, requireStaff, payroll.generateAll);
+r.post('/admin/payslips/publish-all', authenticate, requireStaff, payroll.publishAll);
+r.get('/admin/payslips/export', authenticate, requireStaff, payroll.exportBankSheet); // must precede /:id
 r.get('/admin/payslips/:id', authenticate, requireStaff, payroll.adminDetail);
 r.get('/admin/payslips/:id/pdf', authenticate, requireStaff, payroll.adminPdf);
 r.post('/admin/payslips/:id/publish', authenticate, requireStaff, payroll.publish);

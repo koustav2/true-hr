@@ -2,6 +2,9 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import { decrypt, mask } from '../utils/crypto.js';
 import { buildPayslipPdf } from '../services/paySlipPdf.js';
+import { enqueueEmail } from '../services/emailQueue.js';
+import { payslipPublishedEmail } from '../services/emailTemplates.js';
+import { isoDate } from '../utils/joining.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -280,59 +283,170 @@ export async function adminList(req, res, next) {
          LEFT JOIN payslips p ON p.employee_id=e.id AND p.year=$1 AND p.month=$2
         WHERE e.onboarding_status NOT IN ('REJECTED','EXPIRED')
         ORDER BY e.first_name, e.last_name`, [year, month])).rows;
+    const shaped = rows.map((r) => ({
+      employeeId: r.employee_id, employeeCode: r.employee_code,
+      name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
+      hasStructure: r.has_structure, monthlyCtc: r.monthly_ctc != null ? Number(r.monthly_ctc) : null,
+      payslipId: r.payslip_id, status: r.status, netPay: r.net_pay != null ? Number(r.net_pay) : null,
+    }));
     res.json({
       year, month, monthName: MONTHS[month - 1],
-      rows: rows.map((r) => ({
-        employeeId: r.employee_id, employeeCode: r.employee_code,
-        name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-        hasStructure: r.has_structure, monthlyCtc: r.monthly_ctc != null ? Number(r.monthly_ctc) : null,
-        payslipId: r.payslip_id, status: r.status, netPay: r.net_pay != null ? Number(r.net_pay) : null,
-      })),
+      summary: {
+        employees: shaped.length,
+        withStructure: shaped.filter((r) => r.hasStructure).length,
+        generated: shaped.filter((r) => r.status).length,
+        published: shaped.filter((r) => r.status === 'PUBLISHED').length,
+        draft: shaped.filter((r) => r.status === 'DRAFT').length,
+        netTotal: shaped.reduce((a, r) => a + (r.netPay || 0), 0),
+        publishedNetTotal: shaped.filter((r) => r.status === 'PUBLISHED').reduce((a, r) => a + (r.netPay || 0), 0),
+      },
+      rows: shaped,
     });
   } catch (e) { next(e); }
 }
 
-// POST /admin/payslips/generate { employeeId, year, month, daysPaid, arrears, bonus, tds }
+// ── Run engine ───────────────────────────────────────────────────────────────
+// Enterprise-style run inputs for one employee & month:
+//   · prorated from the joining date (joiners mid-month)
+//   · prorated to the approved last working date (leavers mid-month)
+//   · LOP: approved Leave-Without-Pay days inside the payable window
+// Returns null when the employee is not payable that month at all.
+async function runInputs(employeeId, year, month) {
+  const dim = daysInMonth(Number(year), Number(month));
+  const mm = String(month).padStart(2, '0');
+  const first = `${year}-${mm}-01`;
+  const last = `${year}-${mm}-${String(dim).padStart(2, '0')}`;
+
+  const doj = (await query(`SELECT date_of_joining FROM employees WHERE id=$1`, [employeeId]))
+    .rows[0]?.date_of_joining;
+  const lwd = (await query(
+    `SELECT last_working_date FROM resignations
+      WHERE employee_id=$1 AND status='APPROVED' ORDER BY id DESC LIMIT 1`, [employeeId]))
+    .rows[0]?.last_working_date;
+
+  let start = 1, end = dim;
+  const dojIso = isoDate(doj);
+  const lwdIso = isoDate(lwd);
+  if (dojIso) {
+    if (dojIso > last) return null;                       // joins after this month
+    if (dojIso >= first) start = Number(dojIso.slice(8, 10));
+  }
+  if (lwdIso) {
+    if (lwdIso < first) return null;                      // exited before this month
+    if (lwdIso <= last) end = Number(lwdIso.slice(8, 10));
+  }
+  if (end < start) return null;
+
+  const from = `${year}-${mm}-${String(start).padStart(2, '0')}`;
+  const to = `${year}-${mm}-${String(end).padStart(2, '0')}`;
+  const lop = Number((await query(
+    `SELECT COALESCE(SUM(LEAST(lr.to_date,$3::date) - GREATEST(lr.from_date,$2::date) + 1), 0) AS d
+       FROM leave_requests lr JOIN leave_types lt ON lt.id=lr.leave_type_id
+      WHERE lr.employee_id=$1 AND lr.status='APPROVED' AND lt.code='LWP'
+        AND lr.from_date <= $3::date AND lr.to_date >= $2::date`,
+    [employeeId, from, to])).rows[0].d) || 0;
+
+  const payableDays = end - start + 1;
+  return { dim, daysPaid: Math.max(0, payableDays - lop), lopDays: lop, payableDays };
+}
+
+// Shared by single + bulk generation. Returns { ok } or { skip: reason }.
+async function generateFor(employeeId, year, month, opts, reqUser) {
+  const existing = (await query(
+    `SELECT status FROM payslips WHERE employee_id=$1 AND year=$2 AND month=$3`, [employeeId, year, month])).rows[0];
+  if (existing?.status === 'PUBLISHED') return { skip: 'already published (unpublish first to regenerate)' };
+
+  const sRow = (await query(`SELECT * FROM salary_structures WHERE employee_id=$1`, [employeeId])).rows[0];
+  if (!sRow) return { skip: 'no salary structure' };
+  const s = shapeStructure(sRow);
+  if (!(s.monthlyCtc > 0)) return { skip: 'monthly CTC is zero' };
+
+  const auto = await runInputs(employeeId, year, month);
+  if (!auto) return { skip: 'not payable this month (joined later / exited earlier)' };
+  const dim = auto.dim;
+  const daysPaid = opts.daysPaid != null && opts.daysPaid !== '' ? Number(opts.daysPaid) : auto.daysPaid;
+
+  const calc = computePayslip(s, {
+    daysInMonth: dim, daysPaid, arrears: Number(opts.arrears) || 0,
+    bonus: Number(opts.bonus) || 0, tds: Number(opts.tds) || 0,
+  });
+  const meta = await loadMeta(employeeId);
+  meta.grade = s.grade;
+  meta.lopDays = auto.lopDays;
+  const data = { earnings: calc.earnings, deductions: calc.deductions, arrears: calc.arrears, meta };
+
+  const row = (await query(
+    `INSERT INTO payslips
+       (employee_id, year, month, status, days_in_month, days_paid, arrears, bonus, tds,
+        gross_earnings, total_deductions, net_pay, data, generated_by, generated_at)
+     VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+     ON CONFLICT (employee_id, year, month) DO UPDATE SET
+       status='DRAFT', days_in_month=EXCLUDED.days_in_month, days_paid=EXCLUDED.days_paid,
+       arrears=EXCLUDED.arrears, bonus=EXCLUDED.bonus, tds=EXCLUDED.tds,
+       gross_earnings=EXCLUDED.gross_earnings, total_deductions=EXCLUDED.total_deductions,
+       net_pay=EXCLUDED.net_pay, data=EXCLUDED.data, generated_by=EXCLUDED.generated_by,
+       generated_at=now(), published_at=NULL
+     RETURNING *`,
+    [employeeId, year, month, dim, daysPaid, calc.arrears, Number(opts.bonus) || 0, Number(opts.tds) || 0,
+     calc.grossEarnings, calc.totalDeductions, calc.netPay, JSON.stringify(data), reqUser.employeeId || null])).rows[0];
+  await audit(reqUser.id, 'PAYSLIP_GENERATE', 'payslip', row.id, { employeeId, year, month });
+  return { ok: true, row };
+}
+
+// POST /admin/payslips/generate { employeeId, year, month, daysPaid?, arrears, bonus, tds }
+// daysPaid left blank ⇒ auto (prorated by joining/exit dates, minus approved LWP days).
 export async function generate(req, res, next) {
   try {
     const { employeeId, year, month } = req.body;
     if (!employeeId || !year || !month) return res.status(400).json({ error: 'employeeId, year and month are required' });
-    // A published payslip is locked — it must be unpublished before it can change.
-    const existing = (await query(
-      `SELECT status FROM payslips WHERE employee_id=$1 AND year=$2 AND month=$3`, [employeeId, year, month])).rows[0];
-    if (existing?.status === 'PUBLISHED') {
-      return res.status(409).json({ error: 'This payslip is published. Unpublish it first to make changes.' });
-    }
-    const sRow = (await query(`SELECT * FROM salary_structures WHERE employee_id=$1`, [employeeId])).rows[0];
-    if (!sRow) return res.status(409).json({ error: 'Set a salary structure for this employee first' });
-    const s = shapeStructure(sRow);
-    const dim = daysInMonth(Number(year), Number(month));
-    const daysPaid = req.body.daysPaid != null ? Number(req.body.daysPaid) : dim;
-    const calc = computePayslip(s, {
-      daysInMonth: dim, daysPaid, arrears: Number(req.body.arrears) || 0,
-      bonus: Number(req.body.bonus) || 0, tds: Number(req.body.tds) || 0,
-    });
-    const meta = await loadMeta(employeeId);
-    meta.grade = s.grade;
-    const data = { earnings: calc.earnings, deductions: calc.deductions, arrears: calc.arrears, meta };
-
-    const row = (await query(
-      `INSERT INTO payslips
-         (employee_id, year, month, status, days_in_month, days_paid, arrears, bonus, tds,
-          gross_earnings, total_deductions, net_pay, data, generated_by, generated_at)
-       VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
-       ON CONFLICT (employee_id, year, month) DO UPDATE SET
-         status='DRAFT', days_in_month=EXCLUDED.days_in_month, days_paid=EXCLUDED.days_paid,
-         arrears=EXCLUDED.arrears, bonus=EXCLUDED.bonus, tds=EXCLUDED.tds,
-         gross_earnings=EXCLUDED.gross_earnings, total_deductions=EXCLUDED.total_deductions,
-         net_pay=EXCLUDED.net_pay, data=EXCLUDED.data, generated_by=EXCLUDED.generated_by,
-         generated_at=now(), published_at=NULL
-       RETURNING *`,
-      [employeeId, year, month, dim, daysPaid, calc.arrears, Number(req.body.bonus) || 0, Number(req.body.tds) || 0,
-       calc.grossEarnings, calc.totalDeductions, calc.netPay, JSON.stringify(data), req.user.employeeId || null])).rows[0];
-    await audit(req.user.id, 'PAYSLIP_GENERATE', 'payslip', row.id, { employeeId, year, month });
-    res.json(shapePayslip(row));
+    const out = await generateFor(employeeId, year, month, req.body, req.user);
+    if (out.skip) return res.status(409).json({ error: `Cannot generate: ${out.skip}` });
+    res.json(shapePayslip(out.row));
   } catch (e) { next(e); }
+}
+
+// POST /admin/payslips/generate-all { year, month } — one-click payroll run.
+// Generates drafts for every active employee with a structure; published slips
+// and non-payable employees are skipped and reported back.
+export async function generateAll(req, res, next) {
+  try {
+    const { year, month } = req.body || {};
+    if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const emps = (await query(
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name
+         FROM employees e JOIN salary_structures ss ON ss.employee_id=e.id
+        WHERE e.onboarding_status='ACTIVE'
+        ORDER BY e.first_name, e.last_name`)).rows;
+    let generated = 0;
+    const skipped = [];
+    for (const e of emps) {
+      const out = await generateFor(e.id, year, month, {}, req.user);
+      if (out.ok) generated += 1;
+      else skipped.push({ employeeCode: e.employee_code, name: `${e.first_name} ${e.last_name}`.trim(), reason: out.skip });
+    }
+    await audit(req.user.id, 'PAYROLL_RUN_GENERATE_ALL', 'payslip', null, { year, month, generated, skipped: skipped.length });
+    res.json({ ok: true, generated, skipped });
+  } catch (e) { next(e); }
+}
+
+// Fire-and-forget "your payslip is ready" email to the employee.
+async function notifyPublished(payslipId) {
+  try {
+    const row = (await query(
+      `SELECT p.year, p.month, p.net_pay, e.first_name, ua.email
+         FROM payslips p
+         JOIN employees e ON e.id=p.employee_id
+         LEFT JOIN user_accounts ua ON ua.employee_id=e.id
+        WHERE p.id=$1`, [payslipId])).rows[0];
+    if (!row?.email) return;
+    const monthName = MONTHS[row.month - 1];
+    await enqueueEmail({
+      to: row.email,
+      subject: `TRUE HR — your payslip for ${monthName} ${row.year} is ready`,
+      html: payslipPublishedEmail({ name: row.first_name, monthName, year: row.year, netPay: Number(row.net_pay) }),
+      template: 'payslip_published',
+    });
+  } catch { /* payroll must not fail on mail issues */ }
 }
 
 // POST /admin/payslips/:id/publish
@@ -342,7 +456,55 @@ export async function publish(req, res, next) {
       `UPDATE payslips SET status='PUBLISHED', published_at=now() WHERE id=$1 RETURNING id`, [req.params.id])).rows[0];
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     await audit(req.user.id, 'PAYSLIP_PUBLISH', 'payslip', row.id, {});
+    await notifyPublished(row.id);
     res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/payslips/publish-all { year, month } — publish every draft of the
+// month in one go and email each employee that their payslip is available.
+export async function publishAll(req, res, next) {
+  try {
+    const { year, month } = req.body || {};
+    if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const rows = (await query(
+      `UPDATE payslips SET status='PUBLISHED', published_at=now()
+        WHERE year=$1 AND month=$2 AND status='DRAFT' RETURNING id`, [year, month])).rows;
+    for (const r of rows) await notifyPublished(r.id);
+    await audit(req.user.id, 'PAYROLL_RUN_PUBLISH_ALL', 'payslip', null, { year, month, published: rows.length });
+    res.json({ ok: true, published: rows.length });
+  } catch (e) { next(e); }
+}
+
+// GET /admin/payslips/export?year=&month= — bank-advice sheet (CSV) of the
+// month's published payslips: full account details + net pay for the transfer file.
+export async function exportBankSheet(req, res, next) {
+  try {
+    const year = parseInt(req.query.year, 10);
+    const month = parseInt(req.query.month, 10);
+    if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const rows = (await query(
+      `SELECT e.employee_code, e.first_name, e.last_name,
+              b.bank_name, b.ifsc, b.account_number_enc, b.account_holder,
+              p.net_pay, p.status
+         FROM payslips p
+         JOIN employees e ON e.id=p.employee_id
+         LEFT JOIN employee_bank b ON b.employee_id=e.id
+        WHERE p.year=$1 AND p.month=$2 AND p.status='PUBLISHED'
+        ORDER BY e.first_name, e.last_name`, [year, month])).rows;
+    const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
+    const lines = [
+      ['Employee Code', 'Name', 'Account Holder', 'Bank', 'IFSC', 'Account Number', 'Net Pay (INR)'].join(','),
+      ...rows.map((r) => [
+        r.employee_code, `${r.first_name || ''} ${r.last_name || ''}`.trim(), r.account_holder || '',
+        r.bank_name || '', r.ifsc || '', r.account_number_enc ? decrypt(r.account_number_enc) : '',
+        Number(r.net_pay).toFixed(2),
+      ].map(esc).join(',')),
+    ];
+    await audit(req.user.id, 'PAYROLL_BANK_SHEET_EXPORT', 'payslip', null, { year, month, rows: rows.length });
+    res.setHeader('Content-Type', 'text/csv; charset=utf-8');
+    res.setHeader('Content-Disposition', `attachment; filename="bank-advice-${year}-${String(month).padStart(2, '0')}.csv"`);
+    res.send(lines.join('\n'));
   } catch (e) { next(e); }
 }
 

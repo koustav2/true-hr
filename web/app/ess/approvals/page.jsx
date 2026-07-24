@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, getStoredAuth } from '@/lib/api.js';
 import { Card, Button, Textarea, Spinner, Empty } from '@/components/ui.jsx';
 
 const fmtMoney = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
@@ -31,15 +31,58 @@ export default function ApprovalsPage() {
       <section className="space-y-3">
         <h2 className="text-sm font-semibold text-ink-soft uppercase tracking-wide">Settlements</h2>
         {!settlements ? <Spinner /> : !settlements.length ? <Empty title="Nothing pending" subtitle="No settlements are waiting for your approval." /> :
-          settlements.map((s) => <ApprovalCard key={s.id} title={`Settlement — ${s.nfaCode || s.id}`} sub={s.employee?.name || ''}
-            amount={s.amount} stage={s.pendingStage?.roleKey}
-            act={(action, remarks) => api.post(`/settlements/${s.id}/act`, { action, remarks })} onDone={load} />)}
+          settlements.map((s) => (
+            <ApprovalCard key={s.id} title={`Settlement — ${s.nfaCode || s.id}`} sub={s.employee?.name || ''}
+              amount={s.amount} stage={s.pendingStage?.roleKey}
+              act={(action, remarks) => api.post(`/settlements/${s.id}/act`, { action, remarks })} onDone={load}>
+              <SettlementDetails s={s} />
+            </ApprovalCard>
+          ))}
       </section>
     </div>
   );
 }
 
-function ApprovalCard({ title, sub, amount, stage, act, onDone }) {
+// NFA context + uploaded bills, shown to the settlement approver (client req #3).
+function SettlementDetails({ s }) {
+  const [docs, setDocs] = useState(null);
+  useEffect(() => { api.get(`/settlements/${s.id}/documents`).then(setDocs).catch(() => setDocs([])); }, [s.id]);
+  async function openDoc(docId) {
+    const win = window.open('', '_blank');
+    try {
+      const auth = getStoredAuth();
+      const res = await fetch(`/api/settlements/${s.id}/documents/${docId}`, { headers: { Authorization: `Bearer ${auth?.token}` } });
+      if (!res.ok) { win?.close(); return; }
+      const url = URL.createObjectURL(await res.blob());
+      if (win) win.location = url; else window.location.href = url;
+    } catch { win?.close(); }
+  }
+  return (
+    <div className="mt-3 rounded-xl bg-slate-50/70 border border-line p-3 text-xs space-y-2">
+      <div className="grid sm:grid-cols-4 gap-x-4 gap-y-1 text-ink-soft">
+        <span>NFA: <b className="text-ink">{s.nfaCode || '—'}</b></span>
+        <span>Project: <b className="text-ink">{s.project?.name || '—'}</b></span>
+        <span>Advance received: <b className="text-ink">{fmtMoney(s.nfaGrandTotal)}</b></span>
+        <span>Settling: <b className="text-ink">{fmtMoney(s.amount)}</b></span>
+        {s.settlementDueDate && <span>Due: <b className="text-ink">{String(s.settlementDueDate).slice(0, 10)}</b></span>}
+        {s.remarks && <span className="sm:col-span-3">Remarks: <b className="text-ink">{s.remarks}</b></span>}
+      </div>
+      <div>
+        <span className="text-ink-faint font-semibold">Bills / supporting documents:</span>{' '}
+        {docs === null ? <Spinner className="inline h-3 w-3" /> : !docs.length ? <span className="text-amber-700">none uploaded</span> : (
+          docs.map((d) => (
+            <button key={d.id} onClick={() => openDoc(d.id)}
+              className="inline-flex items-center gap-1 text-brand-700 font-medium hover:underline mr-3">
+              📄 {d.filename || `Document ${d.id}`}
+            </button>
+          ))
+        )}
+      </div>
+    </div>
+  );
+}
+
+function ApprovalCard({ title, sub, amount, stage, act, onDone, children }) {
   const [remarks, setRemarks] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
@@ -58,6 +101,7 @@ function ApprovalCard({ title, sub, amount, stage, act, onDone }) {
         </div>
         <div className="text-right font-semibold">{fmtMoney(amount)}</div>
       </div>
+      {children}
       <div className="mt-3 flex flex-wrap items-center gap-2">
         <Textarea rows={1} className="flex-1 min-w-[200px]" placeholder="Remarks (required for query / reject)…" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
         <Button size="sm" onClick={() => run('APPROVED')} disabled={busy}>Approve</Button>

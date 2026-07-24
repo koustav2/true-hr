@@ -95,6 +95,29 @@ async function notify(instanceId, { action = null, actorEmployeeId = null, remar
         WHERE ai.id=$1`, [instanceId])).rows[0];
     if (!inst) return;
     const subjectLabel = FLOW_LABELS[inst.flow_code] || 'approval request';
+    // Subject facts for the mail body (client req: NFA mails must carry details).
+    const inr = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
+    let details = null;
+    if (inst.subject_type === 'nfa') {
+      const n = (await query(
+        `SELECT n.nfa_code, n.grand_total, p.name AS project, ec.name AS category
+           FROM nfas n LEFT JOIN projects p ON p.id=n.project_id
+           LEFT JOIN expense_categories ec ON ec.id=n.expense_category_id
+          WHERE n.id=$1`, [inst.subject_id])).rows[0];
+      if (n) details = { 'NFA No.': n.nfa_code, 'Project': n.project || '—', 'Category': n.category || '—', 'Amount': inr(n.grand_total) };
+    } else if (inst.subject_type === 'nfa_settlement') {
+      const s = (await query(
+        `SELECT s.amount, n.nfa_code, n.grand_total FROM nfa_settlements s JOIN nfas n ON n.id=s.nfa_id WHERE s.id=$1`,
+        [inst.subject_id])).rows[0];
+      if (s) details = { 'NFA No.': s.nfa_code, 'Advance received': inr(s.grand_total), 'Settlement amount': inr(s.amount) };
+    } else if (inst.subject_type === 'resignation') {
+      const rr = (await query(
+        `SELECT resignation_date, last_working_date FROM resignations WHERE id=$1`, [inst.subject_id])).rows[0];
+      if (rr) details = {
+        'Resignation date': new Date(rr.resignation_date).toLocaleDateString('en-IN'),
+        'Last working date': new Date(rr.last_working_date).toLocaleDateString('en-IN'),
+      };
+    }
     let actorName = null;
     if (actorEmployeeId) {
       const a = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [actorEmployeeId])).rows[0];
@@ -104,7 +127,7 @@ async function notify(instanceId, { action = null, actorEmployeeId = null, remar
       await enqueueEmail({
         to: inst.r_email,
         subject: `TRUE HR — your ${subjectLabel} was ${action === 'APPROVED' ? 'approved' : action === 'REJECTED' ? 'rejected' : 'queried'}`,
-        html: approvalActionEmail({ name: inst.r_first, subjectLabel, action, actorName, remarks }),
+        html: approvalActionEmail({ name: inst.r_first, subjectLabel, action, actorName, remarks, details }),
         template: 'approval_action',
       });
     }
@@ -118,7 +141,7 @@ async function notify(instanceId, { action = null, actorEmployeeId = null, remar
         await enqueueEmail({
           to: nxt.official_email,
           subject: `TRUE HR — ${subjectLabel} awaiting your approval`,
-          html: approvalPendingEmail({ name: nxt.first_name, subjectLabel, raiserName: inst.r_first }),
+          html: approvalPendingEmail({ name: nxt.first_name, subjectLabel, raiserName: inst.r_first, details }),
           template: 'approval_pending',
         });
       }

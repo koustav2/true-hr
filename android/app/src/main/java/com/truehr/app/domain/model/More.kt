@@ -45,6 +45,7 @@ data class TeamMate(
 )
 
 data class DirectoryEntry(
+  val id: Long? = null,
   val employeeCode: String,
   val name: String,
   val designation: String?,

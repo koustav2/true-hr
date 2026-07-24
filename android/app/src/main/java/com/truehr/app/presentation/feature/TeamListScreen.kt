@@ -106,9 +106,7 @@ private fun TeamMateCard(m: TeamMate, onClick: () -> Unit) {
     modifier = Modifier.clickable(onClick = onClick)) {
     Column(Modifier.padding(16.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(46.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-          Text(initials(m.name), color = Green, fontWeight = FontWeight.Bold)
-        }
+        com.truehr.app.presentation.components.EmployeePhoto(m.id, m.name, 46.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
           Text(m.name, fontWeight = FontWeight.Bold, color = Ink)

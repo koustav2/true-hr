@@ -36,6 +36,7 @@ r.post('/auth/forgot-password', auth.forgotPassword);
 r.post('/auth/reset-password', auth.resetPassword);
 r.post('/auth/change-password', authenticate, auth.changePassword);
 r.get('/me/photo', authenticate, auth.myPhoto);
+r.get('/employees/:id/photo', authenticate, auth.employeePhoto);
 r.post('/auth/web-sso-token', authenticate, auth.webSsoToken);
 r.post('/auth/web-sso', auth.webSsoExchange);
 r.get('/me', authenticate, auth.me);

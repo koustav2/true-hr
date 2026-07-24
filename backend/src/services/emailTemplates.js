@@ -197,20 +197,29 @@ export function payslipPublishedEmail({ name, monthName, year, netPay }) {
 
 // ---- Approval-chain notifications (NFA / settlement / resignation / PMS) ----
 const PORTAL = (process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app');
-export function approvalActionEmail({ name, subjectLabel, action, actorName, remarks }) {
+// Facts table (NFA number, amounts, dates…) included in approval mails.
+const detailsTable = (details) => !details ? '' : `
+  <table style="width:100%;border-collapse:collapse;margin:12px 0;font-size:13.5px;background:#f8fafc;border-radius:8px">
+    ${Object.entries(details).map(([k, v]) =>
+      `<tr><td style="padding:7px 14px;color:#6b7280;width:170px">${k}</td><td style="padding:7px 14px;font-weight:700;color:#111827">${v}</td></tr>`).join('')}
+  </table>`;
+
+export function approvalActionEmail({ name, subjectLabel, action, actorName, remarks, details }) {
   const tone = action === 'APPROVED' ? '#059669' : action === 'REJECTED' ? '#dc2626' : '#d97706';
   const verb = action === 'APPROVED' ? 'approved' : action === 'REJECTED' ? 'rejected' : 'put on query / hold';
   return shell(`${subjectLabel} — ${verb}`, `
     <p>Dear <strong>${name || 'User'}</strong>,</p>
     <p>Your <strong>${subjectLabel}</strong> was <strong style="color:${tone}">${verb}</strong>${actorName ? ` by <strong>${actorName}</strong>` : ''}.</p>
+    ${detailsTable(details)}
     ${remarks ? `<p style="background:#f8fafc;border-left:3px solid ${tone};padding:10px 14px;border-radius:6px">Remark: ${remarks}</p>` : ''}
     <p>${btn(`${PORTAL}/ess`, 'Open TRUE HR')}</p>
   `, tone);
 }
-export function approvalPendingEmail({ name, subjectLabel, raiserName }) {
+export function approvalPendingEmail({ name, subjectLabel, raiserName, details }) {
   return shell('Approval waiting for you', `
     <p>Dear <strong>${name || 'Approver'}</strong>,</p>
     <p>A <strong>${subjectLabel}</strong>${raiserName ? ` raised by <strong>${raiserName}</strong>` : ''} is waiting for your approval.</p>
+    ${detailsTable(details)}
     <p>${btn(`${PORTAL}/ess/approvals`, 'Review & approve')}</p>
   `);
 }

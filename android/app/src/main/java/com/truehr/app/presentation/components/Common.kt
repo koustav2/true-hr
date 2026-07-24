@@ -26,6 +26,26 @@ import com.truehr.app.presentation.theme.*
 fun initials(name: String): String =
   name.trim().split(" ").filter { it.isNotBlank() }.take(2).joinToString("") { it.first().uppercase() }.ifBlank { "U" }
 
+/** Profile photo next to a name (client req #19): loads the colleague's
+ *  onboarding photo over the authenticated image loader; initials fallback. */
+@Composable
+fun EmployeePhoto(id: Long?, name: String, size: androidx.compose.ui.unit.Dp = 46.dp) {
+  Box(
+    Modifier.size(size).clip(CircleShape).background(Green.copy(alpha = 0.12f)),
+    contentAlignment = Alignment.Center,
+  ) {
+    Text(initials(name), color = Green, fontWeight = FontWeight.Bold)
+    if (id != null) {
+      coil.compose.AsyncImage(
+        model = com.truehr.app.BuildConfig.BASE_URL + "employees/$id/photo",
+        contentDescription = name,
+        contentScale = androidx.compose.ui.layout.ContentScale.Crop,
+        modifier = Modifier.size(size).clip(CircleShape),
+      )
+    }
+  }
+}
+
 /** Executive navy gradient header with soft glow accents and rounded base. */
 @Composable
 fun GradientHeader(content: @Composable BoxScope.() -> Unit) {

@@ -92,9 +92,7 @@ private fun DirectoryCard(m: DirectoryEntry) {
   Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 1.dp, border = androidx.compose.foundation.BorderStroke(1.dp, Line)) {
     Column(Modifier.padding(14.dp)) {
       Row(verticalAlignment = Alignment.CenterVertically) {
-        Box(Modifier.size(44.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)), contentAlignment = Alignment.Center) {
-          Text(initials(m.name), color = Green, fontWeight = FontWeight.Bold)
-        }
+        com.truehr.app.presentation.components.EmployeePhoto(m.id, m.name, 44.dp)
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
           Text(m.name, fontWeight = FontWeight.Bold, color = Ink)

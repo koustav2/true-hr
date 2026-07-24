@@ -74,13 +74,38 @@ export async function createEmployee(req, res, next) {
     });
 
     const designation = (await query(`SELECT title FROM designations WHERE id=$1`, [result.emp.designation_id])).rows[0]?.title;
+
+    // Client req #8: auto-generate Offer Letter + Annexure A at offer time when
+    // HR ticks the option (needs annual CTC) and no PDF was uploaded manually.
+    let generatedOl = false;
+    if (!olData && b.autoOfferLetter && b.ctc) {
+      try {
+        const dep = (await query(`SELECT name FROM departments WHERE id=$1`, [result.emp.department_id])).rows[0]?.name;
+        const stream = new PassThrough();
+        const chunks = [];
+        stream.on('data', (c) => chunks.push(c));
+        const done = new Promise((resolve, reject) => { stream.on('end', resolve); stream.on('error', reject); });
+        buildOfferLetterPdf({
+          name: `${result.emp.first_name} ${result.emp.last_name}`.trim(), designation, department: dep,
+          joiningDate: result.emp.date_of_joining, ctc: b.ctc, location: result.emp.location || null,
+        }, stream);
+        await done;
+        const pdf = Buffer.concat(chunks).toString('base64');
+        await query(
+          `UPDATE employees SET ctc=$2, offer_letter_data=$3, offer_letter_mime='application/pdf', offer_letter_name=$4 WHERE id=$1`,
+          [result.emp.id, b.ctc, pdf, `offer-letter-${result.emp.first_name.toLowerCase()}.pdf`]);
+        generatedOl = true;
+        await audit(req.user.id, 'OFFER_LETTER_GENERATED', 'employee', result.emp.id, { atOnboarding: true });
+      } catch (err) { console.warn('[offer-letter] auto-generate failed:', err.message); }
+    }
+
     const acceptUrl = `${config.appBaseUrl}/onboarding/accept?token=${result.raw}`;
     const viewLetterUrl = `${config.appBaseUrl}/api/onboarding/offer-letter?token=${result.raw}`;
     const joiningBy = result.emp.date_of_joining ? new Date(result.emp.date_of_joining).toLocaleDateString('en-GB') : null;
     const tpl = offerEmail({
       name: `${result.emp.first_name} ${result.emp.last_name}`,
       designation, location: result.emp.location, joiningBy,
-      acceptUrl, viewLetterUrl, hasOfferLetter: !!olData, expiryDays: config.offerExpiryDays,
+      acceptUrl, viewLetterUrl, hasOfferLetter: !!olData || generatedOl, expiryDays: config.offerExpiryDays,
     });
     await enqueueEmail({ to: result.emp.personal_email, subject: tpl.subject, html: tpl.html, template: 'OFFER', onboardingId: result.ob.id });
 

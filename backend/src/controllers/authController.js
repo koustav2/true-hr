@@ -197,6 +197,29 @@ export async function resetPassword(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// GET /employees/:id/photo — directory photo of a colleague (same company),
+// so team lists and the address book can show faces next to names (req #19).
+export async function employeePhoto(req, res, next) {
+  try {
+    const me = req.user.employeeId;
+    const target = Number(req.params.id);
+    if (!me && !['HR_ADMIN', 'SUPER_ADMIN', 'IT_ADMIN'].includes(req.user.role)) return res.status(403).json({ error: 'Forbidden' });
+    if (me) {
+      const same = (await query(
+        `SELECT 1 FROM employees a JOIN employees b ON b.company_id=a.company_id WHERE a.id=$1 AND b.id=$2`,
+        [me, target])).rowCount > 0;
+      if (!same) return res.status(403).json({ error: 'Forbidden' });
+    }
+    const row = (await query(
+      `SELECT data, mime FROM documents WHERE employee_id=$1 AND type='PHOTO' ORDER BY uploaded_at DESC LIMIT 1`,
+      [target])).rows[0];
+    if (!row?.data) return res.status(404).json({ error: 'No photo' });
+    res.setHeader('Content-Type', row.mime || 'image/jpeg');
+    res.setHeader('Cache-Control', 'private, max-age=86400');
+    res.send(Buffer.from(row.data, 'base64'));
+  } catch (e) { next(e); }
+}
+
 // GET /me/photo — the onboarding photograph of the logged-in employee.
 export async function myPhoto(req, res, next) {
   try {
@@ -239,7 +262,7 @@ export async function directory(req, res, next) {
     if (!empId) return res.json([]);
     const companyId = (await query(`SELECT company_id FROM employees WHERE id=$1`, [empId])).rows[0]?.company_id;
     const rows = (await query(
-      `SELECT e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.official_email, e.phone,
               d.title AS designation, dep.name AS department,
               a.city, a.state
        FROM employees e
@@ -253,6 +276,7 @@ export async function directory(req, res, next) {
        WHERE e.company_id=$1 AND e.onboarding_status='ACTIVE'
        ORDER BY COALESCE(NULLIF(a.state,''),'~') ASC, e.first_name ASC`, [companyId])).rows;
     res.json(rows.map((r) => ({
+      id: r.id,
       employeeCode: r.employee_code,
       name: `${r.first_name} ${r.last_name}`.trim(),
       designation: r.designation,

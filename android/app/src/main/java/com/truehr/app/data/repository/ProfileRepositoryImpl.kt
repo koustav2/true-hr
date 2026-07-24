@@ -60,6 +60,7 @@ class ProfileRepositoryImpl @Inject constructor(
 
   override suspend fun directory(): List<DirectoryEntry> = api.directory().map {
     DirectoryEntry(
+      id = it.id,
       employeeCode = it.employeeCode.orEmpty(),
       name = it.name.orEmpty(),
       designation = it.designation,

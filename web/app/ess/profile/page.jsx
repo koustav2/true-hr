@@ -1,6 +1,6 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, getStoredAuth } from '@/lib/api.js';
 import { Card, Spinner, Empty, Input } from '@/components/ui.jsx';
 
 export default function ProfilePage() {
@@ -47,13 +47,37 @@ function Profile() {
   );
 }
 
+// Photo next to every name (client req #19) — authenticated fetch, initials fallback.
+function PersonAvatar({ id, name }) {
+  const [src, setSrc] = useState(null);
+  useEffect(() => {
+    if (!id) return undefined;
+    let url;
+    const auth = getStoredAuth();
+    fetch(`/api/employees/${id}/photo`, { headers: { Authorization: `Bearer ${auth?.token}` } })
+      .then((r) => (r.ok ? r.blob() : null))
+      .then((b) => { if (b) { url = URL.createObjectURL(b); setSrc(url); } })
+      .catch(() => {});
+    return () => { if (url) URL.revokeObjectURL(url); };
+  }, [id]);
+  if (src) return <img src={src} alt={name} className="h-10 w-10 rounded-full object-cover shrink-0 ring-1 ring-line" />;
+  return (
+    <span className="grid place-items-center h-10 w-10 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 text-white text-xs font-bold shrink-0">
+      {(name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+    </span>
+  );
+}
+
 function PersonRow({ m }) {
   const name = m.name || `${m.firstName || m.first_name || ''} ${m.lastName || m.last_name || ''}`.trim();
   return (
     <Card className="p-3 text-sm flex flex-wrap justify-between items-center gap-2">
-      <div>
-        <div className="font-medium">{name} <span className="text-xs text-ink-faint">{m.employeeCode || m.employee_code}</span></div>
-        <div className="text-xs text-ink-faint">{[m.designation, m.department, m.state].filter(Boolean).join(' · ')}</div>
+      <div className="flex items-center gap-3">
+        <PersonAvatar id={m.id} name={name} />
+        <div>
+          <div className="font-medium">{name} <span className="text-xs text-ink-faint">{m.employeeCode || m.employee_code}</span></div>
+          <div className="text-xs text-ink-faint">{[m.designation, m.department, m.state].filter(Boolean).join(' · ')}</div>
+        </div>
       </div>
       <div className="text-xs text-ink-soft text-right">
         <div>{m.officialEmail || m.official_email || m.email || ''}</div>

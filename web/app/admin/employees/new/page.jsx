@@ -12,6 +12,8 @@ export default function NewEmployeePage() {
   const router = useRouter();
   const [meta, setMeta] = useState({ departments: [], designations: [], managers: [] });
   const [offerLetter, setOfferLetter] = useState(null);
+  const [autoOffer, setAutoOffer] = useState(true);
+  const [ctc, setCtc] = useState('');
   const [f, setF] = useState({
     firstName: '', lastName: '', personalEmail: '', officialEmail: '', phone: '', dob: '', gender: '',
     departmentId: '', designationId: '', reportingManagerId: '', functionManagerId: '',
@@ -48,6 +50,7 @@ export default function NewEmployeePage() {
       ['departmentId','designationId','reportingManagerId','functionManagerId','dob','dateOfJoining']
         .forEach((k) => { if (!payload[k]) payload[k] = null; });
       if (offerLetter) payload.offerLetter = { name: offerLetter.name, dataUrl: offerLetter.dataUrl };
+      if (!offerLetter && autoOffer && ctc) { payload.autoOfferLetter = true; payload.ctc = Number(ctc); }
       const { employee } = await api.post('/employees', payload);
       router.push(`/admin/employees/${employee.id}?created=1`);
     } catch (e) { setErr(e.message); } finally { setSaving(false); }
@@ -121,8 +124,23 @@ export default function NewEmployeePage() {
         </div>
       </SectionCard>
 
-      <SectionCard Icon={IconFile} title="Offer letter" subtitle="Optional — attach a signed offer letter (PDF). The new hire can view it on the acceptance page.">
-        <PdfDropzone value={offerLetter} onChange={setOfferLetter} />
+      <SectionCard Icon={IconFile} title="Offer letter" subtitle="Attach a signed PDF, or let the system generate the Offer Letter + Annexure A automatically and attach it to the offer email.">
+        <div className="space-y-4">
+          <PdfDropzone value={offerLetter} onChange={setOfferLetter} />
+          {!offerLetter && (
+            <div className="rounded-xl border border-line bg-slate-50/60 p-4 space-y-3">
+              <label className="flex items-center gap-2.5 text-sm font-medium text-ink cursor-pointer">
+                <input type="checkbox" checked={autoOffer} onChange={(e) => setAutoOffer(e.target.checked)} className="h-4 w-4 accent-brand-600" />
+                Auto-generate Offer Letter + Annexure A for this employee
+              </label>
+              {autoOffer && (
+                <Field label="Annual CTC (₹)" required hint="Needed for the Annexure A compensation sheet">
+                  <Input type="number" value={ctc} onChange={(e) => setCtc(e.target.value)} placeholder="e.g. 600000" className="max-w-[240px]" required />
+                </Field>
+              )}
+            </div>
+          )}
+        </div>
       </SectionCard>
 
       {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2">{err}</div>}

@@ -41,6 +41,7 @@ data class TeamMateDto(
 
 @Serializable
 data class DirectoryEntryDto(
+  val id: Long? = null,
   val employeeCode: String? = null,
   val name: String? = null,
   val designation: String? = null,

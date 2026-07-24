@@ -8,6 +8,7 @@ const MAP = {
   SENT_BACK:         ['Sent back', 'bg-orange-50 text-orange-700 ring-orange-200'],
   APPROVED:          ['Approved', 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
   ACTIVE:            ['Active', 'bg-emerald-50 text-emerald-700 ring-emerald-200'],
+  INACTIVE:          ['Inactive', 'bg-rose-50 text-rose-700 ring-rose-200'],
   EXPIRED:           ['Expired', 'bg-slate-100 text-slate-500 ring-slate-200'],
 };
 export default function StatusBadge({ status }) {

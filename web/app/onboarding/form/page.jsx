@@ -294,9 +294,16 @@ function FormInner() {
                 <div className="space-y-2">
                   {languages.map((l, i) => (
                     <div key={i} className="flex flex-wrap items-center gap-3">
-                      <Select value={l.name} onChange={(e) => upd(languages, setLanguages, i, 'name', e.target.value)} className="max-w-[200px]">
+                      <Select value={['Hindi', 'English', ''].includes(l.name) ? l.name : 'Others'}
+                        onChange={(e) => upd(languages, setLanguages, i, 'name', e.target.value === 'Others' ? 'Others' : e.target.value)}
+                        className="max-w-[200px]">
                         <option value="">Select…</option><option>Hindi</option><option>English</option><option>Others</option>
                       </Select>
+                      {!['Hindi', 'English', ''].includes(l.name) || l.name === 'Others' ? (
+                        <Input value={l.name === 'Others' ? '' : l.name} placeholder="Specify language"
+                          onChange={(e) => upd(languages, setLanguages, i, 'name', e.target.value || 'Others')}
+                          className="max-w-[180px]" />
+                      ) : null}
                       {['read', 'write', 'speak', 'understand'].map((k) => (
                         <label key={k} className="flex items-center gap-1.5 text-xs text-ink-soft capitalize">
                           <input type="checkbox" checked={!!l[k]} onChange={(e) => upd(languages, setLanguages, i, k, e.target.checked)} className="h-4 w-4 accent-brand-600" />{k}

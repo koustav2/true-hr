@@ -3,7 +3,7 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { api, getStoredAuth } from '@/lib/api.js';
-import { Card, Button, Spinner, Textarea, Modal, Input, Select, Field } from '@/components/ui.jsx';
+import { Card, Button, Spinner, Textarea, Modal, Input, Select, Field, ConfirmClick } from '@/components/ui.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconArrowLeft, IconCheck, IconFile } from '@/components/icons.jsx';
 
@@ -86,6 +86,14 @@ export default function EmployeeDetailPage() {
     setResetBusy(true); setMsg('');
     try { setResetInfo(await api.post(`/admin/employees/${id}/reset-password`)); }
     catch (e) { setMsg(e.message); } finally { setResetBusy(false); }
+  }
+  async function setActive(active) {
+    setMsg('');
+    try {
+      await api.post(`/admin/employees/${id}/active`, { active });
+      setMsg(active ? 'Employee activated — login restored.' : 'Employee deactivated — login blocked, removed from directory & payroll runs.');
+      await load();
+    } catch (e) { setMsg(e.message); }
   }
   async function openEdit() {
     setMsg('');
@@ -177,6 +185,18 @@ export default function EmployeeDetailPage() {
             <Button variant="outline" size="sm" onClick={resetPassword} disabled={resetBusy}>
               {resetBusy ? <Spinner /> : 'Reset password'}
             </Button>
+          )}
+          {e.onboarding_status === 'ACTIVE' && (
+            <ConfirmClick onConfirm={() => setActive(false)} confirmLabel="Deactivate? Login blocks immediately"
+              className="text-xs font-semibold text-rose-600 border border-rose-200 rounded-lg px-3 py-1.5 hover:bg-rose-50">
+              Deactivate
+            </ConfirmClick>
+          )}
+          {e.onboarding_status === 'INACTIVE' && (
+            <ConfirmClick onConfirm={() => setActive(true)} confirmLabel="Re-activate this employee?"
+              className="text-xs font-semibold text-emerald-700 border border-emerald-200 rounded-lg px-3 py-1.5 hover:bg-emerald-50">
+              Activate
+            </ConfirmClick>
           )}
           <StatusBadge status={e.onboarding_status} />
         </div>

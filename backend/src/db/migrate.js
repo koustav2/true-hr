@@ -14,6 +14,7 @@ async function main() {
   await pool.query(`ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'SUPER_ADMIN'`);
   await pool.query(`ALTER TYPE user_role ADD VALUE IF NOT EXISTS 'IT_ADMIN'`);
   await pool.query(`ALTER TYPE onboarding_state ADD VALUE IF NOT EXISTS 'REJECTED'`);
+  await pool.query(`ALTER TYPE onboarding_state ADD VALUE IF NOT EXISTS 'INACTIVE'`); // HR deactivated (client req #2)
   console.log('[migrate] roles & states ensured');
 
   // Resignation chain per client (13-07-2026): RM → FM → Business Head → Admin → Finance → HR.

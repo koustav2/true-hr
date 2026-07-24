@@ -248,6 +248,23 @@ export async function team(req, res, next) {
          LEFT JOIN departments dep ON dep.id=e.department_id
         WHERE (e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1)
           AND r.status=$2 ORDER BY r.applied_at DESC`, [empId, status])).rows;
+
+    // Chain approvers beyond the managers (Business Head / Admin / Finance / HR
+    // via the matrix) must also see requests whose CURRENT stage waits on them —
+    // otherwise the chain stalls after the managers approve (client bug report).
+    if (status === 'PENDING') {
+      const chainRows = (await query(
+        `SELECT ${REQ_COLS} FROM resignations r
+           JOIN approval_instances i ON i.id=r.approval_instance_id AND i.status='PENDING'
+           JOIN approval_instance_stages st ON st.instance_id=i.id
+                AND st.seq=i.current_stage_seq AND st.status='PENDING' AND st.approver_employee_id=$1
+           JOIN employees e ON e.id=r.employee_id
+           LEFT JOIN designations d ON d.id=e.designation_id
+           LEFT JOIN departments dep ON dep.id=e.department_id
+          WHERE r.status='PENDING' ORDER BY r.applied_at DESC`, [empId])).rows;
+      const seen = new Set(rows.map((x) => x.id));
+      for (const cr of chainRows) if (!seen.has(cr.id)) rows.push(cr);
+    }
     res.json(rows.map(shape));
   } catch (e) { next(e); }
 }

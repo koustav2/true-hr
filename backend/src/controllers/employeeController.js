@@ -6,6 +6,7 @@ import { generateMagicToken } from '../utils/tokens.js';
 import { generateTempPassword, hashPassword } from '../utils/password.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { offerEmail, credentialsEmail } from '../services/emailTemplates.js';
+import { invalidateAccountStatus } from '../middleware/auth.js';
 import { decrypt, encrypt, mask } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
 import { buildPersonalInfoSheet } from '../services/personalInfoSheet.js';
@@ -317,6 +318,27 @@ export async function sendBack(req, res, next) {
 
     await audit(req.user.id, 'SEND_BACK', 'onboarding', obId, { notes });
     res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/employees/:id/active { active } — client req #2: HR can mark an
+// employee Active/Inactive. Inactive = login blocked + dropped from directory,
+// team lists and payroll runs (they all filter onboarding_status='ACTIVE').
+export async function setEmployeeActive(req, res, next) {
+  try {
+    const id = Number(req.params.id);
+    const active = !!req.body?.active;
+    const emp = (await query(`SELECT id, onboarding_status FROM employees WHERE id=$1`, [id])).rows[0];
+    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    if (!['ACTIVE', 'INACTIVE'].includes(emp.onboarding_status)) {
+      return res.status(409).json({ error: `Employee is ${emp.onboarding_status} — only fully onboarded employees can be toggled` });
+    }
+    await query(`UPDATE employees SET onboarding_status=$2 WHERE id=$1`, [id, active ? 'ACTIVE' : 'INACTIVE']);
+    const acc = (await query(
+      `UPDATE user_accounts SET status=$2 WHERE employee_id=$1 RETURNING id`, [id, active ? 'ACTIVE' : 'DISABLED'])).rows[0];
+    if (acc) invalidateAccountStatus(acc.id);
+    await audit(req.user.id, active ? 'EMPLOYEE_ACTIVATED' : 'EMPLOYEE_DEACTIVATED', 'employee', id, {});
+    res.json({ ok: true, status: active ? 'ACTIVE' : 'INACTIVE' });
   } catch (e) { next(e); }
 }
 

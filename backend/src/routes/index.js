@@ -236,6 +236,7 @@ r.post('/admin/users/:id/status', authenticate, requireAnyAdmin, users.setUserSt
 r.post('/admin/users/:id/role', authenticate, requireAnyAdmin, users.setUserRole);
 r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
 r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
+r.post('/admin/employees/:id/active', authenticate, requireStaff, emp.setEmployeeActive);
 r.post('/admin/employees/:id/generate-offer', authenticate, requireStaff, emp.generateOfferLetter);
 r.post('/admin/employees/:id/documents', authenticate, requireStaff, emp.uploadEmployeeDocument);
 r.patch('/admin/employees/:id/bank-statutory', authenticate, requireStaff, emp.updateBankStatutory);

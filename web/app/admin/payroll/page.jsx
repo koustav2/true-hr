@@ -16,6 +16,57 @@ const STRUCT_FIELDS = [
 // Company-wide default (no per-person Grade / CTC).
 const TEMPLATE_FIELDS = STRUCT_FIELDS.filter(([k]) => k !== 'monthlyCtc');
 
+// Mirrors the backend computePayslip for a full month — powers the live preview.
+function breakup(s) {
+  const n = (v) => Number(v) || 0;
+  const ctc = n(s.monthlyCtc);
+  const basic = (ctc * n(s.basicPct)) / 100;
+  const hra = (basic * n(s.hraPctOfBasic)) / 100;
+  const fixed = n(s.lta) + n(s.personalAllowance) + n(s.miscellaneous) + n(s.cityAllowance) + n(s.performancePay);
+  const special = Math.max(0, ctc - basic - hra - fixed);
+  const pf = (basic * n(s.employeePfPct)) / 100;
+  const pt = n(s.professionalTax);
+  const welfare = n(s.welfareTrust);
+  const gross = basic + hra + special + fixed;
+  const deductions = pf + pt + welfare;
+  return { ctc, basic, hra, special, fixed, gross, pf, pt, welfare, deductions, net: gross - deductions, overAllocated: basic + hra + fixed > ctc && ctc > 0 };
+}
+
+function PreviewRow({ label, value, bold, tone }) {
+  return (
+    <div className={`flex justify-between py-1 text-[13px] ${bold ? 'font-bold' : ''} ${tone || 'text-ink-soft'}`}>
+      <span>{label}</span><span className="tabular-nums">₹{inr(Math.round(value))}</span>
+    </div>
+  );
+}
+
+// Live salary breakup shown beside the structure form (full-month view).
+function StructurePreview({ s }) {
+  const b = breakup(s);
+  return (
+    <div className="rounded-xl border border-line bg-slate-50/60 p-4">
+      <div className="text-xs font-bold tracking-wide uppercase text-ink-faint mb-2">Monthly breakup (full month)</div>
+      <PreviewRow label="Basic Salary" value={b.basic} />
+      <PreviewRow label="House Rent Allowance" value={b.hra} />
+      <PreviewRow label="Special Allowance (auto-balance)" value={b.special} />
+      {b.fixed > 0 && <PreviewRow label="Other allowances" value={b.fixed} />}
+      <div className="border-t border-line my-1.5" />
+      <PreviewRow label="Gross earnings" value={b.gross} bold tone="text-ink" />
+      <PreviewRow label="Provident Fund" value={-b.pf} tone="text-rose-600" />
+      <PreviewRow label="Professional Tax" value={-b.pt} tone="text-rose-600" />
+      {b.welfare > 0 && <PreviewRow label="Welfare Trust" value={-b.welfare} tone="text-rose-600" />}
+      <div className="border-t border-line my-1.5" />
+      <PreviewRow label="Net pay in hand" value={b.net} bold tone="text-emerald-700" />
+      {b.overAllocated && (
+        <p className="mt-2 text-[11px] text-rose-600">
+          Basic + HRA + allowances exceed the CTC — reduce a component.
+        </p>
+      )}
+      {!b.ctc && <p className="mt-2 text-[11px] text-ink-faint">Enter the Monthly CTC to see the breakup.</p>}
+    </div>
+  );
+}
+
 export default function PayrollPage() {
   const now = new Date();
   const [year, setYear] = useState(now.getFullYear());
@@ -207,20 +258,49 @@ export default function PayrollPage() {
             <thead className="bg-slate-50/60 text-ink-faint border-b border-line">
               <tr>
                 <th className="text-left px-5 py-3 font-medium">Employee</th>
-                <th className="text-left px-5 py-3 font-medium">Monthly CTC</th>
-                <th className="text-left px-5 py-3 font-medium">{MONTHS[month - 1]} {year}</th>
+                <th className="text-right px-5 py-3 font-medium">Monthly CTC</th>
+                <th className="text-left px-5 py-3 font-medium">Status — {MONTHS[month - 1]} {year}</th>
+                <th className="text-right px-5 py-3 font-medium">Net pay</th>
                 <th className="text-right px-5 py-3 font-medium">Actions</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-line">
               {sheet.filter((r) => !q || `${r.name} ${r.employeeCode || ''}`.toLowerCase().includes(q.toLowerCase())).map((r) => (
                 <tr key={r.employeeId} className="hover:bg-slate-50/70">
-                  <td className="px-5 py-3"><div className="text-ink font-medium">{r.name}</div><div className="text-ink-faint text-xs">{r.employeeCode}</div></td>
-                  <td className="px-5 py-3 text-ink-soft">{r.hasStructure ? inr(r.monthlyCtc) : <span className="text-amber-600">No structure</span>}</td>
                   <td className="px-5 py-3">
-                    {r.status === 'PUBLISHED' ? <span className="inline-flex items-center gap-1.5 text-emerald-700"><span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Published · ₹{inr(r.netPay)}</span>
-                      : r.status === 'DRAFT' ? <span className="inline-flex items-center gap-1.5 text-amber-600"><span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Draft · ₹{inr(r.netPay)}</span>
-                      : <span className="text-ink-faint">Not generated</span>}
+                    <div className="flex items-center gap-3">
+                      <span className="grid place-items-center h-8 w-8 rounded-full bg-gradient-to-br from-brand-500 to-emerald-600 text-white text-[11px] font-bold shrink-0">
+                        {(r.name || '?').split(' ').map((w) => w[0]).slice(0, 2).join('').toUpperCase()}
+                      </span>
+                      <div>
+                        <div className="text-ink font-medium">{r.name}</div>
+                        <div className="text-ink-faint text-xs">{r.employeeCode}</div>
+                      </div>
+                    </div>
+                  </td>
+                  <td className="px-5 py-3 text-right tabular-nums text-ink-soft">
+                    {r.hasStructure ? `₹${inr(r.monthlyCtc)}` : (
+                      <button onClick={() => openStructure(r)}
+                        className="text-xs font-semibold text-amber-700 bg-amber-50 ring-1 ring-inset ring-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100">
+                        Set structure
+                      </button>
+                    )}
+                  </td>
+                  <td className="px-5 py-3">
+                    {r.status === 'PUBLISHED' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-emerald-700 bg-emerald-50 ring-1 ring-inset ring-emerald-200 rounded-full px-2.5 py-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-emerald-500" />Published
+                      </span>
+                    ) : r.status === 'DRAFT' ? (
+                      <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-amber-700 bg-amber-50 ring-1 ring-inset ring-amber-200 rounded-full px-2.5 py-1">
+                        <span className="h-1.5 w-1.5 rounded-full bg-amber-400" />Draft — review & publish
+                      </span>
+                    ) : (
+                      <span className="text-xs text-ink-faint">Not generated</span>
+                    )}
+                  </td>
+                  <td className="px-5 py-3 text-right tabular-nums font-semibold text-ink">
+                    {r.netPay != null ? `₹${inr(r.netPay)}` : <span className="text-ink-faint font-normal">—</span>}
                   </td>
                   <td className="px-5 py-3 text-right whitespace-nowrap">
                     <button onClick={() => openStructure(r)} className="text-ink-soft text-xs font-medium hover:underline mr-3">Structure</button>
@@ -242,16 +322,40 @@ export default function PayrollPage() {
         )}
       </Card>
 
-      {/* Structure editor */}
+      {/* Structure editor with live breakup preview */}
       <Modal open={!!structFor} onClose={() => setStructFor(null)} title={`Salary structure — ${structFor?.name || ''}`} size="lg"
-        actions={<><Button variant="ghost" onClick={() => setStructFor(null)}>Cancel</Button><Button onClick={saveStructure} disabled={structBusy || !struct}>{structBusy ? <Spinner /> : 'Save'}</Button></>}>
+        actions={<><Button variant="ghost" onClick={() => setStructFor(null)}>Cancel</Button><Button onClick={saveStructure} disabled={structBusy || !struct || !Number(struct?.monthlyCtc)}>{structBusy ? <Spinner /> : 'Save structure'}</Button></>}>
         {!struct ? <div className="py-6 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div> : (
-          <div className="grid sm:grid-cols-2 gap-3">
-            <Field label="Grade"><Input value={struct.grade} onChange={(e) => setStruct({ ...struct, grade: e.target.value })} /></Field>
-            {STRUCT_FIELDS.map(([k, label]) => (
-              <Field key={k} label={label}><Input type="number" value={struct[k]} onChange={(e) => setStruct({ ...struct, [k]: e.target.value })} /></Field>
-            ))}
-            <p className="sm:col-span-2 text-xs text-ink-faint">Basic = CTC × Basic%. HRA = Basic × HRA%. Provident Fund = Basic × PF%. Allowances are fixed monthly amounts and prorate by days paid.</p>
+          <div className="grid lg:grid-cols-[1fr_260px] gap-5">
+            <div className="space-y-4">
+              <div>
+                <div className="text-xs font-bold tracking-wide uppercase text-ink-faint mb-2">Pay</div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Monthly CTC" required><Input type="number" value={struct.monthlyCtc} onChange={(e) => setStruct({ ...struct, monthlyCtc: e.target.value })} autoFocus /></Field>
+                  <Field label="Grade"><Input value={struct.grade} onChange={(e) => setStruct({ ...struct, grade: e.target.value })} placeholder="e.g. L3" /></Field>
+                </div>
+              </div>
+              <div>
+                <div className="text-xs font-bold tracking-wide uppercase text-ink-faint mb-2">Earning components</div>
+                <div className="grid sm:grid-cols-2 gap-3">
+                  <Field label="Basic (% of CTC)"><Input type="number" value={struct.basicPct} onChange={(e) => setStruct({ ...struct, basicPct: e.target.value })} /></Field>
+                  <Field label="HRA (% of Basic)"><Input type="number" value={struct.hraPctOfBasic} onChange={(e) => setStruct({ ...struct, hraPctOfBasic: e.target.value })} /></Field>
+                  {[['lta', 'Leave Travel Allowance'], ['personalAllowance', 'Personal Allowance'], ['miscellaneous', 'Miscellaneous'], ['cityAllowance', 'City Allowance'], ['performancePay', 'Performance Pay']].map(([k, label]) => (
+                    <Field key={k} label={`${label} (₹/mo)`}><Input type="number" value={struct[k]} onChange={(e) => setStruct({ ...struct, [k]: e.target.value })} /></Field>
+                  ))}
+                </div>
+                <p className="text-xs text-ink-faint mt-2">Whatever is left of the CTC after Basic, HRA and allowances is paid as <b>Special Allowance</b> automatically — gross always equals CTC.</p>
+              </div>
+              <div>
+                <div className="text-xs font-bold tracking-wide uppercase text-ink-faint mb-2">Deductions</div>
+                <div className="grid sm:grid-cols-3 gap-3">
+                  <Field label="PF (% of Basic)"><Input type="number" value={struct.employeePfPct} onChange={(e) => setStruct({ ...struct, employeePfPct: e.target.value })} /></Field>
+                  <Field label="Professional Tax (₹)"><Input type="number" value={struct.professionalTax} onChange={(e) => setStruct({ ...struct, professionalTax: e.target.value })} /></Field>
+                  <Field label="Welfare Trust (₹)"><Input type="number" value={struct.welfareTrust} onChange={(e) => setStruct({ ...struct, welfareTrust: e.target.value })} /></Field>
+                </div>
+              </div>
+            </div>
+            <StructurePreview s={struct} />
           </div>
         )}
       </Modal>

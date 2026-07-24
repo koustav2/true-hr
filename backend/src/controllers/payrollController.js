@@ -82,11 +82,19 @@ function shapeStructure(row) {
 
 // Core engine — compute a payslip from a structure + that month's run inputs.
 // Earnings prorate by daysPaid/daysInMonth; PF on prorated basic; PT/Welfare are fixed.
+// Whatever part of the monthly CTC is not covered by Basic/HRA/fixed allowances
+// flows into a balancing "Special Allowance", so gross always equals the CTC.
 export function computePayslip(s, { daysInMonth: dim, daysPaid, arrears = 0, bonus = 0, tds = 0 }) {
   const factor = dim > 0 ? Math.min(1, daysPaid / dim) : 1;
   const fullBasic = (s.monthlyCtc * s.basicPct) / 100;
+  const fullHra = (fullBasic * s.hraPctOfBasic) / 100;
+  const fullFixed = Number(s.lta) + Number(s.personalAllowance) + Number(s.miscellaneous)
+    + Number(s.cityAllowance) + Number(s.performancePay);
+  const fullSpecial = Math.max(0, s.monthlyCtc - fullBasic - fullHra - fullFixed);
+
   const basic = r2(fullBasic * factor);
-  const hra = r2(((fullBasic * s.hraPctOfBasic) / 100) * factor);
+  const hra = r2(fullHra * factor);
+  const special = r2(fullSpecial * factor);
   const lta = r2(s.lta * factor);
   const personal = r2(s.personalAllowance * factor);
   const misc = r2(s.miscellaneous * factor);
@@ -98,6 +106,7 @@ export function computePayslip(s, { daysInMonth: dim, daysPaid, arrears = 0, bon
   const earnings = [
     { label: 'Basic Salary', amount: basic },
     { label: 'House Rent Allowance', amount: hra },
+    { label: 'Special Allowance', amount: special },
     { label: 'Leave Travel Allowance', amount: lta },
     { label: 'Personal Allowance', amount: personal },
     { label: 'Miscellaneous', amount: misc },

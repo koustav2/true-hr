@@ -69,6 +69,8 @@ async function main() {
 
   let s = await slip(full);
   check(`full month → ${DIM} days paid`, Number(s.days_paid) === DIM, `got ${s.days_paid}`);
+  check('gross equals CTC (Special Allowance balances)', Number(s.gross_earnings) === 60000, `got ${s.gross_earnings}`);
+  check('net = CTC - PF - PT', Number(s.net_pay) === 60000 - 3600 - 200, `got ${s.net_pay}`);
   const fullNet = Number(s.net_pay);
 
   s = await slip(joiner);

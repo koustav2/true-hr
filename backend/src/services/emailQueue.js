@@ -16,7 +16,7 @@ const MAX_ATTEMPTS = 5;
 async function processBatch() {
   const { rows } = await query(
     `SELECT * FROM email_queue
-     WHERE status='PENDING' AND attempts < $1
+     WHERE status='PENDING' AND attempts < $1 AND COALESCE(next_attempt_at, now()) <= now()
      ORDER BY created_at ASC LIMIT 10`,
     [MAX_ATTEMPTS]
   );
@@ -31,9 +31,13 @@ async function processBatch() {
       console.log(`[email-worker] sent #${job.id} via ${res.provider} -> ${job.to_email}`);
     } catch (e) {
       const failed = job.attempts + 1 >= MAX_ATTEMPTS;
+      // Exponential backoff: 1, 4, 9, 16 minutes between retries so a flapping
+      // SMTP server isn't hammered every 5 seconds.
+      const backoffMin = (job.attempts + 1) ** 2;
       await query(
-        `UPDATE email_queue SET status=$2, attempts=attempts+1, error=$3 WHERE id=$1`,
-        [job.id, failed ? 'FAILED' : 'PENDING', e.message]
+        `UPDATE email_queue SET status=$2, attempts=attempts+1, error=$3,
+                next_attempt_at = now() + ($4 || ' minutes')::interval WHERE id=$1`,
+        [job.id, failed ? 'FAILED' : 'PENDING', e.message, backoffMin]
       );
       console.warn(`[email-worker] error #${job.id}: ${e.message}`);
     }

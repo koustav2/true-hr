@@ -1,6 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api, getStoredAuth } from '@/lib/api.js';
+import { downloadCsv } from '@/lib/csv.js';
 import { Card, Button, Input, Select, Field, Modal, Spinner, ConfirmClick } from '@/components/ui.jsx';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June', 'July', 'August', 'September', 'October', 'November', 'December'];
@@ -229,6 +230,15 @@ export default function PayrollPage() {
             )}
             {summary?.published > 0 && (
               <Button variant="outline" onClick={downloadBankSheet}>Bank sheet (CSV)</Button>
+            )}
+            {summary?.generated > 0 && (
+              <Button variant="outline" onClick={() => downloadCsv(`payroll-register-${year}-${String(month).padStart(2, '0')}.csv`,
+                (sheet || []).filter((r) => r.status).map((r) => ({
+                  'Employee ID': r.employeeCode || '', Name: r.name,
+                  'Monthly CTC': r.monthlyCtc ?? '', Status: r.status, 'Net pay': r.netPay ?? '',
+                })))}>
+                Register (CSV)
+              </Button>
             )}
           </div>
         </div>

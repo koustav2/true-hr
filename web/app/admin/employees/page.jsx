@@ -3,15 +3,25 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
-import { Button } from '@/components/ui.jsx';
+import { downloadCsv } from '@/lib/csv.js';
+import { Button, Select } from '@/components/ui.jsx';
 import DataTable from '@/components/DataTable.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconPlus } from '@/components/icons.jsx';
 
 export default function EmployeesPage() {
   const [rows, setRows] = useState(null);
+  const [statusFilter, setStatusFilter] = useState('');
   const router = useRouter();
   useEffect(() => { api.get('/employees').then(setRows).catch(() => setRows([])); }, []);
+
+  const visible = (rows || []).filter((r) => !statusFilter || r.onboarding_status === statusFilter);
+  const exportCsv = () => downloadCsv('employees.csv', visible.map((r) => ({
+    'Employee ID': r.employee_code || '', Name: `${r.first_name} ${r.last_name}`.trim(),
+    Designation: r.designation || '', Department: r.department || '',
+    'Official email': r.official_email || '', Status: r.onboarding_status || '',
+    'Date of joining': r.date_of_joining ? String(r.date_of_joining).slice(0, 10) : '',
+  })));
 
   const columns = [
     {
@@ -41,12 +51,23 @@ export default function EmployeesPage() {
           <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Employees</h1>
           <p className="text-ink-faint text-sm mt-0.5">{rows ? `${rows.length} total` : 'Loading…'}</p>
         </div>
-        <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>
+        <div className="flex items-center gap-2.5 flex-wrap">
+          <Select value={statusFilter} onChange={(e) => setStatusFilter(e.target.value)} className="!w-44">
+            <option value="">All statuses</option>
+            <option value="ACTIVE">Active</option>
+            <option value="INACTIVE">Inactive</option>
+            <option value="OFFER_SENT">Offer sent</option>
+            <option value="DETAILS_SUBMITTED">Awaiting review</option>
+            <option value="REJECTED">Rejected</option>
+          </Select>
+          <Button variant="outline" onClick={exportCsv}>Export CSV</Button>
+          <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>
+        </div>
       </div>
 
       <DataTable
         columns={columns}
-        rows={rows || []}
+        rows={visible}
         loading={!rows}
         searchKeys={['first_name', 'last_name', 'official_email', 'employee_code', 'designation', 'department']}
         searchPlaceholder="Search name, email, ID…"

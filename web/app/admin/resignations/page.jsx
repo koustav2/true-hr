@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { Card, Button, Select, Field, Modal, Textarea, Spinner, Empty } from '@/components/ui.jsx';
+import { downloadCsv } from '@/lib/csv.js';
 
 const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN'];
 const dmy = (iso) => { if (!iso) return '—'; const p = String(iso).slice(0, 10).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : iso; };
@@ -36,11 +37,22 @@ export default function ResignationsPage() {
           <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Resignations</h1>
           <p className="text-ink-faint text-sm mt-0.5">Review and act on employee resignation requests.</p>
         </div>
-        <Field label="Status">
-          <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-            {STATUSES.map((s) => <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>)}
-          </Select>
-        </Field>
+        <div className="flex items-end gap-2.5">
+          <Field label="Status">
+            <Select value={status} onChange={(e) => setStatus(e.target.value)}>
+              {STATUSES.map((s) => <option key={s} value={s}>{s[0] + s.slice(1).toLowerCase()}</option>)}
+            </Select>
+          </Field>
+          <Button variant="outline" onClick={() => downloadCsv(`resignations-${status.toLowerCase()}.csv`,
+            (rows || []).map((r) => ({
+              'Employee ID': r.employeeCode || '', Name: r.name || '',
+              'Resignation date': (r.resignationDate || '').slice(0, 10),
+              'Last working date': (r.lastWorkingDate || '').slice(0, 10),
+              Reason: r.reason || '', Status: r.status || '', 'Review note': r.reviewNote || '',
+            })))}>
+            Export CSV
+          </Button>
+        </div>
       </div>
       {msg && <p className="text-sm text-rose-600">{msg}</p>}
 

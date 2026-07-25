@@ -1055,6 +1055,15 @@ CREATE INDEX IF NOT EXISTS idx_pwreset_user ON password_reset_otps (user_id, cre
 -- The same table also backs two-step login codes; purpose keeps them apart.
 ALTER TABLE password_reset_otps ADD COLUMN IF NOT EXISTS purpose TEXT NOT NULL DEFAULT 'RESET';
 
+-- ── Reliability / performance hardening ──────────────────────────────────────
+-- Email retries back off exponentially instead of every worker tick.
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS next_attempt_at TIMESTAMPTZ NOT NULL DEFAULT now();
+CREATE INDEX IF NOT EXISTS idx_email_queue_pending ON email_queue (next_attempt_at) WHERE status='PENDING';
+-- Hot lookups: payroll run sheet, "approvals waiting on me", account-status check.
+CREATE INDEX IF NOT EXISTS idx_payslips_month ON payslips (year, month);
+CREATE INDEX IF NOT EXISTS idx_stage_approver ON approval_instance_stages (approver_employee_id, status);
+CREATE INDEX IF NOT EXISTS idx_ua_employee ON user_accounts (employee_id);
+
 -- Supporting documents on vendor registrations & agreements (base64, like policies).
 ALTER TABLE vendor_registrations
   ADD COLUMN IF NOT EXISTS document TEXT,

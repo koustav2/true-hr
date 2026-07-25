@@ -3,7 +3,8 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { useAuth } from '@/lib/auth.jsx';
 import { can } from '@/lib/permissions.js';
-import { Card } from '@/components/ui.jsx';
+import { Card, Button } from '@/components/ui.jsx';
+import { downloadCsv } from '@/lib/csv.js';
 import DataTable from '@/components/DataTable.jsx';
 
 const ACTION_LABEL = {
@@ -31,9 +32,17 @@ export default function AuditPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Audit log</h1>
-        <p className="text-ink-faint text-sm mt-0.5">The 200 most recent system actions.</p>
+      <div className="flex flex-wrap items-end justify-between gap-3">
+        <div>
+          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Audit log</h1>
+          <p className="text-ink-faint text-sm mt-0.5">The 200 most recent system actions.</p>
+        </div>
+        <Button variant="outline" onClick={() => downloadCsv('audit-log.csv', (rows || []).map((a) => ({
+          When: a.created_at || '', Action: a.action || '', By: a.actor_email || 'system',
+          Entity: `${a.entity || ''}${a.entity_id ? ` #${a.entity_id}` : ''}`,
+        })))}>
+          Export CSV
+        </Button>
       </div>
       <DataTable
         columns={columns}

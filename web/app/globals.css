@@ -40,12 +40,42 @@ body {
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
 /* prominent section/page titles: brand-gradient accent bar underneath */
-.page-title { position: relative; padding-bottom: 10px; }
+.page-title { position: relative; padding-bottom: 12px; letter-spacing: -0.02em; }
 .page-title::after {
   content: '';
   position: absolute;
   left: 0; bottom: 0;
-  height: 4px; width: 44px;
+  height: 5px; width: 60px;
   border-radius: 999px;
   background: linear-gradient(90deg, #2563eb, #16a34a);
+  box-shadow: 0 2px 8px -2px rgba(37,99,235,.5);
 }
+
+/* ── Uniform, modern tables everywhere (admin + ESS) ─────────────────────────
+   One consistent treatment regardless of per-page classes: micro-cap headers
+   on a soft gradient band, roomy rows, brand-tinted hover. */
+main table thead th {
+  text-transform: uppercase;
+  font-size: 11px;
+  letter-spacing: .07em;
+  font-weight: 700;
+  color: #64748b;
+  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+}
+main table tbody tr { transition: background .12s ease; }
+main table tbody tr:hover { background: rgba(37,99,235,.035); }
+
+/* Section sub-headings (the small uppercase ones) get the brand tick */
+main section > h2 { display: flex; align-items: center; gap: 8px; }
+main section > h2::before {
+  content: '';
+  width: 4px; height: 14px; border-radius: 999px;
+  background: linear-gradient(180deg, #2563eb, #16a34a);
+}
+
+/* Page titles a notch larger & tighter everywhere for presence */
+main h1.page-title { font-size: 30px; line-height: 1.15; }
+@media (max-width: 640px) { main h1.page-title { font-size: 25px; } }
+
+/* Give every page's lead-in (the sentence under the title) a calm, readable cap */
+main h1.page-title + p { max-width: 640px; }

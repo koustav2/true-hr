@@ -1,8 +1,8 @@
 import React from 'react';
 import { createPortal } from 'react-dom';
 export function Button({ as: As = 'button', variant = 'primary', size = 'md', className = '', children, ...props }) {
-  const base = 'inline-flex items-center justify-center gap-2 font-medium rounded-lg transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
-  const sizes = { md: 'px-4 py-2.5 text-sm', sm: 'px-3 py-1.5 text-[13px]' };
+  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
+  const sizes = { md: 'px-5 py-2.5 text-sm', sm: 'px-3.5 py-1.5 text-[13px]' };
   const styles = {
     primary: 'text-white bg-brand-gradient bg-[length:140%_140%] bg-[position:0%] hover:bg-[position:100%] transition-[background-position,box-shadow] shadow-btn hover:shadow-pop',
     soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100 ring-1 ring-inset ring-brand-100',
@@ -14,8 +14,8 @@ export function Button({ as: As = 'button', variant = 'primary', size = 'md', cl
 }
 
 export function Card({ className = '', hover = false, children }) {
-  const interactive = hover ? 'lift hover:shadow-lift hover:border-slate-300/80' : '';
-  return <div className={`bg-white rounded-xl2 border border-line shadow-card ${interactive} ${className}`}>{children}</div>;
+  const interactive = hover ? 'lift hover:shadow-lift hover:border-brand-200/70' : '';
+  return <div className={`bg-white rounded-xl3 border border-line shadow-card ${interactive} ${className}`}>{children}</div>;
 }
 
 export function Field({ label, hint, required, children }) {
@@ -30,7 +30,7 @@ export function Field({ label, hint, required, children }) {
   );
 }
 
-const inputCls = 'w-full rounded-lg border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-400 outline-none transition focus:border-brand-500 focus:shadow-focus';
+const inputCls = 'w-full rounded-xl border border-line bg-white px-3.5 py-2.5 text-sm text-ink placeholder:text-slate-400 shadow-soft outline-none transition hover:border-slate-300 focus:border-brand-500 focus:shadow-focus';
 // Callers may pass an explicit width (w-24, w-40, w-[…]); drop the built-in
 // w-full then, otherwise the two width utilities conflict and w-full can win
 // (seen live: the KPI "Wt %" input swallowing the whole row).
@@ -75,13 +75,16 @@ export function Modal({ open, onClose, title, children, actions, tone = 'brand',
 export function Empty({ title, subtitle, icon = null }) {
   return (
     <div className="text-center py-16 px-6">
-      <div className="mx-auto mb-4 grid place-items-center h-12 w-12 rounded-full bg-slate-100 text-ink-faint">
-        {icon || (
-          <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
-        )}
+      <div className="relative mx-auto mb-5 h-16 w-16">
+        <div className="absolute inset-0 rounded-full bg-gradient-to-br from-brand-100 to-emerald-100 blur-[6px] opacity-80" />
+        <div className="relative grid place-items-center h-16 w-16 rounded-full bg-gradient-to-br from-brand-50 to-emerald-50 text-brand-500 ring-1 ring-inset ring-brand-100">
+          {icon || (
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><path d="M3 7l9-4 9 4-9 4-9-4z"/><path d="M3 7v10l9 4 9-4V7"/></svg>
+          )}
+        </div>
       </div>
-      <div className="font-semibold text-ink">{title}</div>
-      {subtitle && <div className="text-sm text-ink-faint mt-1">{subtitle}</div>}
+      <div className="font-bold text-ink text-[15px]">{title}</div>
+      {subtitle && <div className="text-sm text-ink-faint mt-1.5 max-w-sm mx-auto leading-relaxed">{subtitle}</div>}
     </div>
   );
 }

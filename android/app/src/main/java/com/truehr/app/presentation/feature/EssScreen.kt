@@ -27,12 +27,13 @@ import androidx.hilt.navigation.compose.hiltViewModel
 import com.truehr.app.domain.model.KpiRow
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.InfoCard
+import com.truehr.app.presentation.components.MenuTile
 import com.truehr.app.presentation.components.SectionTitle
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.theme.*
 import java.util.Calendar
 
-private data class EssTile(val label: String, val icon: ImageVector, val route: String)
+private data class EssTile(val label: String, val icon: ImageVector, val route: String, val tint: Color)
 
 // GreenHR-style employee self-service hub (UserDashboard.aspx): quick tiles +
 // the 12-month performance strip.
@@ -43,18 +44,18 @@ fun EssScreen(onOpen: (String) -> Unit, onBack: () -> Unit, vm: EssViewModel = h
   LaunchedEffect(Unit) { vm.loadPerformance(year) }
 
   val tiles = listOf(
-    EssTile("My Profile", Icons.Filled.Person, Routes.PROFILE),
-    EssTile("Attendance", Icons.Filled.EventAvailable, Routes.ATTENDANCE),
-    EssTile("Leave", Icons.Filled.BeachAccess, Routes.LEAVE),
-    EssTile("Support", Icons.Filled.SupportAgent, Routes.SUPPORT),
-    EssTile("PMS", Icons.Filled.Insights, Routes.MY_PERFORMANCE),
-    EssTile("NFA", Icons.Filled.RequestQuote, Routes.NFA),
-    EssTile("Salary Slip", Icons.Filled.ReceiptLong, Routes.SALARY),
-    EssTile("Policies", Icons.AutoMirrored.Filled.ListAlt, Routes.POLICIES),
-    EssTile("HR Induction", Icons.Filled.School, Routes.feature("HR Induction")),
-    EssTile("Feedback", Icons.Filled.Forum, Routes.feature("Feedback")),
-    EssTile("COC / Undertaking", Icons.Filled.Gavel, Routes.feature("Business COC / Undertaking")),
-    EssTile("E-Resignation", Icons.Filled.Logout, Routes.RESIGNATION),
+    EssTile("My Profile", Icons.Filled.Person, Routes.PROFILE, Violet),
+    EssTile("Attendance", Icons.Filled.EventAvailable, Routes.ATTENDANCE, Green),
+    EssTile("Leave", Icons.Filled.BeachAccess, Routes.LEAVE, Rose),
+    EssTile("Support", Icons.Filled.SupportAgent, Routes.SUPPORT, Amber),
+    EssTile("PMS", Icons.Filled.Insights, Routes.MY_PERFORMANCE, Sky),
+    EssTile("NFA", Icons.Filled.RequestQuote, Routes.NFA, Grape),
+    EssTile("Salary Slip", Icons.Filled.ReceiptLong, Routes.SALARY, Teal),
+    EssTile("Policies", Icons.AutoMirrored.Filled.ListAlt, Routes.POLICIES, Sky),
+    EssTile("HR Induction", Icons.Filled.School, Routes.feature("HR Induction"), Violet),
+    EssTile("Feedback", Icons.Filled.Forum, Routes.feature("Feedback"), Amber),
+    EssTile("COC / Undertaking", Icons.Filled.Gavel, Routes.feature("Business COC / Undertaking"), Grape),
+    EssTile("E-Resignation", Icons.Filled.Logout, Routes.RESIGNATION, Rose),
   )
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
@@ -86,17 +87,9 @@ fun EssScreen(onOpen: (String) -> Unit, onBack: () -> Unit, vm: EssViewModel = h
       SectionTitle("Self Service")
       // 3-column tile grid (fixed rows inside the scroll column)
       tiles.chunked(3).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           row.forEach { t ->
-            Surface(color = Surface, shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp, modifier = Modifier.weight(1f).height(112.dp)) {
-              Column(Modifier.clickable { onOpen(t.route) }.padding(10.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Box(Modifier.size(44.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-                  Icon(t.icon, null, tint = Green, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.height(8.dp))
-                Text(t.label, style = MaterialTheme.typography.labelSmall, color = Ink, textAlign = TextAlign.Center, maxLines = 2)
-              }
-            }
+            MenuTile(t.label, t.icon, t.tint, Modifier.weight(1f)) { onOpen(t.route) }
           }
           repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }

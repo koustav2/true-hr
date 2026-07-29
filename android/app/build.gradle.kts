@@ -68,9 +68,12 @@ android {
       dimension = "env"
       applicationIdSuffix = ".staging"
       versionNameSuffix = "-staging"
-      // 10.0.2.2 reaches localhost from the Android emulator.
-      buildConfigField("String", "BASE_URL", "\"http://10.0.2.2:4000/api/\"")
-      buildConfigField("String", "WEB_URL", "\"http://10.0.2.2:5173\"")
+      // Local backend host. 10.0.2.2 reaches the Mac's localhost from the Android
+      // emulator. For a physical device on the same Wi-Fi, set your Mac's LAN IP in
+      // local.properties:  STAGING_HOST=192.168.1.35
+      val stagingHost = localProps.getProperty("STAGING_HOST") ?: "10.0.2.2"
+      buildConfigField("String", "BASE_URL", "\"http://$stagingHost:4000/api/\"")
+      buildConfigField("String", "WEB_URL", "\"http://$stagingHost:5173\"")
     }
   }
 

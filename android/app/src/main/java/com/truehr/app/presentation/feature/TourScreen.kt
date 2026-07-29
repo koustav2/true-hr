@@ -27,21 +27,22 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.truehr.app.presentation.components.GradientHeader
+import com.truehr.app.presentation.components.MenuTile
 import com.truehr.app.presentation.components.initials
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 
-private data class TourTile(val label: String, val icon: ImageVector, val route: String)
+private data class TourTile(val label: String, val icon: ImageVector, val route: String, val tint: androidx.compose.ui.graphics.Color)
 
 @Composable
 fun TourScreen(onOpen: (String) -> Unit, onBack: () -> Unit, profileVm: ProfileViewModel = hiltViewModel()) {
   val p by profileVm.state.collectAsState()
   val tiles = listOf(
-    TourTile("Tour Management", Icons.Filled.Map, Routes.TOUR_LIVE),
-    TourTile("Tour Details", Icons.AutoMirrored.Filled.ListAlt, Routes.TOUR_DETAILS),
-    TourTile("Geo Tag", Icons.Filled.AddLocationAlt, Routes.GEOTAG),
-    TourTile("Geo Tag Details", Icons.Filled.PinDrop, Routes.GEOTAG_LIST),
+    TourTile("Tour Management", Icons.Filled.Map, Routes.TOUR_LIVE, Green),
+    TourTile("Tour Details", Icons.AutoMirrored.Filled.ListAlt, Routes.TOUR_DETAILS, Sky),
+    TourTile("Geo Tag", Icons.Filled.AddLocationAlt, Routes.GEOTAG, Amber),
+    TourTile("Geo Tag Details", Icons.Filled.PinDrop, Routes.GEOTAG_LIST, Violet),
   )
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -63,17 +64,9 @@ fun TourScreen(onOpen: (String) -> Unit, onBack: () -> Unit, profileVm: ProfileV
         }
       }
     }
-    LazyVerticalGrid(columns = GridCells.Fixed(2), contentPadding = PaddingValues(14.dp), horizontalArrangement = Arrangement.spacedBy(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
+    LazyVerticalGrid(columns = GridCells.Fixed(3), contentPadding = PaddingValues(14.dp), horizontalArrangement = Arrangement.spacedBy(10.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
       items(tiles) { t ->
-        Surface(color = Surface, shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp, modifier = Modifier.fillMaxWidth().height(150.dp)) {
-          Column(Modifier.clickable { onOpen(t.route) }.padding(16.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-            Box(Modifier.size(58.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-              Icon(t.icon, null, tint = Green, modifier = Modifier.size(28.dp))
-            }
-            Spacer(Modifier.height(12.dp))
-            Text(t.label, style = MaterialTheme.typography.labelLarge, color = Ink, textAlign = TextAlign.Center)
-          }
-        }
+        MenuTile(t.label, t.icon, t.tint) { onOpen(t.route) }
       }
     }
   }

@@ -32,7 +32,13 @@ import com.truehr.app.presentation.theme.*
 fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewModel()) {
   val s by vm.list.collectAsState()
   var q by remember { mutableStateOf("") }
+  // Debounced query: results only compute once the user pauses typing.
+  var debouncedQ by remember { mutableStateOf("") }
   LaunchedEffect(Unit) { vm.load() }
+  LaunchedEffect(q) {
+    if (q.isBlank()) debouncedQ = ""
+    else { kotlinx.coroutines.delay(600); debouncedQ = q }
+  }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -43,18 +49,28 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
     }
     OutlinedTextField(
       value = q, onValueChange = { q = it },
-      placeholder = { Text("Search e.g. mumbai, sharma  (comma = AND)") },
+      placeholder = { Text("Please type employee id or name to search") },
       leadingIcon = { Icon(Icons.Filled.Search, null, tint = Green) },
       singleLine = true, shape = RoundedCornerShape(14.dp),
       colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
       modifier = Modifier.fillMaxWidth().padding(14.dp),
     )
     when {
+      // Directory is private by default — results appear only after the user searches.
+      q.isBlank() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
+        Column(horizontalAlignment = Alignment.CenterHorizontally) {
+          Icon(Icons.Filled.Search, null, tint = InkFaint, modifier = Modifier.size(40.dp))
+          Spacer(Modifier.height(10.dp))
+          Text("Search by employee ID or name\nto find a colleague.", color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+        }
+      }
+      // Still typing — hold the list back until the user pauses.
+      debouncedQ != q -> Box(Modifier.fillMaxSize())
       s.loading -> CenterLoader()
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       else -> {
         val filtered = (s.data ?: emptyList()).filter {
-          matchesQuery("${it.name} ${it.employeeCode} ${it.designation} ${it.department} ${it.state} ${it.city}", q)
+          matchesQuery("${it.name} ${it.employeeCode}", debouncedQ)
         }
         if (filtered.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
           Text("No employees found.", color = InkSoft)
@@ -122,7 +138,8 @@ private fun ContactLine(icon: ImageVector, value: String) {
  * Comma-separated, fuzzy search. The query is split on commas into terms; an entry
  * matches only if EVERY term matches somewhere in its text. Each term matches by
  * substring OR a typo-tolerant (edit-distance) match against any word.
- * e.g. "mumbai, sharma" → people named Sharma located in Mumbai; "mumbi" still hits "mumbai".
+ * Matching runs over the employee's name and employee code only;
+ * e.g. "sharma" or "TKF5001" — "sharme" still hits "sharma" (typo-tolerant).
  */
 private fun matchesQuery(haystack: String, query: String): Boolean {
   val terms = query.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
@@ -137,7 +154,12 @@ private fun matchesQuery(haystack: String, query: String): Boolean {
 private fun fuzzyWord(token: String, term: String): Boolean {
   if (token.contains(term) || term.contains(token)) return true
   if (term.length < 3) return token.startsWith(term)
-  val maxDist = if (term.length <= 5) 1 else 2
+  // People usually type the start of a name right: a shared prefix of 4+ letters
+  // covering at least half the query counts (e.g. "nishiiikaa" → "nishikanta").
+  val prefix = token.commonPrefixWith(term).length
+  if (prefix >= 4 && prefix * 2 >= term.length) return true
+  // Otherwise allow typos scaled to word length (~1 per 3 letters).
+  val maxDist = maxOf(1, term.length / 3)
   return levenshtein(token, term) <= maxDist
 }
 

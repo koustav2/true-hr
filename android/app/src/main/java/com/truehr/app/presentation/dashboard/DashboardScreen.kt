@@ -35,6 +35,7 @@ import com.truehr.app.data.remote.dto.BannerDto
 import com.truehr.app.presentation.components.Avatar
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.HeaderIconButton
+import com.truehr.app.presentation.components.MenuTile
 import com.truehr.app.presentation.components.SectionTitle
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.theme.*
@@ -131,7 +132,7 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
         SectionTitle("Workspace")
       }
       items(items) { item ->
-        DashboardTile(item) { onOpen(item.route) }
+        MenuTile(item.label, item.icon, item.tint) { onOpen(item.route) }
       }
     }
   }
@@ -189,7 +190,7 @@ private fun BannerCarousel(banners: List<BannerDto>) {
   }
 }
 
-/** Top-right account menu: profile, support, policies, password, resignation + logout. */
+/** Top-right account menu: profile, team actions, password (+ flagged NFA suite) + logout. */
 @Composable
 private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
   var open by remember { mutableStateOf(false) }
@@ -248,43 +249,6 @@ private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
           }
         },
         onClick = { open = false; confirmLogout = true },
-      )
-    }
-  }
-}
-
-@Composable
-private fun DashboardTile(item: DashItem, onClick: () -> Unit) {
-  Surface(
-    color = Surface,
-    shape = RoundedCornerShape(18.dp),
-    border = BorderStroke(1.dp, Line),
-    shadowElevation = 1.dp,
-    modifier = Modifier.fillMaxWidth().aspectRatio(1.04f),
-  ) {
-    Column(
-      Modifier.clickable(onClick = onClick).padding(10.dp),
-      horizontalAlignment = Alignment.CenterHorizontally,
-      verticalArrangement = Arrangement.Center,
-    ) {
-      Box(
-        modifier = Modifier
-          .size(46.dp)
-          .clip(RoundedCornerShape(14.dp))
-          .background(item.tint.copy(alpha = 0.12f)),
-        contentAlignment = Alignment.Center,
-      ) {
-        Icon(item.icon, null, tint = item.tint, modifier = Modifier.size(24.dp))
-      }
-      Spacer(Modifier.height(9.dp))
-      Text(
-        item.label,
-        style = MaterialTheme.typography.labelMedium,
-        fontWeight = FontWeight.SemiBold,
-        color = Ink,
-        textAlign = TextAlign.Center,
-        maxLines = 2,
-        overflow = TextOverflow.Ellipsis,
       )
     }
   }

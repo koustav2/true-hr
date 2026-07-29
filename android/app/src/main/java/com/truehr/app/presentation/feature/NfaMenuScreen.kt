@@ -25,10 +25,11 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.InfoCard
+import com.truehr.app.presentation.components.MenuTile
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.theme.*
 
-private data class NfaTile(val label: String, val icon: ImageVector, val route: String)
+private data class NfaTile(val label: String, val icon: ImageVector, val route: String, val tint: androidx.compose.ui.graphics.Color)
 
 @Composable
 fun NfaMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, vm: NfaViewModel = hiltViewModel()) {
@@ -36,13 +37,13 @@ fun NfaMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, vm: NfaViewModel
   LaunchedEffect(Unit) { vm.loadLedger() }
 
   val tiles = listOf(
-    NfaTile("Create NFA", Icons.Filled.PostAdd, Routes.NFA_CREATE),
-    NfaTile("My NFAs", Icons.AutoMirrored.Filled.ListAlt, Routes.NFA_LIST),
-    NfaTile("NFA Approvals", Icons.Filled.FactCheck, Routes.NFA_APPROVALS),
-    NfaTile("Update Settlement", Icons.Filled.AccountBalanceWallet, Routes.NFA_LIST),
-    NfaTile("Settlement Approvals", Icons.Filled.FactCheck, Routes.SETTLEMENT_APPROVALS),
-    NfaTile("Vendor Registration", Icons.Filled.PostAdd, Routes.VENDOR_REGISTRATION),
-    NfaTile("Upload Agreement", Icons.AutoMirrored.Filled.ListAlt, Routes.UPLOAD_AGREEMENT),
+    NfaTile("Create NFA", Icons.Filled.PostAdd, Routes.NFA_CREATE, Green),
+    NfaTile("My NFAs", Icons.AutoMirrored.Filled.ListAlt, Routes.NFA_LIST, Sky),
+    NfaTile("NFA Approvals", Icons.Filled.FactCheck, Routes.NFA_APPROVALS, Amber),
+    NfaTile("Update Settlement", Icons.Filled.AccountBalanceWallet, Routes.NFA_LIST, Teal),
+    NfaTile("Settlement Approvals", Icons.Filled.FactCheck, Routes.SETTLEMENT_APPROVALS, Violet),
+    NfaTile("Vendor Registration", Icons.Filled.PostAdd, Routes.VENDOR_REGISTRATION, Grape),
+    NfaTile("Upload Agreement", Icons.AutoMirrored.Filled.ListAlt, Routes.UPLOAD_AGREEMENT, Rose),
   )
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
@@ -53,20 +54,12 @@ fun NfaMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, vm: NfaViewModel
       }
     }
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
-      tiles.chunked(2).forEach { row ->
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+      tiles.chunked(3).forEach { row ->
+        Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
           row.forEach { t ->
-            Surface(color = Surface, shape = RoundedCornerShape(18.dp), shadowElevation = 2.dp, modifier = Modifier.weight(1f).height(120.dp)) {
-              Column(Modifier.clickable { onOpen(t.route) }.padding(12.dp), horizontalAlignment = Alignment.CenterHorizontally, verticalArrangement = Arrangement.Center) {
-                Box(Modifier.size(46.dp).clip(CircleShape).background(Green.copy(alpha = 0.10f)), contentAlignment = Alignment.Center) {
-                  Icon(t.icon, null, tint = Green, modifier = Modifier.size(22.dp))
-                }
-                Spacer(Modifier.height(10.dp))
-                Text(t.label, style = MaterialTheme.typography.labelMedium, color = Ink, textAlign = TextAlign.Center)
-              }
-            }
+            MenuTile(t.label, t.icon, t.tint, Modifier.weight(1f)) { onOpen(t.route) }
           }
-          repeat(2 - row.size) { Spacer(Modifier.weight(1f)) }
+          repeat(3 - row.size) { Spacer(Modifier.weight(1f)) }
         }
       }
       InfoCard {

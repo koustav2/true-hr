@@ -104,7 +104,7 @@ export async function regularized(req, res, next) {
     const month = parseInt(req.query.month, 10) || (new Date().getMonth() + 1);
     const rows = (await query(
       `SELECT days FROM miss_punch WHERE employee_id=$1 AND month=$2 AND year=$3 AND status='APPROVED'`,
-      [empId, year, month])).rows;
+      [empId, month, year])).rows;
     const set = new Set();
     rows.forEach((r) => String(r.days || '').split(',').forEach((s) => {
       const n = parseInt(s.trim(), 10); if (Number.isFinite(n)) set.add(n);
@@ -114,6 +114,11 @@ export async function regularized(req, res, next) {
 }
 
 // GET /attendance/monthly?year=&month=&employeeId= -> per-day status map for the calendar
+// P  = punched IN **and** OUT (or day regularised by an approved miss-punch / covered by approved OD;
+//      today counts as P from punch-in, since the day isn't over yet)
+// A  = past working day with missing punches — either no punches at all, or punch-in without punch-out.
+//      Both cases stay eligible for a miss-punch application.
+// L  = approved leave · H = holiday (national or posting-state) · WO = Sunday
 export async function monthly(req, res, next) {
   try {
     const t = await resolveTarget(req);
@@ -123,19 +128,67 @@ export async function monthly(req, res, next) {
     const month = parseInt(req.query.month, 10) || (new Date().getMonth() + 1);
     const daysInMonth = new Date(year, month, 0).getDate();
 
-    const present = empId ? (await query(
-      `SELECT DISTINCT EXTRACT(DAY FROM captured_at)::int AS d
-       FROM attendance
-       WHERE employee_id=$1 AND type='IN'
-         AND EXTRACT(YEAR FROM captured_at)=$2 AND EXTRACT(MONTH FROM captured_at)=$3`,
-      [empId, year, month])).rows.map((r) => r.d) : [];
+    const inDays = new Set(); const outDays = new Set();
+    const done = new Set(); const leave = new Set(); const holiday = new Set();
+    let emp = {};
+    if (empId) {
+      emp = (await query(
+        `SELECT date_of_joining, posting_state FROM employees WHERE id=$1`, [empId])).rows[0] || {};
+
+      (await query(
+        `SELECT DISTINCT type, EXTRACT(DAY FROM captured_at)::int AS d
+         FROM attendance
+         WHERE employee_id=$1
+           AND EXTRACT(YEAR FROM captured_at)=$2 AND EXTRACT(MONTH FROM captured_at)=$3`,
+        [empId, year, month])).rows
+        .forEach((r) => (r.type === 'IN' ? inDays : outDays).add(r.d));
+
+      // Approved miss-punches regularise their day numbers.
+      (await query(
+        `SELECT days FROM miss_punch WHERE employee_id=$1 AND month=$2 AND year=$3 AND status='APPROVED'`,
+        [empId, month, year])).rows.forEach((r) => String(r.days || '').split(',').forEach((s) => {
+        const n = parseInt(s.trim(), 10); if (Number.isFinite(n)) done.add(n);
+      }));
+
+      // Approved on-duty days count as present; approved leave shows as L.
+      const rangeDays = async (table) => (await query(
+        `SELECT DISTINCT EXTRACT(DAY FROM gs)::int AS d
+           FROM ${table} r,
+                generate_series(GREATEST(r.from_date, make_date($2,$3,1)),
+                                LEAST(r.to_date, (make_date($2,$3,1) + interval '1 month - 1 day')::date),
+                                interval '1 day') gs
+          WHERE r.employee_id=$1 AND r.status='APPROVED'
+            AND r.from_date <= (make_date($2,$3,1) + interval '1 month - 1 day')::date
+            AND r.to_date >= make_date($2,$3,1)`,
+        [empId, year, month])).rows.map((r) => r.d);
+      (await rangeDays('on_duty')).forEach((d) => done.add(d));
+      (await rangeDays('leave_requests')).forEach((d) => leave.add(d));
+
+      (await query(
+        `SELECT EXTRACT(DAY FROM holiday_date)::int AS d FROM holidays
+          WHERE EXTRACT(YEAR FROM holiday_date)=$1 AND EXTRACT(MONTH FROM holiday_date)=$2
+            AND (state IS NULL OR state=$3)`,
+        [year, month, emp.posting_state || null])).rows.forEach((r) => holiday.add(r.d));
+    }
+
+    const now = new Date();
+    const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
+    const doj = emp.date_of_joining
+      ? new Date(new Date(emp.date_of_joining).getFullYear(), new Date(emp.date_of_joining).getMonth(), new Date(emp.date_of_joining).getDate())
+      : null;
 
     const days = [];
     for (let d = 1; d <= daysInMonth; d++) {
-      const dow = new Date(year, month - 1, d).getDay(); // 0=Sun
+      const date = new Date(year, month - 1, d);
+      const dow = date.getDay(); // 0=Sun
       let status = null;
-      if (present.includes(d)) status = 'P';
+      if (doj && date < doj) status = null;                                      // before joining
+      else if ((inDays.has(d) && outDays.has(d)) || done.has(d)) status = 'P';   // complete / regularised / OD
+      else if (date.getTime() === today.getTime() && inDays.has(d)) status = 'P'; // today, still at work
+      else if (holiday.has(d)) status = 'H';
       else if (dow === 0) status = 'WO';
+      else if (leave.has(d)) status = 'L';
+      else if (date < today) status = 'A';                                       // missed/incomplete punches
       days.push({ day: d, status });
     }
     res.json({ year, month, days });

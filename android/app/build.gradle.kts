@@ -31,12 +31,12 @@ val hasReleaseKeystore = keystoreProps.getProperty("storeFile") != null
 
 android {
   namespace = "com.truehr.app"
-  compileSdk = 34
+  compileSdk = 35
 
   defaultConfig {
     applicationId = "com.truehr.app"
     minSdk = 24
-    targetSdk = 34
+    targetSdk = 35
     versionCode = 3
     versionName = "1.1.0"
     vectorDrawables { useSupportLibrary = true }

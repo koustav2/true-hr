@@ -4,7 +4,6 @@ import { api, storeAuth, setToken } from '@/lib/api.js';
 import { Card, Button, Input, Textarea, Spinner, Empty, Field } from '@/components/ui.jsx';
 
 const TONE = { PENDING: 'text-amber-700', APPROVED: 'text-emerald-700', REJECTED: 'text-rose-700', WITHDRAWN: 'text-ink-faint' };
-const STAGE_TONE = { APPROVED: 'text-emerald-700', REJECTED: 'text-red-700', BYPASSED: 'text-slate-400', PENDING: 'text-amber-700', WAITING: 'text-slate-400' };
 
 export default function ResignationPage() {
   const [tab, setTab] = useState(0);
@@ -23,21 +22,59 @@ export default function ResignationPage() {
   );
 }
 
-function Chain({ id }) {
-  const [inst, setInst] = useState(null);
-  useEffect(() => { api.get(`/resignation/${id}/chain`).then(setInst).catch(() => setInst(false)); }, [id]);
-  if (inst === null) return <Spinner />;
-  if (!inst) return null;
+// Android-style section card: teal header strip + body (matches the app's Resignation screen).
+function Section({ title, children }) {
   return (
-    <div className="space-y-1 mt-2">
-      {inst.chain.map((s) => (
-        <div key={s.seq} className="flex justify-between text-xs border border-line rounded px-2.5 py-1">
-          <span>{s.seq}. {s.roleKey.replace(/_/g, ' ')} <span className="text-ink-soft">{s.approver?.name || '—'}</span>
-            {s.remarks && <span className="text-ink-faint"> “{s.remarks}”</span>}</span>
-          <span className={`font-semibold ${STAGE_TONE[s.status] || ''}`}>{s.status}</span>
-        </div>
-      ))}
+    <Card className="overflow-hidden">
+      <div className="bg-[#149A55] px-4 py-2.5 text-sm font-bold text-white">{title}</div>
+      <div className="p-4">{children}</div>
+    </Card>
+  );
+}
+
+function KV({ k, v }) {
+  return (
+    <div className="flex py-1 text-sm">
+      <span className="w-40 shrink-0 text-ink-faint">{k}</span>
+      <span className="min-w-0 flex-1 font-medium text-ink">{v || '—'}</span>
     </div>
+  );
+}
+
+// Same stage-status pill colours as the Android approvals table.
+const STAGE_PILL = {
+  APPROVED: 'bg-emerald-100 text-emerald-700',
+  REJECTED: 'bg-red-100 text-red-700',
+  BYPASSED: 'bg-slate-100 text-slate-500',
+  PENDING: 'bg-amber-100 text-amber-700',
+  WAITING: 'bg-slate-100 text-slate-500',
+};
+
+// GreenHR-style stage table: role → approver (code - name, email) → live status.
+// Shown even before applying (the backend previews who will approve).
+function Approvals({ approvers }) {
+  if (!approvers?.length) return null;
+  return (
+    <Section title="Approvals">
+      <div className="divide-y divide-line">
+        {approvers.map((a) => (
+          <div key={a.seq} className="flex items-center gap-3 py-2.5">
+            <span className="w-36 shrink-0 text-xs font-semibold text-ink-soft">{a.stage || 'Approver'}</span>
+            <div className="min-w-0 flex-1">
+              <div className={`text-sm font-semibold ${a.name ? 'text-ink' : 'text-ink-faint'}`}>
+                {[a.employeeCode, a.name].filter(Boolean).join(' - ') || 'Not assigned'}
+              </div>
+              {a.email && <div className="truncate text-xs text-ink-soft">{a.email}</div>}
+            </div>
+            {a.status && (
+              <span className={`shrink-0 rounded-full px-2.5 py-1 text-[11px] font-semibold ${STAGE_PILL[a.status] || 'bg-slate-100 text-slate-500'}`}>
+                {a.status.charAt(0) + a.status.slice(1).toLowerCase()}
+              </span>
+            )}
+          </div>
+        ))}
+      </div>
+    </Section>
   );
 }
 
@@ -73,11 +110,14 @@ function Mine() {
   return (
     <div className="space-y-4">
       {ctx && ctx !== false && (
-        <Card className="p-3 text-xs text-ink-soft grid sm:grid-cols-3 gap-y-1">
-          <span>Employee: <b>{ctx.employee?.name || `${ctx.firstName || ''}`}</b></span>
-          <span>Notice period: <b>{ctx.noticePeriodDays ?? ctx.employee?.noticePeriodDays ?? 30} days</b></span>
-          <span>Designation: <b>{ctx.designation || ctx.employee?.designation || '—'}</b></span>
-        </Card>
+        <Section title="Employee Details">
+          <KV k="Employee Code" v={ctx.employee?.employeeCode} />
+          <KV k="Full Name" v={ctx.employee?.name} />
+          <KV k="Vertical" v={ctx.employee?.vertical} />
+          <KV k="Office Location" v={ctx.employee?.location} />
+          <KV k="Designation" v={ctx.employee?.designation} />
+          <KV k="Notice Period" v={ctx.employee?.noticePeriodDays != null ? `${ctx.employee.noticePeriodDays} Days` : null} />
+        </Section>
       )}
       {!active && (
         <Card className="p-4 space-y-2.5 max-w-lg">
@@ -120,9 +160,10 @@ function Mine() {
                 {r.status === 'PENDING' && <Button size="sm" variant="outline" onClick={() => withdraw(r.id)}>Withdraw</Button>}
               </div>
             </div>
-            {r.status === 'PENDING' && <Chain id={r.id} />}
           </Card>
         ))}
+      {/* Android-parity approvals table: who approves, in order, with live status. */}
+      {ctx && ctx !== false && <Approvals approvers={ctx.approvers} />}
     </div>
   );
 }

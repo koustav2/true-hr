@@ -67,16 +67,36 @@ function Monthly() {
       )}
       {bar}
       {data === null ? <Spinner /> : data === false ? <Empty title="Could not load" /> : (
-        <Card className="p-4">
+        <Card className="p-4 space-y-3">
+          {/* Summary counts — same chips as the Android monthly calendar */}
+          <div className="grid grid-cols-4 gap-2 text-center">
+            {[['Present', 'P', 'bg-emerald-50 text-emerald-700'],
+              ['Absent', 'A', 'bg-rose-50 text-rose-700'],
+              ['Leave', 'L', 'bg-sky-50 text-sky-700'],
+              ['WO', 'WO', 'bg-amber-50 text-amber-700']].map(([label, code, cls]) => (
+              <div key={code} className={`rounded-xl py-2 ${cls}`}>
+                <div className="text-base font-bold">{data.days.filter((d) => d.status === code).length}</div>
+                <div className="text-[10px] text-ink-soft">{label}</div>
+              </div>
+            ))}
+          </div>
           <div className="grid grid-cols-7 gap-1.5 text-center text-xs">
             {['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'].map((d) => <div key={d} className="text-ink-faint font-semibold py-1">{d}</div>)}
             {Array.from({ length: new Date(year, month - 1, 1).getDay() }).map((_, i) => <div key={`b${i}`} />)}
             {data.days.map((d) => (
               <div key={d.day} className={`rounded-lg py-2 ${
                 d.status === 'P' ? 'bg-emerald-50 text-emerald-700 font-semibold' :
+                d.status === 'A' ? 'bg-rose-50 text-rose-700 font-semibold' :
+                d.status === 'L' ? 'bg-sky-50 text-sky-700' :
+                d.status === 'H' ? 'bg-violet-50 text-violet-600' :
                 d.status === 'WO' ? 'bg-amber-50/60 text-amber-600' : 'bg-slate-50 text-ink-faint'}`}>
                 <div>{d.day}</div>
-                <div className="text-[9px]">{d.status === 'P' ? 'Present' : d.status === 'WO' ? 'Week off' : '—'}</div>
+                <div className="text-[9px]">{
+                  d.status === 'P' ? 'Present' :
+                  d.status === 'A' ? 'Absent' :
+                  d.status === 'L' ? 'Leave' :
+                  d.status === 'H' ? 'Holiday' :
+                  d.status === 'WO' ? 'Week off' : '—'}</div>
               </div>
             ))}
           </div>

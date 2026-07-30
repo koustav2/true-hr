@@ -183,13 +183,14 @@ export async function monthly(req, res, next) {
       const date = new Date(year, month - 1, d);
       const dow = date.getDay(); // 0=Sun
       let status = null;
-      if (doj && date < doj) status = null;                                      // before joining
-      else if ((inDays.has(d) && outDays.has(d)) || done.has(d)) status = 'P';   // complete / regularised / OD
+      if ((inDays.has(d) && outDays.has(d)) || done.has(d)) status = 'P';        // complete / regularised / OD
       else if (date.getTime() === today.getTime() && inDays.has(d)) status = 'P'; // today, still at work
       else if (holiday.has(d)) status = 'H';
       else if (dow === 0) status = 'WO';
       else if (leave.has(d)) status = 'L';
-      else if (date < today) status = 'A';                                       // missed/incomplete punches
+      // Absent only from the joining date onwards — but a wrong/missing DOJ must
+      // never blank P/WO/H/L, so the DOJ guard applies to the A branch alone.
+      else if (date < today && (!doj || date >= doj)) status = 'A';              // missed/incomplete punches
       days.push({ day: d, status });
     }
     res.json({ year, month, days });

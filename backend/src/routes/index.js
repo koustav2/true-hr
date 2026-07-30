@@ -25,6 +25,7 @@ import * as settlement from '../controllers/settlementController.js';
 import * as nfaReport from '../controllers/nfaReportController.js';
 import * as pms from '../controllers/pmsController.js';
 import * as vendor from '../controllers/vendorController.js';
+import * as notif from '../controllers/notificationController.js';
 import { authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin } from '../middleware/auth.js';
 
 const r = Router();
@@ -43,6 +44,13 @@ r.get('/me', authenticate, auth.me);
 r.get('/me/profile', authenticate, auth.meProfile);
 r.get('/me/team', authenticate, auth.myTeam);
 r.get('/me/directory', authenticate, auth.directory);
+
+// --- Push notifications: device registration + in-app notification centre ---
+r.post('/me/device-token', authenticate, notif.registerDevice);
+r.delete('/me/device-token', authenticate, notif.unregisterDevice);
+r.get('/notifications', authenticate, notif.list);
+r.get('/notifications/unread-count', authenticate, notif.unreadCount);
+r.post('/notifications/read-all', authenticate, notif.markAllRead);
 
 // --- Employee: attendance ---
 r.post('/attendance/punch', authenticate, attendance.punch);

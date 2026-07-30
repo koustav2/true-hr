@@ -1,0 +1,48 @@
+{
+  "project_info": {
+    "project_number": "363630662353",
+    "project_id": "truehr-21fd2",
+    "storage_bucket": "truehr-21fd2.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363630662353:android:1a76dd5910ad5a10962bf0",
+        "android_client_info": {
+          "package_name": "com.truehr.app"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDV8BwC7fkJkeHz4c6mABJ6J1dq8bsqn-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:363630662353:android:364bd5aecdec2e52962bf0",
+        "android_client_info": {
+          "package_name": "com.truehr.app.staging"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyDV8BwC7fkJkeHz4c6mABJ6J1dq8bsqn-I"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

@@ -19,13 +19,31 @@ import com.truehr.app.data.remote.dto.TeamMemberDto
 import com.truehr.app.data.remote.dto.TodayDto
 import okhttp3.ResponseBody
 import retrofit2.http.Body
+import retrofit2.http.DELETE
 import retrofit2.http.GET
+import retrofit2.http.HTTP
 import retrofit2.http.POST
 import retrofit2.http.Path
 import retrofit2.http.Query
 import retrofit2.http.Streaming
 
 interface ApiService {
+  // --- Push notifications / notification centre ---
+  @POST("me/device-token")
+  suspend fun registerDevice(@Body body: com.truehr.app.data.remote.dto.DeviceTokenRequest)
+
+  @HTTP(method = "DELETE", path = "me/device-token", hasBody = true)
+  suspend fun unregisterDevice(@Body body: com.truehr.app.data.remote.dto.DeviceTokenRequest)
+
+  @GET("notifications")
+  suspend fun notifications(@Query("limit") limit: Int = 50): List<com.truehr.app.data.remote.dto.NotificationDto>
+
+  @GET("notifications/unread-count")
+  suspend fun notificationUnreadCount(): com.truehr.app.data.remote.dto.UnreadCountDto
+
+  @POST("notifications/read-all")
+  suspend fun markNotificationsRead()
+
   @POST("auth/login")
   suspend fun login(@Body body: LoginRequest): LoginResponse
 

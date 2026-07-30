@@ -26,6 +26,7 @@
         <activity
             android:name=".MainActivity"
             android:exported="true"
+            android:launchMode="singleTop"
             android:theme="@style/Theme.TrueHR">
             <intent-filter>
                 <action android:name="android.intent.action.MAIN" />
@@ -52,6 +53,15 @@
             android:name=".tracking.TourTrackingService"
             android:exported="false"
             android:foregroundServiceType="location" />
+
+        <!-- FCM push notifications (leave / attendance / resignation updates) -->
+        <service
+            android:name=".push.TrueHrMessagingService"
+            android:exported="false">
+            <intent-filter>
+                <action android:name="com.google.firebase.MESSAGING_EVENT" />
+            </intent-filter>
+        </service>
 
         <!-- We provide a custom WorkManager configuration via Hilt, so disable the
              default on-startup initializer. -->

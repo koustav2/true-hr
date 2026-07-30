@@ -1,5 +1,6 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { notifyEmployee, employeeName } from '../services/notify.js';
 
 // POST /attendance/punch { type, lat, lng, address, photo, capturedAt }
 export async function punch(req, res, next) {
@@ -249,6 +250,11 @@ export async function holdTeam(req, res, next) {
     await query(
       `INSERT INTO attendance_hold (manager_id, employee_id, hold_date, status)
        VALUES ($1,$2, now()::date, 'HELD') ON CONFLICT DO NOTHING`, [managerId, employeeId]);
+    notifyEmployee(employeeId, {
+      type: 'ATTENDANCE_HELD', route: 'attendance',
+      title: 'Attendance on hold',
+      body: `Your attendance for today has been put on hold by ${await employeeName(managerId)}. Contact them to release it before punching out.`,
+    });
     res.json({ ok: true, held: true });
   } catch (e) { next(e); }
 }

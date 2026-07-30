@@ -1,6 +1,7 @@
 import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { query, pool } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { notifyEmployee, notifyManagersOf, employeeName } from '../services/notify.js';
 
 // Resolve an employee's state (posting_state, else CURRENT address state).
 async function employeeState(empId) {
@@ -187,6 +188,11 @@ export async function apply(req, res, next) {
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9) RETURNING id`,
       [empId, lt.id, fromDate, toDate, days, reason || null, isHalf, certificate || null, certificateMime || null])).rows[0];
     await audit(req.user.id, 'LEAVE_APPLY', 'leave_request', row.id, { leaveCode, fromDate, toDate, days, halfDay: isHalf });
+    notifyManagersOf(empId, {
+      type: 'LEAVE_APPLIED', route: 'team_leave',
+      title: 'Leave request',
+      body: `${await employeeName(empId)} applied for ${days} day(s) ${leaveCode} (${fromDate} to ${toDate}).`,
+    });
     res.status(201).json({ ok: true, id: row.id, days });
   } catch (e) { next(e); }
 }
@@ -283,6 +289,11 @@ export async function review(req, res, next) {
     }
     await client.query('COMMIT');
     await audit(req.user.id, `LEAVE_${decision}`, 'leave_request', id, { note });
+    notifyEmployee(lr.employee_id, {
+      type: `LEAVE_${decision}`, route: 'view_leave',
+      title: `Leave ${decision.toLowerCase()}`,
+      body: `Your leave request was ${decision.toLowerCase()} by ${await employeeName(managerId)}${note ? ` — "${note}"` : '.'}`,
+    });
     res.json({ ok: true });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});

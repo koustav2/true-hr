@@ -2,6 +2,7 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
 import { invalidateAccountStatus } from '../middleware/auth.js';
+import { notifyEmployee, notifyManagersOf, employeeName } from '../services/notify.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 
@@ -155,6 +156,11 @@ export async function apply(req, res, next) {
     await query(`UPDATE user_accounts SET status='DISABLED' WHERE employee_id=$1`, [empId]);
     invalidateAccountStatus(req.user.id);
     await audit(req.user.id, 'ACCOUNT_BLOCKED_ON_RESIGNATION', 'user_account', req.user.id, { resignationId: row.id });
+    notifyManagersOf(empId, {
+      type: 'RESIGNATION_APPLIED', route: 'team_resignation',
+      title: 'Resignation submitted',
+      body: `${await employeeName(empId)} has submitted their resignation (last working day ${lastWorkingDate}).`,
+    });
     res.status(201).json({ ok: true, id: row.id, accountBlocked: true });
   } catch (e) { next(e); }
 }
@@ -197,9 +203,19 @@ export async function actOn(req, res, next) {
     });
     if (inst.status === 'APPROVED') {
       await query(`UPDATE resignations SET status='APPROVED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || null]);
+      notifyEmployee(r.employee_id, {
+        type: 'RESIGNATION_APPROVED', route: 'resignation',
+        title: 'Resignation approved',
+        body: 'Your resignation has been approved by all authorities in the approval chain.',
+      });
     } else if (inst.status === 'REJECTED') {
       await query(`UPDATE resignations SET status='REJECTED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || inst.statusLabel]);
       await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
+      notifyEmployee(r.employee_id, {
+        type: 'RESIGNATION_REJECTED', route: 'resignation',
+        title: 'Resignation rejected',
+        body: `Your resignation was rejected${remarks ? ` — "${remarks}"` : ''}. Your account has been re-activated.`,
+      });
     }
     await audit(req.user.id, `RESIGNATION_${action}`, 'resignation', id, { stage: inst.currentStageSeq });
     res.json({ status: inst.status === 'PENDING' ? 'PENDING' : inst.status, approval: inst });
@@ -288,6 +304,11 @@ export async function review(req, res, next) {
       [decision, managerId, note, id]);
     await audit(req.user.id, `RESIGNATION_${decision}`, 'resignation', id, { note });
     if (decision === 'REJECTED') await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
+    notifyEmployee(r.employee_id, {
+      type: `RESIGNATION_${decision}`, route: 'resignation',
+      title: `Resignation ${decision.toLowerCase()}`,
+      body: `Your resignation was ${decision.toLowerCase()} by ${await employeeName(managerId)}${note ? ` — "${note}"` : '.'}`,
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -324,6 +345,11 @@ export async function adminReview(req, res, next) {
       [decision, req.user.employeeId || null, note, id]);
     await audit(req.user.id, `RESIGNATION_${decision}`, 'resignation', id, { note, byHr: true });
     if (decision === 'REJECTED') await reenableAccount(r.employee_id, req.user.id, 'resignation rejected');
+    notifyEmployee(r.employee_id, {
+      type: `RESIGNATION_${decision}`, route: 'resignation',
+      title: `Resignation ${decision.toLowerCase()}`,
+      body: `Your resignation was ${decision.toLowerCase()} by HR${note ? ` — "${note}"` : '.'}`,
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

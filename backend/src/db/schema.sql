@@ -1087,3 +1087,18 @@ CREATE TABLE IF NOT EXISTS nfa_settlement_docs (
   created_at    TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_settlement_docs ON nfa_settlement_docs(settlement_id);
+
+-- ===================== Push notifications (FCM) =====================
+-- Deep-link route for in-app navigation when a notification is tapped.
+ALTER TABLE notifications ADD COLUMN IF NOT EXISTS route TEXT;
+CREATE INDEX IF NOT EXISTS idx_notifications_recipient ON notifications(recipient_user_id, read, created_at DESC);
+
+-- One row per signed-in device; a token moves to whoever logs in on that device.
+CREATE TABLE IF NOT EXISTS device_tokens (
+  id          BIGSERIAL PRIMARY KEY,
+  user_id     BIGINT NOT NULL REFERENCES user_accounts(id) ON DELETE CASCADE,
+  token       TEXT UNIQUE NOT NULL,
+  platform    TEXT NOT NULL DEFAULT 'android',
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);

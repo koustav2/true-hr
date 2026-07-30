@@ -174,22 +174,27 @@ export async function monthly(req, res, next) {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const doj = emp.date_of_joining
+    let doj = emp.date_of_joining
       ? new Date(new Date(emp.date_of_joining).getFullYear(), new Date(emp.date_of_joining).getMonth(), new Date(emp.date_of_joining).getDate())
       : null;
+    // A joining date in the future is a data-entry error (e.g. 2027 typed for
+    // 2026) — someone with attendance history has clearly joined. Ignore it so
+    // absents still show instead of the guard suppressing them.
+    if (doj && doj > today) doj = null;
 
     const days = [];
     for (let d = 1; d <= daysInMonth; d++) {
       const date = new Date(year, month - 1, d);
       const dow = date.getDay(); // 0=Sun
       let status = null;
-      if (doj && date < doj) status = null;                                      // before joining
-      else if ((inDays.has(d) && outDays.has(d)) || done.has(d)) status = 'P';   // complete / regularised / OD
+      if ((inDays.has(d) && outDays.has(d)) || done.has(d)) status = 'P';        // complete / regularised / OD
       else if (date.getTime() === today.getTime() && inDays.has(d)) status = 'P'; // today, still at work
       else if (holiday.has(d)) status = 'H';
       else if (dow === 0) status = 'WO';
       else if (leave.has(d)) status = 'L';
-      else if (date < today) status = 'A';                                       // missed/incomplete punches
+      // Absent only from the joining date onwards — but a wrong/missing DOJ must
+      // never blank P/WO/H/L, so the DOJ guard applies to the A branch alone.
+      else if (date < today && (!doj || date >= doj)) status = 'A';              // missed/incomplete punches
       days.push({ day: d, status });
     }
     res.json({ year, month, days });

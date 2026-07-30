@@ -1,6 +1,7 @@
 import { query } from '../db/pool.js';
 import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { audit } from '../utils/audit.js';
+import { notifyEmployee, notifyManagersOf, employeeName } from '../services/notify.js';
 
 const monthName = (m) => ['January','February','March','April','May','June','July','August','September','October','November','December'][(m || 1) - 1] || '';
 
@@ -53,6 +54,11 @@ export async function apply(req, res, next) {
       `INSERT INTO miss_punch (employee_id, days, month, year, remarks) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
       [empId, String(days), m, y, remarks || null])).rows[0];
     await audit(req.user.id, 'MISS_PUNCH_APPLY', 'miss_punch', row.id, { days, month, year });
+    notifyManagersOf(empId, {
+      type: 'MISS_PUNCH_APPLIED', route: 'team_miss_punch',
+      title: 'Miss punch request',
+      body: `${await employeeName(empId)} applied for miss punch — day(s) ${days} ${monthName(m)} ${y}.`,
+    });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }
 }
@@ -105,6 +111,11 @@ export async function review(req, res, next) {
       `UPDATE miss_punch SET status=$1, reviewed_by=$2, review_note=$3, reviewed_at=now() WHERE id=$4`,
       [decision, managerId, note, id]);
     await audit(req.user.id, `MISS_PUNCH_${decision}`, 'miss_punch', id, { note });
+    notifyEmployee(mp.employee_id, {
+      type: `MISS_PUNCH_${decision}`, route: 'view_miss_punch',
+      title: `Miss punch ${decision.toLowerCase()}`,
+      body: `Your miss punch request was ${decision.toLowerCase()} by ${await employeeName(managerId)}${note ? ` — "${note}"` : '.'}`,
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

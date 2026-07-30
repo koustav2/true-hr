@@ -126,6 +126,12 @@ dependencies {
   implementation(libs.coil.compose)
   implementation(libs.play.services.location)
 
+  // Push notifications (FCM). Needs app/google-services.json from the Firebase
+  // console — the google-services plugin is applied conditionally below so the
+  // project still builds before that file is added.
+  implementation(platform(libs.firebase.bom))
+  implementation(libs.firebase.messaging)
+
   // Tour Management: maps, offline buffer (Room), background sync (WorkManager + Hilt)
   implementation(libs.maps.compose)
   implementation(libs.play.services.maps)
@@ -135,4 +141,14 @@ dependencies {
   implementation(libs.androidx.work.runtime)
   implementation(libs.androidx.hilt.work)
   ksp(libs.androidx.hilt.compiler)
+}
+
+// Parse google-services.json into resources only when it exists (Firebase
+// console -> Project settings -> add Android apps for BOTH package names:
+// com.truehr.app and com.truehr.app.staging -> download google-services.json
+// into android/app/). Without the file, FCM is silently disabled at runtime.
+if (file("google-services.json").exists()) {
+  apply(plugin = "com.google.gms.google-services")
+} else {
+  logger.lifecycle("google-services.json not found in app/ - Firebase push disabled for this build")
 }

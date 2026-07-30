@@ -13,6 +13,7 @@ import com.truehr.app.data.repository.ProfileRepositoryImpl
 import com.truehr.app.data.repository.TourRepositoryImpl
 import com.truehr.app.data.repository.PayrollRepositoryImpl
 import com.truehr.app.data.repository.ResignationRepositoryImpl
+import com.truehr.app.data.repository.NotificationRepositoryImpl
 import com.truehr.app.data.repository.TaskRepositoryImpl
 import com.truehr.app.domain.repository.AttendanceRepository
 import com.truehr.app.domain.repository.AuthRepository
@@ -27,6 +28,7 @@ import com.truehr.app.domain.repository.ProfileRepository
 import com.truehr.app.domain.repository.TourRepository
 import com.truehr.app.domain.repository.PayrollRepository
 import com.truehr.app.domain.repository.ResignationRepository
+import com.truehr.app.domain.repository.NotificationRepository
 import com.truehr.app.domain.repository.TaskRepository
 import dagger.Binds
 import dagger.Module
@@ -81,4 +83,7 @@ abstract class RepositoryModule {
 
   @Binds @Singleton
   abstract fun bindEssRepository(impl: com.truehr.app.data.repository.EssRepositoryImpl): com.truehr.app.domain.repository.EssRepository
+
+  @Binds @Singleton
+  abstract fun notificationRepository(impl: NotificationRepositoryImpl): NotificationRepository
 }

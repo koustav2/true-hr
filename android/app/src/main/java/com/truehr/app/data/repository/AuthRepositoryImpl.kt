@@ -7,6 +7,7 @@ import com.truehr.app.data.remote.dto.LoginRequest
 import com.truehr.app.domain.model.SessionUser
 import com.truehr.app.domain.repository.AuthRepository
 import com.truehr.app.domain.repository.LoginResult
+import com.truehr.app.push.PushTokenManager
 import kotlinx.coroutines.flow.Flow
 import kotlinx.coroutines.flow.map
 import javax.inject.Inject
@@ -14,6 +15,7 @@ import javax.inject.Inject
 class AuthRepositoryImpl @Inject constructor(
   private val api: ApiService,
   private val tokenStore: TokenStore,
+  private val pushTokenManager: PushTokenManager,
 ) : AuthRepository {
 
   override val isLoggedIn: Flow<Boolean> = tokenStore.token.map { !it.isNullOrBlank() }
@@ -32,6 +34,8 @@ class AuthRepositoryImpl @Inject constructor(
     val token = res.token ?: throw IllegalStateException("No session token in response")
     val user = res.user
     tokenStore.save(token, user?.email, user?.role)
+    // Point this device's FCM token at the account that just signed in.
+    runCatching { pushTokenManager.register() }
     return SessionUser(
       email = user?.email.orEmpty(),
       role = user?.role.orEmpty(),
@@ -51,5 +55,9 @@ class AuthRepositoryImpl @Inject constructor(
     api.resetPassword(com.truehr.app.data.remote.dto.ResetPasswordRequest(email.trim(), otp.trim(), newPassword))
   }
 
-  override suspend fun logout() = tokenStore.clear()
+  override suspend fun logout() {
+    // Best-effort: stop pushes to this device while the auth token is still valid.
+    runCatching { pushTokenManager.unregister() }
+    tokenStore.clear()
+  }
 }

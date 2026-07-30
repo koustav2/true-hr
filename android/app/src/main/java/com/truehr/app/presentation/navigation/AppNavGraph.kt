@@ -72,6 +72,10 @@ import com.truehr.app.presentation.feature.GeoTagListScreen
 import com.truehr.app.presentation.profile.PfScreen
 import com.truehr.app.presentation.profile.ProfileScreen
 import com.truehr.app.presentation.splash.SplashScreen
+import com.truehr.app.presentation.feature.NotificationsScreen
+import com.truehr.app.push.PendingPushRoute
+import com.truehr.app.push.PushRoutes
+import kotlinx.coroutines.flow.filterNotNull
 
 /**
  * Post-login route: keeps content above the system navigation bar while the
@@ -106,6 +110,22 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     rootVm.logoutEvents.collect { toLogin() }
   }
 
+  // Tapped push notification → open its screen once the user is inside the app.
+  val authRoutes = setOf(Routes.SPLASH, Routes.LOGIN, Routes.FORGOT_PASSWORD, Routes.CHANGE_PASSWORD)
+  fun consumePushRoute() {
+    val cur = nav.currentBackStackEntry?.destination?.route ?: return
+    if (cur in authRoutes) return // not signed in yet — keep it pending
+    PendingPushRoute.consume()?.let { key -> nav.navigate(PushRoutes.toNavRoute(key)) }
+  }
+  // Cold start: the route waits until splash/login lands on the dashboard.
+  LaunchedEffect(Unit) {
+    nav.currentBackStackEntryFlow.collect { consumePushRoute() }
+  }
+  // Warm start (app already open, notification tapped) → navigate immediately.
+  LaunchedEffect(Unit) {
+    PendingPushRoute.flow.filterNotNull().collect { consumePushRoute() }
+  }
+
   NavHost(navController = nav, startDestination = Routes.SPLASH) {
     composable(Routes.SPLASH) {
       SplashScreen(onLoggedIn = { toDashboard() }, onGuest = { nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } } })
@@ -122,6 +142,9 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     }
     screen(Routes.DASHBOARD) {
       DashboardScreen(onOpen = { route -> nav.navigate(route) }, onLoggedOut = { toLogin() })
+    }
+    screen(Routes.NOTIFICATIONS) {
+      NotificationsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) })
     }
     screen(Routes.PROFILE) { ProfileScreen(onBack = { nav.popBackStack() }) }
     screen(Routes.PF) { PfScreen(onBack = { nav.popBackStack() }) }

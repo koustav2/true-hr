@@ -14,9 +14,16 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.automirrored.filled.Logout
+import android.Manifest
+import android.content.pm.PackageManager
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.ui.platform.LocalContext
+import androidx.core.content.ContextCompat
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
 import androidx.compose.ui.Alignment
@@ -55,6 +62,19 @@ private fun greeting(): String = when (Calendar.getInstance().get(Calendar.HOUR_
 fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: DashboardViewModel = hiltViewModel()) {
   val header by vm.header.collectAsState()
   val banners by vm.banners.collectAsState()
+  val unread by vm.unread.collectAsState()
+
+  // Refresh the bell badge every time the dashboard comes (back) on screen.
+  LaunchedEffect(Unit) { vm.refreshUnread() }
+
+  // Android 13+ needs a runtime opt-in before push notifications can show.
+  val context = LocalContext.current
+  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+  LaunchedEffect(Unit) {
+    if (Build.VERSION.SDK_INT >= 33 &&
+      ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) != PackageManager.PERMISSION_GRANTED
+    ) permissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
+  }
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
       Column {
@@ -93,7 +113,26 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
               }
             }
           }
-          HeaderIconButton(Icons.Filled.Notifications, "Notifications") {}
+          Box {
+            HeaderIconButton(Icons.Filled.Notifications, "Notifications") { onOpen(Routes.NOTIFICATIONS) }
+            if (unread > 0) {
+              Box(
+                Modifier
+                  .align(Alignment.TopEnd)
+                  .clip(CircleShape)
+                  .background(Rose)
+                  .padding(horizontal = 5.dp, vertical = 1.dp),
+                contentAlignment = Alignment.Center,
+              ) {
+                Text(
+                  if (unread > 99) "99+" else unread.toString(),
+                  color = Color.White,
+                  style = MaterialTheme.typography.labelSmall,
+                  fontWeight = FontWeight.Bold,
+                )
+              }
+            }
+          }
           Spacer(Modifier.width(8.dp))
           AccountMenu(onOpen = onOpen, onLogout = { vm.logout(onLoggedOut) })
         }

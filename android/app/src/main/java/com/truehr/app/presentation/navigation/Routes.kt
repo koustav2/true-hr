@@ -6,6 +6,7 @@ object Routes {
   const val FORGOT_PASSWORD = "forgot_password"
   const val CHANGE_PASSWORD = "change_password"
   const val DASHBOARD = "dashboard"
+  const val NOTIFICATIONS = "notifications"
   const val PROFILE = "profile"
   const val PF = "pf"
   const val ATTENDANCE = "attendance"

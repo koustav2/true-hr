@@ -174,9 +174,13 @@ export async function monthly(req, res, next) {
 
     const now = new Date();
     const today = new Date(now.getFullYear(), now.getMonth(), now.getDate());
-    const doj = emp.date_of_joining
+    let doj = emp.date_of_joining
       ? new Date(new Date(emp.date_of_joining).getFullYear(), new Date(emp.date_of_joining).getMonth(), new Date(emp.date_of_joining).getDate())
       : null;
+    // A joining date in the future is a data-entry error (e.g. 2027 typed for
+    // 2026) — someone with attendance history has clearly joined. Ignore it so
+    // absents still show instead of the guard suppressing them.
+    if (doj && doj > today) doj = null;
 
     const days = [];
     for (let d = 1; d <= daysInMonth; d++) {

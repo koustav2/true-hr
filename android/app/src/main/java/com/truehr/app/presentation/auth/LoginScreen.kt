@@ -184,6 +184,8 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, onForgotPasswo
       Text("·", color = InkFaint)
       TextButton(onClick = { open("https://truehr.co.in/terms") }) { Text("Terms & Conditions", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
     }
+    Spacer(Modifier.height(4.dp))
+    Text("An initiative by L R Technology", color = InkFaint, style = MaterialTheme.typography.labelMedium)
     Spacer(Modifier.height(10.dp))
     Spacer(Modifier.navigationBarsPadding())
   }

@@ -22,6 +22,10 @@ import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.material.icons.filled.CalendarToday
 import androidx.compose.material.icons.filled.MoreVert
 import androidx.compose.material.icons.filled.Notifications
+import androidx.compose.material.icons.filled.VerifiedUser
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.platform.LocalContext
 import androidx.core.content.ContextCompat
 import androidx.compose.material3.*
@@ -173,6 +177,9 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
       items(items) { item ->
         MenuTile(item.label, item.icon, item.tint) { onOpen(item.route) }
       }
+      item(span = { GridItemSpan(maxLineSpan) }) {
+        FooterCard()
+      }
     }
   }
 }
@@ -289,6 +296,43 @@ private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
         },
         onClick = { open = false; confirmLogout = true },
       )
+    }
+  }
+}
+
+/** Company footer card: shield badge + welcome line (GreenHR-style). */
+@Composable
+private fun FooterCard() {
+  Surface(
+    color = Surface,
+    shape = RoundedCornerShape(18.dp),
+    border = BorderStroke(1.dp, Line),
+    shadowElevation = 1.dp,
+    modifier = Modifier.fillMaxWidth(),
+  ) {
+    Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
+      Box(
+        modifier = Modifier.size(42.dp).clip(CircleShape).background(Green.copy(alpha = 0.12f)),
+        contentAlignment = Alignment.Center,
+      ) {
+        Icon(Icons.Filled.VerifiedUser, null, tint = Green, modifier = Modifier.size(22.dp))
+      }
+      Spacer(Modifier.width(12.dp))
+      Column {
+        Text(
+          buildAnnotatedString {
+            withStyle(SpanStyle(color = Ink, fontWeight = FontWeight.Bold)) { append("Welcome to ") }
+            withStyle(SpanStyle(color = Teal, fontWeight = FontWeight.Bold)) { append("True Kind Foundation") }
+          },
+          style = MaterialTheme.typography.bodyLarge,
+        )
+        Spacer(Modifier.height(2.dp))
+        Text(
+          "Empowering people, building a better future together.",
+          color = InkSoft,
+          style = MaterialTheme.typography.bodyMedium,
+        )
+      }
     }
   }
 }

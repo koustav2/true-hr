@@ -10,21 +10,33 @@ export async function stats(req, res, next) {
     const year = now.getFullYear();
     const month = now.getMonth() + 1;
 
+    const org = req.orgId || null;
     const pipeline = (await query(
-      `SELECT onboarding_status AS s, COUNT(*)::int AS n FROM employees GROUP BY onboarding_status`)).rows;
+      `SELECT onboarding_status AS s, COUNT(*)::int AS n FROM employees
+        WHERE ($1::bigint IS NULL OR organisation_id=$1)
+        GROUP BY onboarding_status`, [org])).rows;
     const pc = (keys) => pipeline.filter((r) => keys.includes(r.s)).reduce((a, r) => a + r.n, 0);
     const headcount = pipeline.reduce((a, r) => a + r.n, 0);
 
     const one = async (sql, params = []) => Number((await query(sql, params)).rows[0]?.n || 0);
     const [leave, od, missPunch, compOff, tickets, policies, pubSlips, draftSlips] = await Promise.all([
-      one(`SELECT COUNT(*)::int n FROM leave_requests WHERE status='PENDING'`),
-      one(`SELECT COUNT(*)::int n FROM on_duty WHERE status='PENDING'`),
-      one(`SELECT COUNT(*)::int n FROM miss_punch WHERE status='PENDING'`),
-      one(`SELECT COUNT(*)::int n FROM comp_off_requests WHERE status='PENDING'`),
-      one(`SELECT COUNT(*)::int n FROM support_tickets WHERE status='PENDING'`),
+      one(`SELECT COUNT(*)::int n FROM leave_requests r JOIN employees e ON e.id=r.employee_id
+            WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
+      one(`SELECT COUNT(*)::int n FROM on_duty r JOIN employees e ON e.id=r.employee_id
+            WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
+      one(`SELECT COUNT(*)::int n FROM miss_punch r JOIN employees e ON e.id=r.employee_id
+            WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
+      one(`SELECT COUNT(*)::int n FROM comp_off_requests r JOIN employees e ON e.id=r.employee_id
+            WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
+      one(`SELECT COUNT(*)::int n FROM support_tickets r JOIN employees e ON e.id=r.employee_id
+            WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
       one(`SELECT COUNT(*)::int n FROM policies`),
-      one(`SELECT COUNT(*)::int n FROM payslips WHERE year=$1 AND month=$2 AND status='PUBLISHED'`, [year, month]),
-      one(`SELECT COUNT(*)::int n FROM payslips WHERE year=$1 AND month=$2 AND status='DRAFT'`, [year, month]),
+      one(`SELECT COUNT(*)::int n FROM payslips p JOIN employees e ON e.id=p.employee_id
+            WHERE p.year=$1 AND p.month=$2 AND p.status='PUBLISHED'
+              AND ($3::bigint IS NULL OR e.organisation_id=$3)`, [year, month, org]),
+      one(`SELECT COUNT(*)::int n FROM payslips p JOIN employees e ON e.id=p.employee_id
+            WHERE p.year=$1 AND p.month=$2 AND p.status='DRAFT'
+              AND ($3::bigint IS NULL OR e.organisation_id=$3)`, [year, month, org]),
     ]);
 
     const recent = (await query(

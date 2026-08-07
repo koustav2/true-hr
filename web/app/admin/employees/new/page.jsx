@@ -10,13 +10,13 @@ import { IconArrowLeft, IconUser, IconBriefcase, IconFile } from '@/components/i
 
 export default function NewEmployeePage() {
   const router = useRouter();
-  const [meta, setMeta] = useState({ departments: [], designations: [], managers: [] });
+  const [meta, setMeta] = useState({ departments: [], designations: [], managers: [], companies: [] });
   const [offerLetter, setOfferLetter] = useState(null);
   const [autoOffer, setAutoOffer] = useState(true);
   const [ctc, setCtc] = useState('');
   const [f, setF] = useState({
     firstName: '', lastName: '', personalEmail: '', officialEmail: '', phone: '', dob: '', gender: '',
-    departmentId: '', designationId: '', reportingManagerId: '', functionManagerId: '',
+    companyId: '', departmentId: '', designationId: '', reportingManagerId: '', functionManagerId: '',
     dateOfJoining: '', employmentType: 'FULL_TIME', location: '',
   });
   const mgrLabel = (m) => `${m.first_name} ${m.last_name}${m.employee_code ? ` · ${m.employee_code}` : ''}${m.designation ? ` (${m.designation})` : ''}`;
@@ -30,15 +30,36 @@ export default function NewEmployeePage() {
   const set = (k) => (e) => setF((p) => ({ ...p, [k]: e.target.value }));
 
   const [metaErr, setMetaErr] = useState('');
+
+  // Load each list independently so one failing request can't blank the others.
+  const load = (path, key) => api.get(path)
+    .then((rows) => setMeta((m) => ({ ...m, [key]: rows || [] })))
+    .catch((e) => { console.error(`meta ${path} failed:`, e.message); setMetaErr(e.message); });
+
   useEffect(() => {
-    // Load each list independently so one failing request can't blank the others.
-    const load = (path, key) => api.get(path)
-      .then((rows) => setMeta((m) => ({ ...m, [key]: rows || [] })))
-      .catch((e) => { console.error(`meta ${path} failed:`, e.message); setMetaErr(e.message); });
-    load('/meta/departments', 'departments');
-    load('/meta/designations', 'designations');
     load('/meta/managers', 'managers');
+    // An organisation may run several companies. Default to the first, and only
+    // show the picker when there is genuinely a choice to make.
+    api.get('/meta/companies')
+      .then((rows) => {
+        const list = rows || [];
+        setMeta((m) => ({ ...m, companies: list }));
+        if (list.length && !f.companyId) setF((p) => ({ ...p, companyId: String(list[0].id) }));
+      })
+      .catch(() => {});
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
+
+  // Departments and designations belong to a company, so refetch them whenever
+  // the chosen company changes — otherwise a group's entities would mix.
+  useEffect(() => {
+    const q = f.companyId ? `?companyId=${f.companyId}` : '';
+    load(`/meta/departments${q}`, 'departments');
+    load(`/meta/designations${q}`, 'designations');
+    // Clear selections that belong to the previous company.
+    setF((p) => ({ ...p, departmentId: '', designationId: '' }));
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [f.companyId]);
 
   async function submit(e) {
     e.preventDefault();
@@ -93,6 +114,17 @@ export default function NewEmployeePage() {
       <SectionCard Icon={IconBriefcase} title="Role & reporting" subtitle="Position, team and reporting lines.">
         <div className={grid}>
           <Field label="Official email" required><Input type="email" value={f.officialEmail} onChange={set('officialEmail')} required /></Field>
+          {/* Only worth asking when the organisation actually runs more than one
+              legal entity; the employee ID prefix comes from this choice. */}
+          {meta.companies.length > 1 && (
+            <Field label="Company" required hint="Which legal entity this person joins — sets their employee ID prefix">
+              <Select value={f.companyId} onChange={set('companyId')}>
+                {meta.companies.map((c) => (
+                  <option key={c.id} value={c.id}>{c.name} ({c.codePrefix})</option>
+                ))}
+              </Select>
+            </Field>
+          )}
           <Field label="Department">
             <Select value={f.departmentId} onChange={set('departmentId')}>
               <option value="">Select…</option>

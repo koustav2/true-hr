@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { pool } from './pool.js';
+import { migrateTenancy } from './tenancyMigration.js';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -28,6 +29,13 @@ async function main() {
     FROM approval_flows f WHERE s.flow_id=f.id AND f.code='RESIGNATION'
       AND s.seq IN (4,5) AND s.resolver_type='named_user'`);
   console.log('[migrate] resignation chain ensured (RM→FM→Business Head→Admin→Finance→HR)');
+
+  // Multi-tenancy, custom roles & module permissions, terminations.
+  // Additive and idempotent; the backfill maps every existing account onto the
+  // system role matching the guard it used to pass, so behaviour is unchanged.
+  const tenancySql = fs.readFileSync(path.join(__dirname, 'schema_tenancy.sql'), 'utf8');
+  await pool.query(tenancySql);
+  await migrateTenancy(pool);
 
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {

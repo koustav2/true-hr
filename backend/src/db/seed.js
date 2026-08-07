@@ -1,5 +1,6 @@
 import { pool } from './pool.js';
 import { hashPassword } from '../utils/password.js';
+import { ensureSystemRoles } from './tenancyMigration.js';
 
 async function main() {
   // Idempotent: only create the org if it doesn't already exist (safe to re-run on every container start).
@@ -18,6 +19,15 @@ async function main() {
   // Ensure employee-code prefix is TKF (codes look like TKF5001).
   await pool.query(`UPDATE companies SET code_prefix='TKF' WHERE id=$1`, [companyId]);
 
+  // This organisation's built-in roles and payroll policy. migrate.js runs
+  // BEFORE seed.js on a fresh install, so its backfill has no accounts to adopt
+  // yet — everything below must scope itself.
+  await ensureSystemRoles(pool, orgId);
+  await pool.query(
+    `INSERT INTO org_payroll_settings (organisation_id) VALUES ($1)
+     ON CONFLICT (organisation_id) DO NOTHING`, [orgId]);
+  await pool.query(`UPDATE organisations SET code = COALESCE(NULLIF(code,''), 'TRUEHR') WHERE id=$1`, [orgId]);
+
   const depts = ['Engineering','Human Resources','Sales','Operations','Finance'];
   for (const d of depts) {
     const exists = await pool.query(`SELECT 1 FROM departments WHERE company_id=$1 AND name=$2`, [companyId, d]);
@@ -29,18 +39,42 @@ async function main() {
     if (!exists.rowCount) await pool.query(`INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3)`, [companyId, t, g]);
   }
 
-  // Seed staff accounts
-  async function ensureUser(email, password, role) {
-    const exists = await pool.query(`SELECT 1 FROM user_accounts WHERE email=$1`, [email]);
+  // Seed staff accounts, each scoped to the organisation and bound to the
+  // matching built-in role so its module permissions resolve.
+  const roleIdFor = async (key) => (await pool.query(
+    `SELECT id FROM org_roles WHERE organisation_id=$1 AND key=$2`, [orgId, key])).rows[0]?.id || null;
+
+  async function ensureUser(email, password, role, { platform = false } = {}) {
+    const roleId = await roleIdFor(role);
+    const exists = await pool.query(`SELECT id FROM user_accounts WHERE email=$1`, [email]);
     if (!exists.rowCount) {
       const hash = await hashPassword(password);
-      await pool.query(`INSERT INTO user_accounts (email, password_hash, role, status) VALUES ($1,$2,$3,'ACTIVE')`, [email, hash, role]);
+      await pool.query(
+        `INSERT INTO user_accounts (email, password_hash, role, status, organisation_id, org_role_id,
+                                    is_platform_admin, active_organisation_id)
+         VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$4)`,
+        [email, hash, role, orgId, roleId, platform]);
       console.log(`[seed] ${role} created -> ${email} / ${password}`);
+    } else {
+      // Heal an account seeded before this migration (or by an older build):
+      // without an organisation and role it can open nothing at all.
+      await pool.query(
+        `UPDATE user_accounts
+            SET organisation_id = COALESCE(organisation_id, $2),
+                org_role_id     = COALESCE(org_role_id, $3),
+                is_platform_admin = is_platform_admin OR $4,
+                active_organisation_id = COALESCE(active_organisation_id, $2)
+          WHERE id = $1`, [exists.rows[0].id, orgId, roleId, platform]);
     }
   }
-  await ensureUser('superadmin@truehr.example', 'Super@12345', 'SUPER_ADMIN');
+  // The founding Super Admin owns the platform: it may create further
+  // organisations and switch between them.
+  await ensureUser('superadmin@truehr.example', 'Super@12345', 'SUPER_ADMIN', { platform: true });
   await ensureUser('hr@truehr.example', 'Hr@12345', 'HR_ADMIN');
   await ensureUser('itadmin@truehr.example', 'It@12345', 'IT_ADMIN');
+  await pool.query(
+    `UPDATE organisations SET created_by_user_id = COALESCE(created_by_user_id,
+       (SELECT id FROM user_accounts WHERE email='superadmin@truehr.example')) WHERE id=$1`, [orgId]);
 
   // Seed a demo list of managers (ACTIVE employees) so reporting/function manager dropdowns are populated.
   // Managers occupy a TKF10xx band; new hires are approved starting at TKF5001.
@@ -65,10 +99,10 @@ async function main() {
       continue;
     }
     await pool.query(
-      `INSERT INTO employees (company_id, employee_code, first_name, last_name, personal_email, official_email,
-         department_id, designation_id, employment_type, onboarding_status)
-       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,'FULL_TIME','ACTIVE')`,
-      [companyId, m.code, m.first, m.last, email, email, dept || null, desig || null]
+      `INSERT INTO employees (company_id, organisation_id, employee_code, first_name, last_name,
+         personal_email, official_email, department_id, designation_id, employment_type, onboarding_status)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,'FULL_TIME','ACTIVE')`,
+      [companyId, orgId, m.code, m.first, m.last, email, email, dept || null, desig || null]
     );
   }
 

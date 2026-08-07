@@ -26,7 +26,14 @@ import * as nfaReport from '../controllers/nfaReportController.js';
 import * as pms from '../controllers/pmsController.js';
 import * as vendor from '../controllers/vendorController.js';
 import * as notif from '../controllers/notificationController.js';
-import { authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin } from '../middleware/auth.js';
+import * as org from '../controllers/organisationController.js';
+import * as roles from '../controllers/roleController.js';
+import * as termination from '../controllers/terminationController.js';
+import * as company from '../controllers/companyController.js';
+import {
+  authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
+  requireModule, requirePlatformAdmin, requireOrg,
+} from '../middleware/auth.js';
 
 const r = Router();
 
@@ -121,16 +128,16 @@ r.post('/tasks/:id/status', authenticate, task.updateStatus);
 
 // --- NFA masters ---
 r.get('/meta/nfa-masters', authenticate, masters.nfaMasters);
-r.get('/admin/masters/:type', authenticate, requireStaff, masters.list);
-r.post('/admin/masters/expense-hierarchy/import', authenticate, requireStaff, masters.importExpenseHierarchy);
-r.post('/admin/masters/:type', authenticate, requireStaff, masters.create);
-r.put('/admin/masters/:type/:id', authenticate, requireStaff, masters.update);
-r.delete('/admin/masters/:type/:id', authenticate, requireStaff, masters.remove);
+r.get('/admin/masters/:type', authenticate, requireModule('MASTERS'), masters.list);
+r.post('/admin/masters/expense-hierarchy/import', authenticate, requireModule('MASTERS', 'manage'), masters.importExpenseHierarchy);
+r.post('/admin/masters/:type', authenticate, requireModule('MASTERS', 'manage'), masters.create);
+r.put('/admin/masters/:type/:id', authenticate, requireModule('MASTERS', 'manage'), masters.update);
+r.delete('/admin/masters/:type/:id', authenticate, requireModule('MASTERS', 'manage'), masters.remove);
 
 // --- Approver matrix (who approves per role/context) ---
-r.get('/admin/approver-matrix', authenticate, requireStaff, approval.matrixList);
-r.post('/admin/approver-matrix', authenticate, requireStaff, approval.matrixSave);
-r.delete('/admin/approver-matrix/:id', authenticate, requireStaff, approval.matrixRemove);
+r.get('/admin/approver-matrix', authenticate, requireModule('APPROVERS'), approval.matrixList);
+r.post('/admin/approver-matrix', authenticate, requireModule('APPROVERS', 'manage'), approval.matrixSave);
+r.delete('/admin/approver-matrix/:id', authenticate, requireModule('APPROVERS', 'manage'), approval.matrixRemove);
 
 // --- Approval-chain engine (generic: NFA / settlement / resignation / PMS) ---
 r.get('/approvals/pending', authenticate, approval.pending);
@@ -149,7 +156,7 @@ r.post('/nfa/:id/act', authenticate, nfa.actOn);
 r.post('/nfa/:id/resubmit', authenticate, nfa.resubmit);
 r.put('/nfa/:id', authenticate, nfa.update);
 r.post('/nfa/:id/release-payment', authenticate, nfa.releasePayment);
-r.get('/admin/nfa', authenticate, requireStaff, nfa.adminList);
+r.get('/admin/nfa', authenticate, requireModule('NFA'), nfa.adminList);
 
 // --- NFA settlements ---
 r.post('/nfa/:id/settlement', authenticate, settlement.submit);
@@ -157,15 +164,15 @@ r.get('/nfa/:id/settlement', authenticate, settlement.forNfa);
 r.get('/settlements/pending', authenticate, settlement.pendingApprovals);
 r.post('/settlements/:id/act', authenticate, settlement.actOn);
 r.post('/settlements/:id/resubmit', authenticate, settlement.resubmit);
-r.get('/admin/settlements', authenticate, requireStaff, settlement.adminList);
+r.get('/admin/settlements', authenticate, requireModule('SETTLEMENTS'), settlement.adminList);
 
 // --- NFA reports & analytics ---
-r.get('/admin/nfa-dashboard', authenticate, requireStaff, nfaReport.dashboard);
-r.get('/admin/reports/project-expense', authenticate, requireStaff, nfaReport.projectExpense);
-r.get('/admin/reports/client-billing', authenticate, requireStaff, nfaReport.clientBilling);
-r.get('/admin/reports/pending-settlements', authenticate, requireStaff, nfaReport.pendingSettlements);
-r.get('/admin/reports/company-expense', authenticate, requireStaff, nfaReport.companyExpense);
-r.get('/admin/nfa-export', authenticate, requireStaff, nfaReport.nfaExport);
+r.get('/admin/nfa-dashboard', authenticate, requireModule('NFA_REPORTS'), nfaReport.dashboard);
+r.get('/admin/reports/project-expense', authenticate, requireModule('NFA_REPORTS'), nfaReport.projectExpense);
+r.get('/admin/reports/client-billing', authenticate, requireModule('NFA_REPORTS'), nfaReport.clientBilling);
+r.get('/admin/reports/pending-settlements', authenticate, requireModule('NFA_REPORTS'), nfaReport.pendingSettlements);
+r.get('/admin/reports/company-expense', authenticate, requireModule('NFA_REPORTS'), nfaReport.companyExpense);
+r.get('/admin/nfa-export', authenticate, requireModule('NFA_REPORTS'), nfaReport.nfaExport);
 
 // --- PMS / KPI ---
 r.get('/pms/grades', authenticate, pms.grades);
@@ -182,14 +189,14 @@ r.post('/kpi/:id/pms', authenticate, pms.submitPms);
 // --- Vendor registration & agreements ---
 r.get('/vendors', authenticate, vendor.listVendors);
 r.post('/vendors', authenticate, vendor.createVendor);
-r.post('/admin/vendors/:id/review', authenticate, requireStaff, vendor.reviewVendor);
+r.post('/admin/vendors/:id/review', authenticate, requireModule('VENDORS', 'manage'), vendor.reviewVendor);
 r.get('/agreements', authenticate, vendor.listAgreements);
 r.post('/agreements', authenticate, vendor.createAgreement);
 r.get('/vendors/:id/document', authenticate, vendor.vendorDocument);
 r.get('/agreements/:id/document', authenticate, vendor.agreementDocument);
 r.get('/settlements/:id/documents', authenticate, settlement.listDocs);
 r.get('/settlements/:id/documents/:docId', authenticate, settlement.getDoc);
-r.post('/admin/agreements/:id/review', authenticate, requireStaff, vendor.reviewAgreement);
+r.post('/admin/agreements/:id/review', authenticate, requireModule('VENDORS', 'manage'), vendor.reviewAgreement);
 
 // --- Resignation ---
 r.get('/resignation/context', authenticate, resignation.context);
@@ -223,79 +230,126 @@ r.post('/onboarding/esign', ob.postEsign);
 
 // --- Meta (staff) ---
 r.get('/meta/company', authenticate, requireStaff, meta.getCompany);
+r.get('/meta/companies', authenticate, requireStaff, meta.getCompanies);
 r.get('/meta/departments', authenticate, requireStaff, meta.getDepartments);
 r.get('/meta/designations', authenticate, requireStaff, meta.getDesignations);
 r.get('/meta/managers', authenticate, requireStaff, meta.getManagers);
 
 // --- Staff: employees + onboarding review ---
-r.get('/employees', authenticate, requireStaff, emp.listEmployees);
-r.post('/employees', authenticate, requireStaff, emp.createEmployee);
-r.get('/employees/:id', authenticate, requireStaff, emp.getEmployee);
-r.get('/employees/:id/offer-letter', authenticate, requireStaff, emp.downloadOfferLetter);
-r.get('/employees/:id/documents/:docId', authenticate, requireStaff, emp.downloadDocument);
-r.get('/employees/:id/sheet', authenticate, requireStaff, emp.generateSheet);
-r.get('/onboarding/queue', authenticate, requireStaff, emp.reviewQueue);
-r.post('/onboarding/:id/approve', authenticate, requireStaff, emp.approveOnboarding);
-r.post('/onboarding/:id/send-back', authenticate, requireStaff, emp.sendBack);
+r.get('/employees', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.listEmployees);
+r.post('/employees', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.createEmployee);
+r.get('/employees/:id', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.getEmployee);
+r.get('/employees/:id/offer-letter', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.downloadOfferLetter);
+r.get('/employees/:id/documents/:docId', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.downloadDocument);
+r.get('/employees/:id/sheet', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.generateSheet);
+r.get('/onboarding/queue', authenticate, requireOrg, requireModule('ONBOARDING'), emp.reviewQueue);
+r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
+r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 
 // --- System administration (IT admin + super admin) ---
-r.get('/admin/users', authenticate, requireAnyAdmin, users.listUsers);
-r.post('/admin/users', authenticate, requireAnyAdmin, users.createUser);
-r.post('/admin/users/:id/status', authenticate, requireAnyAdmin, users.setUserStatus);
-r.post('/admin/users/:id/role', authenticate, requireAnyAdmin, users.setUserRole);
-r.post('/admin/employees/:id/reset-password', authenticate, requireStaff, users.resetEmployeePassword);
-r.patch('/admin/employees/:id', authenticate, requireStaff, emp.updateEmployee);
-r.post('/admin/employees/:id/active', authenticate, requireStaff, emp.setEmployeeActive);
-r.post('/admin/employees/:id/generate-offer', authenticate, requireStaff, emp.generateOfferLetter);
-r.post('/admin/employees/:id/documents', authenticate, requireStaff, emp.uploadEmployeeDocument);
-r.patch('/admin/employees/:id/bank-statutory', authenticate, requireStaff, emp.updateBankStatutory);
-r.get('/admin/audit', authenticate, requireAdmin, users.getAudit);
+r.get('/admin/users', authenticate, requireOrg, requireModule('USERS'), users.listUsers);
+r.post('/admin/users', authenticate, requireOrg, requireModule('USERS', 'manage'), users.createUser);
+r.post('/admin/users/:id/status', authenticate, requireOrg, requireModule('USERS', 'manage'), users.setUserStatus);
+r.post('/admin/users/:id/role', authenticate, requireOrg, requireModule('USERS', 'manage'), users.setUserRole);
+r.post('/admin/users/:id/org-role', authenticate, requireOrg, requireModule('USERS', 'manage'), users.setUserOrgRole);
+r.post('/admin/employees/:id/reset-password', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), users.resetEmployeePassword);
+r.patch('/admin/employees/:id', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.updateEmployee);
+r.post('/admin/employees/:id/active', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.setEmployeeActive);
+r.post('/admin/employees/:id/generate-offer', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.generateOfferLetter);
+r.post('/admin/employees/:id/documents', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.uploadEmployeeDocument);
+r.patch('/admin/employees/:id/bank-statutory', authenticate, requireOrg, requireModule('EMPLOYEES', 'manage'), emp.updateBankStatutory);
+r.get('/admin/audit', authenticate, requireOrg, requireModule('AUDIT'), users.getAudit);
 
 // --- Leave configuration (HR) ---
-r.get('/admin/holidays', authenticate, requireStaff, leaveAdmin.listHolidays);
-r.post('/admin/holidays', authenticate, requireStaff, leaveAdmin.createHoliday);
-r.delete('/admin/holidays/:id', authenticate, requireStaff, leaveAdmin.deleteHoliday);
-r.get('/admin/entitlements', authenticate, requireStaff, leaveAdmin.listEntitlements);
-r.put('/admin/entitlements', authenticate, requireStaff, leaveAdmin.upsertEntitlement);
-r.get('/admin/leave-types', authenticate, requireStaff, leaveAdmin.listLeaveTypes);
-r.put('/admin/leave-types/:code', authenticate, requireStaff, leaveAdmin.updateLeaveType);
+r.get('/admin/holidays', authenticate, requireModule('LEAVE'), leaveAdmin.listHolidays);
+r.post('/admin/holidays', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.createHoliday);
+r.delete('/admin/holidays/:id', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.deleteHoliday);
+r.get('/admin/entitlements', authenticate, requireModule('LEAVE'), leaveAdmin.listEntitlements);
+r.put('/admin/entitlements', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.upsertEntitlement);
+r.get('/admin/leave-types', authenticate, requireModule('LEAVE'), leaveAdmin.listLeaveTypes);
+r.put('/admin/leave-types/:code', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.updateLeaveType);
 
 // --- Support Desk portal (HR/IT/Admin agents) ---
-r.get('/admin/support', authenticate, requireStaff, support.adminList);
-r.post('/admin/support/:id/resolve', authenticate, requireStaff, support.resolve);
-r.get('/admin/support/:id/attachment', authenticate, requireStaff, support.adminAttachment);
+r.get('/admin/support', authenticate, requireModule('SUPPORT'), support.adminList);
+r.post('/admin/support/:id/resolve', authenticate, requireModule('SUPPORT', 'manage'), support.resolve);
+r.get('/admin/support/:id/attachment', authenticate, requireModule('SUPPORT'), support.adminAttachment);
 
 // --- Dashboard stats (HR) ---
-r.get('/admin/stats', authenticate, requireStaff, dashboard.stats);
+r.get('/admin/stats', authenticate, requireModule('DASHBOARD'), dashboard.stats);
 
 // --- Resignations (HR) ---
-r.get('/admin/resignations', authenticate, requireStaff, resignation.adminList);
-r.post('/admin/resignations/:id/review', authenticate, requireStaff, resignation.adminReview);
+r.get('/admin/resignations', authenticate, requireOrg, requireModule('RESIGNATION'), resignation.adminList);
+r.post('/admin/resignations/:id/review', authenticate, requireOrg, requireModule('RESIGNATION', 'manage'), resignation.adminReview);
 
 // --- Payroll (HR) ---
-r.get('/admin/salary-template', authenticate, requireStaff, payroll.getTemplate);
-r.put('/admin/salary-template', authenticate, requireStaff, payroll.setTemplate);
-r.get('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.getStructure);
-r.put('/admin/salary-structure/:employeeId', authenticate, requireStaff, payroll.setStructure);
-r.get('/admin/payslips', authenticate, requireStaff, payroll.adminList);
-r.post('/admin/payslips/generate', authenticate, requireStaff, payroll.generate);
-r.post('/admin/payslips/generate-all', authenticate, requireStaff, payroll.generateAll);
-r.post('/admin/payslips/publish-all', authenticate, requireStaff, payroll.publishAll);
-r.get('/admin/payslips/export', authenticate, requireStaff, payroll.exportBankSheet); // must precede /:id
-r.get('/admin/payslips/:id', authenticate, requireStaff, payroll.adminDetail);
-r.get('/admin/payslips/:id/pdf', authenticate, requireStaff, payroll.adminPdf);
-r.post('/admin/payslips/:id/publish', authenticate, requireStaff, payroll.publish);
-r.post('/admin/payslips/:id/unpublish', authenticate, requireStaff, payroll.unpublish);
-r.delete('/admin/payslips/:id', authenticate, requireStaff, payroll.remove);
+r.get('/admin/salary-template', authenticate, requireOrg, requireModule('PAYROLL'), payroll.getTemplate);
+r.put('/admin/salary-template', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.setTemplate);
+r.get('/admin/salary-structure/:employeeId', authenticate, requireOrg, requireModule('PAYROLL'), payroll.getStructure);
+r.put('/admin/salary-structure/:employeeId', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.setStructure);
+r.get('/admin/payslips', authenticate, requireOrg, requireModule('PAYROLL'), payroll.adminList);
+r.post('/admin/payslips/generate', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.generate);
+r.post('/admin/payslips/generate-all', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.generateAll);
+r.post('/admin/payslips/publish-all', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.publishAll);
+r.get('/admin/payslips/export', authenticate, requireOrg, requireModule('PAYROLL'), payroll.exportBankSheet); // must precede /:id
+r.get('/admin/payslips/:id', authenticate, requireOrg, requireModule('PAYROLL'), payroll.adminDetail);
+r.get('/admin/payslips/:id/pdf', authenticate, requireOrg, requireModule('PAYROLL'), payroll.adminPdf);
+r.post('/admin/payslips/:id/publish', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.publish);
+r.post('/admin/payslips/:id/unpublish', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.unpublish);
+r.delete('/admin/payslips/:id', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), payroll.remove);
 
 // --- Policies (HR manage) ---
-r.get('/admin/policies', authenticate, requireStaff, policy.adminList);
-r.post('/admin/policies', authenticate, requireStaff, policy.create);
-r.delete('/admin/policies/:id', authenticate, requireStaff, policy.remove);
+r.get('/admin/policies', authenticate, requireModule('POLICIES'), policy.adminList);
+r.post('/admin/policies', authenticate, requireModule('POLICIES', 'manage'), policy.create);
+r.delete('/admin/policies/:id', authenticate, requireModule('POLICIES', 'manage'), policy.remove);
 
 // --- App dashboard banners (HR manage) ---
-r.get('/admin/banners', authenticate, requireStaff, banner.adminList);
-r.post('/admin/banners', authenticate, requireStaff, banner.create);
-r.delete('/admin/banners/:id', authenticate, requireStaff, banner.remove);
+r.get('/admin/banners', authenticate, requireModule('BANNERS'), banner.adminList);
+r.post('/admin/banners', authenticate, requireModule('BANNERS', 'manage'), banner.create);
+r.delete('/admin/banners/:id', authenticate, requireModule('BANNERS', 'manage'), banner.remove);
+
+// --- Who am I allowed to be? (drives the portal sidebar) ---
+r.get('/me/permissions', authenticate, roles.myPermissions);
+r.get('/me/organisations', authenticate, org.mine);
+
+// --- Organisations (platform owner: create tenants & switch between them) ---
+r.get('/admin/organisations', authenticate, requirePlatformAdmin, org.list);
+r.post('/admin/organisations', authenticate, requirePlatformAdmin, org.create);
+r.post('/admin/organisations/switch', authenticate, requirePlatformAdmin, org.switchOrg);
+r.patch('/admin/organisations/:id', authenticate, requirePlatformAdmin, org.update);
+r.post('/admin/organisations/:id/status', authenticate, requirePlatformAdmin, org.setStatus);
+
+// --- Payroll policy for the current organisation (attendance rules) ---
+r.get('/admin/payroll-settings', authenticate, requireOrg, requireModule('PAYROLL'), org.getPayrollSettings);
+r.put('/admin/payroll-settings', authenticate, requireOrg, requireModule('PAYROLL', 'manage'), org.setPayrollSettings);
+
+// --- Roles & module permissions (replaces the old hardcoded guards) ---
+r.get('/admin/modules', authenticate, requireOrg, requireModule('ROLES'), roles.modules);
+r.get('/admin/role-presets', authenticate, requireOrg, requireModule('ROLES'), roles.presets);
+// Assignable roles for the Users screen — gated on USERS, because putting
+// someone into an existing role is account management, not role design.
+r.get('/admin/assignable-roles', authenticate, requireOrg, requireModule('USERS'), roles.assignable);
+r.get('/admin/roles', authenticate, requireOrg, requireModule('ROLES'), roles.list);
+r.post('/admin/roles', authenticate, requireOrg, requireModule('ROLES', 'manage'), roles.create);
+r.get('/admin/roles/:id', authenticate, requireOrg, requireModule('ROLES'), roles.detail);
+r.put('/admin/roles/:id', authenticate, requireOrg, requireModule('ROLES', 'manage'), roles.update);
+r.delete('/admin/roles/:id', authenticate, requireOrg, requireModule('ROLES', 'manage'), roles.remove);
+
+// --- Companies (legal entities inside the current organisation) ---
+r.get('/admin/companies', authenticate, requireOrg, requireModule('COMPANIES'), company.list);
+r.post('/admin/companies', authenticate, requireOrg, requireModule('COMPANIES', 'manage'), company.create);
+r.patch('/admin/companies/:id', authenticate, requireOrg, requireModule('COMPANIES', 'manage'), company.update);
+r.post('/admin/companies/:id/status', authenticate, requireOrg, requireModule('COMPANIES', 'manage'), company.setStatus);
+r.get('/admin/companies/:id/structure', authenticate, requireOrg, requireModule('COMPANIES'), company.listStructure);
+r.post('/admin/companies/:id/departments', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDepartment);
+r.delete('/admin/companies/:id/departments/:depId', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDepartment);
+r.post('/admin/companies/:id/designations', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignation);
+r.delete('/admin/companies/:id/designations/:desId', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDesignation);
+
+// --- Termination (employer-initiated exit; separate from resignation) ---
+r.get('/admin/termination-types', authenticate, requireModule('TERMINATION'), termination.types);
+r.get('/admin/terminations', authenticate, requireOrg, requireModule('TERMINATION'), termination.list);
+r.get('/admin/employees/:id/termination', authenticate, requireOrg, requireModule('TERMINATION'), termination.forEmployee);
+r.post('/admin/employees/:id/terminate', authenticate, requireOrg, requireModule('TERMINATION', 'manage'), termination.terminate);
+r.post('/admin/terminations/:id/revoke', authenticate, requireOrg, requireModule('TERMINATION', 'manage'), termination.revoke);
 
 export default r;

@@ -40,6 +40,9 @@ export default function EmployeesPage() {
     },
     { key: 'designation', label: 'Designation', sortable: true, className: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-ink-soft', render: (r) => r.designation || '—' },
     { key: 'department', label: 'Department', sortable: true, className: 'hidden md:table-cell', cellClassName: 'hidden md:table-cell text-ink-soft', render: (r) => r.department || '—' },
+    // Shown only when the organisation runs more than one company, so a
+    // single-entity setup keeps the table uncluttered.
+    { key: 'company', label: 'Company', sortable: true, className: 'hidden xl:table-cell', cellClassName: 'hidden xl:table-cell text-ink-soft', render: (r) => r.company || '—' },
     { key: 'employee_code', label: 'Employee ID', sortable: true, className: 'hidden lg:table-cell', cellClassName: 'hidden lg:table-cell text-ink-soft', render: (r) => r.employee_code || '—' },
     { key: 'onboarding_status', label: 'Status', sortable: true, render: (r) => <StatusBadge status={r.onboarding_status} /> },
   ];

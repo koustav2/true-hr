@@ -318,9 +318,9 @@ export async function review(req, res, next) {
 export async function adminList(req, res, next) {
   try {
     const status = (req.query.status || '').toUpperCase();
-    const params = [];
-    let where = '1=1';
-    if (status) { params.push(status); where = `r.status=$${params.length}`; }
+    const params = [req.orgId || null];
+    let where = '($1::bigint IS NULL OR e.organisation_id=$1)';
+    if (status) { params.push(status); where += ` AND r.status=$${params.length}`; }
     const rows = (await query(
       `SELECT ${REQ_COLS} FROM resignations r
          JOIN employees e ON e.id=r.employee_id

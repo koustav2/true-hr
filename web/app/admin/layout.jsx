@@ -4,41 +4,48 @@ import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { can, ROLE_LABEL } from '@/lib/permissions.js';
+import { PermProvider, usePerms } from '@/lib/perms.jsx';
 import { FEATURES } from '@/lib/flags.js';
 import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
   IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
-  IconBriefcase, IconTicket,
+  IconBriefcase, IconTicket, IconCheck,
 } from '@/components/icons.jsx';
 
+// Navigation is driven by module permissions, not by hardcoded role checks: a
+// Super Admin ticking a box on the Roles screen moves this sidebar for everyone
+// holding that role. `module` is the permission key the server reports via
+// /me/permissions; `nfa` marks entries still gated by the release flag.
 const WORKSPACE = [
-  { href: '/admin', label: 'Dashboard', Icon: IconDashboard, show: can.hr },
-  { href: '/admin/employees', label: 'Employees', Icon: IconUsers, show: can.hr },
-  { href: '/admin/review', label: 'Review queue', Icon: IconReview, show: can.hr },
-  { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, show: can.hr },
-  { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, show: can.hr },
-  { href: '/admin/policies', label: 'Policies', Icon: IconFile, show: can.hr },
-  { href: '/admin/banners', label: 'App Banners', Icon: IconFile, show: can.hr },
-  { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, show: can.hr },
-  { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, show: can.hr },
+  { href: '/admin', label: 'Dashboard', Icon: IconDashboard, module: 'DASHBOARD' },
+  { href: '/admin/employees', label: 'Employees', Icon: IconUsers, module: 'EMPLOYEES' },
+  { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
+  { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
+  { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, module: 'SUPPORT' },
+  { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
+  { href: '/admin/banners', label: 'App Banners', Icon: IconFile, module: 'BANNERS' },
+  { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
+  { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, module: 'RESIGNATION' },
+  { href: '/admin/terminations', label: 'Terminations', Icon: IconExit, module: 'TERMINATION' },
 ];
-// NFA / PMS suite — hidden behind FEATURES.nfaSuite for this release.
-const gated = (role) => FEATURES.nfaSuite && can.hr(role);
 const FINANCE = [
-  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, show: gated },
-  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, show: gated },
-  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, show: gated },
-  { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, show: gated },
-  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, show: gated },
+  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, module: 'NFA', nfa: true },
+  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, module: 'NFA_REPORTS', nfa: true },
+  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, module: 'MASTERS', nfa: true },
+  { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, module: 'APPROVERS', nfa: true },
+  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, module: 'VENDORS', nfa: true },
 ];
 const PERFORMANCE = [
-  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, show: gated },
+  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, module: 'PMS', nfa: true },
 ];
 const ADMINISTRATION = [
-  { href: '/admin/users', label: 'Users & roles', Icon: IconShield, show: can.users },
-  { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, show: can.admin },
+  { href: '/admin/companies', label: 'Companies', Icon: IconBriefcase, module: 'COMPANIES' },
+  { href: '/admin/users', label: 'Users & accounts', Icon: IconShield, module: 'USERS' },
+  { href: '/admin/roles', label: 'Roles & permissions', Icon: IconShield, module: 'ROLES' },
+  { href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' },
+  { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, module: 'AUDIT' },
 ];
 const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
 
@@ -62,8 +69,8 @@ function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate })
   );
 }
 
-function NavGroup({ title, items, role, isActive, collapsed, onNavigate }) {
-  const visible = items.filter((i) => i.show(role));
+function NavGroup({ title, items, canView, isActive, collapsed, onNavigate }) {
+  const visible = items.filter((i) => (i.nfa ? FEATURES.nfaSuite : true) && canView(i.module));
   if (visible.length === 0) return null;
   return (
     <div className="mt-6 first:mt-0">
@@ -77,10 +84,86 @@ function NavGroup({ title, items, role, isActive, collapsed, onNavigate }) {
 }
 
 export default function AdminLayout({ children }) {
+  return (
+    <PermProvider>
+      <AdminShell>{children}</AdminShell>
+    </PermProvider>
+  );
+}
+
+// ── The organisation switcher ───────────────────────────────────────────────
+// Only the platform owner can switch. Everyone else sees their organisation's
+// name as a plain label, so it is always obvious whose data is on screen.
+function OrgSwitcher() {
+  const { orgs, activeOrg, switchOrg } = usePerms();
+  const [open, setOpen] = useState(false);
+  if (!orgs || !activeOrg) return null;
+
+  const list = (orgs.organisations || []).filter((o) => o.status === 'ACTIVE');
+  if (!orgs.canSwitch || list.length <= 1) {
+    return (
+      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-ink-soft ring-1 ring-inset ring-line max-w-[220px]">
+        <IconBriefcase className="text-ink-faint shrink-0" />
+        <span className="truncate">{activeOrg.name}</span>
+      </span>
+    );
+  }
+  return (
+    <div className="relative">
+      <button onClick={() => setOpen((o) => !o)}
+        className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink ring-1 ring-inset ring-line hover:bg-slate-50 max-w-[240px]"
+        title="Switch organisation">
+        <IconBriefcase className="text-brand-600 shrink-0" />
+        <span className="truncate">{activeOrg.name}</span>
+        <IconChevronLeft className="-rotate-90 text-ink-faint shrink-0" />
+      </button>
+      {open && (
+        <>
+          <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
+          <div className="absolute right-0 top-10 z-40 w-72 rounded-xl2 border border-line bg-white shadow-pop p-2 animate-in">
+            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+              Switch organisation
+            </div>
+            <div className="max-h-72 overflow-y-auto">
+              {list.map((o) => {
+                const active = String(o.id) === String(orgs.activeOrganisationId);
+                return (
+                  <button key={o.id} disabled={active}
+                    onClick={() => { setOpen(false); switchOrg(o.id); }}
+                    className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${
+                      active ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-ink-soft hover:bg-slate-50'}`}>
+                    <span className="min-w-0">
+                      <span className="block truncate">{o.name}</span>
+                      <span className="block text-[11px] text-ink-faint">{o.employees ?? 0} employees</span>
+                    </span>
+                    {active && <IconCheck className="text-brand-600 shrink-0" />}
+                  </button>
+                );
+              })}
+            </div>
+            <div className="mt-1 border-t border-line pt-1">
+              <Link href="/admin/organisations" onClick={() => setOpen(false)}
+                className="block rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-slate-50">
+                Manage organisations
+              </Link>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
+  );
+}
+
+function AdminShell({ children }) {
   const { auth, user, logout, ready } = useAuth();
+  const { canView, loading: permsLoading, role: liveRole, activeOrg } = usePerms();
   const pathname = usePathname();
   const router = useRouter();
   const role = user?.role;
+  // Prefer the custom role's label ("Chief Technology Officer") over the base
+  // enum, so a CEO is not shown as "HR Admin".
+  const roleLabel = liveRole?.label || ROLE_LABEL[role] || 'Staff';
+  const badgeRole = liveRole?.baseRole || role;
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -96,7 +179,7 @@ export default function AdminLayout({ children }) {
     setCollapsed((c) => { localStorage.setItem('truehr_nav_collapsed', c ? '0' : '1'); return !c; });
   }
 
-  if (!ready || !auth?.token) {
+  if (!ready || !auth?.token || permsLoading) {
     return <div className="min-h-screen grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
   }
 
@@ -111,10 +194,10 @@ export default function AdminLayout({ children }) {
         <Logo size={collapsed ? 30 : 32} compact={collapsed} />
       </div>
       <div className={`pt-5 flex-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
-        <NavGroup title="Workspace" items={WORKSPACE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="NFA & Finance" items={FINANCE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="Performance" items={PERFORMANCE} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="Administration" items={ADMINISTRATION} role={role} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="Workspace" items={WORKSPACE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="NFA & Finance" items={FINANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="Performance" items={PERFORMANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        <NavGroup title="Administration" items={ADMINISTRATION} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
       </div>
       <div className={`mt-auto border-t border-line ${collapsed ? 'p-2' : 'p-3'}`}>
         <div className={`flex items-center gap-3 py-2 ${collapsed ? 'justify-center' : 'px-2'}`}>
@@ -122,7 +205,7 @@ export default function AdminLayout({ children }) {
           {!collapsed && (
             <div className="min-w-0">
               <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
-              <span className={`inline-flex mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
+              <span className={`inline-flex mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
             </div>
           )}
         </div>
@@ -158,11 +241,14 @@ export default function AdminLayout({ children }) {
             </button>
             <div className="min-w-0">
               <h1 className="text-[15px] font-bold text-ink leading-tight truncate">{pageTitle}</h1>
-              <div className="hidden sm:block text-[11px] text-ink-faint leading-tight">True HR Pvt Ltd · Admin Console</div>
+              <div className="hidden sm:block text-[11px] text-ink-faint leading-tight truncate">
+                {activeOrg?.name || 'True HR'} · Admin Console
+              </div>
             </div>
           </div>
           <div className="relative flex items-center gap-3">
-            <span className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
+            <OrgSwitcher />
+            <span className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
             <button onClick={() => setMenuOpen((o) => !o)} className="grid place-items-center h-9 w-9 rounded-full bg-brand-gradient text-white text-xs font-bold ring-2 ring-brand-100 shadow-pop">{initials}</button>
             {menuOpen && (
               <>
@@ -170,7 +256,7 @@ export default function AdminLayout({ children }) {
                 <div className="absolute right-0 top-12 z-40 w-60 rounded-xl2 border border-line bg-white shadow-pop p-2 animate-in">
                   <div className="px-3 py-2 border-b border-line mb-1">
                     <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
-                    <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[role] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{ROLE_LABEL[role] || 'Staff'}</span>
+                    <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
                   </div>
                   <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-slate-50">
                     <IconLogout className="text-ink-faint" /> Sign out

@@ -74,6 +74,18 @@ export default function PayrollPage() {
   const [month, setMonth] = useState(now.getMonth() + 1);
   const [sheet, setSheet] = useState(null);
   const [summary, setSummary] = useState(null);
+  // The organisation's attendance policy, returned with the run sheet — decides
+  // whether unexplained days are deducted or only flagged for review.
+  const [policy, setPolicy] = useState(null);
+  // An organisation may run several legal entities. Payroll is normally run per
+  // entity, because each has its own bank account and statutory registrations.
+  const [companies, setCompanies] = useState([]);
+  const [companyId, setCompanyId] = useState('');
+  // Attendance-policy editor: whether pay follows attendance, whether
+  // unaccounted days are deducted or only flagged, and the weekly off.
+  const [policyOpen, setPolicyOpen] = useState(false);
+  const [policyForm, setPolicyForm] = useState(null);
+  const [policyBusy, setPolicyBusy] = useState(false);
   const [q, setQ] = useState('');
   const [msg, setMsg] = useState('');
   const [runMsg, setRunMsg] = useState(null); // { generated, skipped } after Generate all
@@ -101,19 +113,23 @@ export default function PayrollPage() {
     catch (e) { setMsg(e.message); } finally { setTplBusy(false); }
   }
 
+  // `companyId` is sent as a query param when set, so the run sheet, the run
+  // itself and the bank sheet all cover exactly one legal entity.
+  const coQ = companyId ? `&companyId=${companyId}` : '';
   const load = () => {
     setSheet(null);
-    api.get(`/admin/payslips?year=${year}&month=${month}`)
-      .then((r) => { setSheet(r.rows || []); setSummary(r.summary || null); })
-      .catch(() => { setSheet([]); setSummary(null); });
+    api.get(`/admin/payslips?year=${year}&month=${month}${coQ}`)
+      .then((r) => { setSheet(r.rows || []); setSummary(r.summary || null); setPolicy(r.policy || null); })
+      .catch(() => { setSheet([]); setSummary(null); setPolicy(null); });
   };
-  useEffect(() => { load(); setRunMsg(null); /* eslint-disable-next-line */ }, [year, month]);
+  useEffect(() => { load(); setRunMsg(null); /* eslint-disable-next-line */ }, [year, month, companyId]);
 
   // ── Bulk run actions ──
   async function generateAll() {
     setBulkBusy(true); setMsg(''); setRunMsg(null);
     try {
-      const r = await api.post('/admin/payslips/generate-all', { year, month });
+      const r = await api.post('/admin/payslips/generate-all',
+        { year, month, ...(companyId ? { companyId: Number(companyId) } : {}) });
       setRunMsg(r);
       load();
     } catch (e) { setMsg(e.message); } finally { setBulkBusy(false); }
@@ -121,7 +137,8 @@ export default function PayrollPage() {
   async function publishAll() {
     setBulkBusy(true); setMsg('');
     try {
-      const r = await api.post('/admin/payslips/publish-all', { year, month });
+      const r = await api.post('/admin/payslips/publish-all',
+        { year, month, ...(companyId ? { companyId: Number(companyId) } : {}) });
       setRunMsg({ published: r.published });
       load();
     } catch (e) { setMsg(e.message); } finally { setBulkBusy(false); }
@@ -129,14 +146,38 @@ export default function PayrollPage() {
   async function downloadBankSheet() {
     try {
       const auth = getStoredAuth();
-      const res = await fetch(`/api/admin/payslips/export?year=${year}&month=${month}`,
+      const res = await fetch(`/api/admin/payslips/export?year=${year}&month=${month}${coQ}`,
         { headers: { Authorization: `Bearer ${auth?.token}` } });
       if (!res.ok) throw new Error('Export failed');
       const url = URL.createObjectURL(await res.blob());
       const a = document.createElement('a');
-      a.href = url; a.download = `bank-advice-${year}-${String(month).padStart(2, '0')}.csv`;
+      const prefix = companies.find((c) => String(c.id) === String(companyId))?.codePrefix;
+      a.href = url;
+      a.download = `bank-advice-${prefix ? `${prefix}-` : ''}${year}-${String(month).padStart(2, '0')}.csv`;
       a.click(); URL.revokeObjectURL(url);
     } catch (e) { setMsg(e.message); }
+  }
+
+  function openPolicy() {
+    setPolicyForm({
+      attendanceBased: policy?.attendanceBased !== false,
+      deductUnexplained: !!policy?.deductUnexplained,
+      weekOffDays: policy?.weekOffDays?.length ? [...policy.weekOffDays] : [0],
+    });
+    setPolicyOpen(true);
+  }
+  async function savePolicy() {
+    setPolicyBusy(true);
+    try {
+      await api.put('/admin/payroll-settings', {
+        attendanceBased: policyForm.attendanceBased,
+        deductUnexplained: policyForm.deductUnexplained,
+        weekOffDays: policyForm.weekOffDays.length ? policyForm.weekOffDays : [0],
+      });
+      setPolicyOpen(false);
+      await load();
+    } catch (e) { alert(e.message); }
+    finally { setPolicyBusy(false); }
   }
 
   async function openStructure(row) {
@@ -201,6 +242,9 @@ export default function PayrollPage() {
             ['Generated', summary.generated, 'text-ink'],
             ['Published', summary.published, 'text-emerald-700'],
             ['Published net pay', `₹${inr(summary.publishedNetTotal)}`, 'text-emerald-700'],
+            ...(summary.needingReview
+              ? [['Needs attendance review', summary.needingReview, 'text-amber-600']]
+              : []),
           ].map(([label, value, tone]) => (
             <Card key={label} className="p-4">
               <div className="text-xs text-ink-faint">{label}</div>
@@ -210,20 +254,60 @@ export default function PayrollPage() {
         </div>
       )}
 
+      {/* Attendance-driven payroll: unexplained days are surfaced for review.
+          Under the default policy they do NOT reduce anyone's pay — HR decides. */}
+      {summary?.needingReview > 0 && (
+        <div className="rounded-lg bg-amber-50 text-amber-900 ring-1 ring-inset ring-amber-200 px-4 py-3 text-sm">
+          <b>{summary.needingReview} employee{summary.needingReview === 1 ? '' : 's'}</b> have{' '}
+          {summary.unexplainedDays} day{summary.unexplainedDays === 1 ? '' : 's'} with no punch and no approved leave.
+          {policy?.deductUnexplained
+            ? ' These days are being deducted as loss of pay.'
+            : ' These days are not being deducted — check them before you publish.'}
+        </div>
+      )}
+
+      {/* State the rule in force, so nobody has to guess how days paid was
+          worked out before they publish a month's salaries. */}
+      {policy && (
+        <p className="text-xs text-ink-faint">
+          {policy.attendanceBased
+            ? (policy.deductUnexplained
+              ? 'Salary follows attendance. Days with no punch and no approved leave are deducted as loss of pay.'
+              : 'Salary follows attendance. Days with no punch and no approved leave are flagged for review but not deducted.')
+            : 'Salary is prorated by joining/exit dates and approved unpaid leave only — attendance is not used.'}
+          {' '}<button onClick={openPolicy} className="font-semibold text-brand-700 hover:underline">Change</button>
+        </p>
+      )}
+
       <Card className="p-4">
         <div className="flex items-end gap-3 flex-wrap">
           <Field label="Month"><Select value={month} onChange={(e) => setMonth(Number(e.target.value))}>{MONTHS.map((m, i) => <option key={m} value={i + 1}>{m}</option>)}</Select></Field>
           <Field label="Year"><Select value={year} onChange={(e) => setYear(Number(e.target.value))}>{years.map((y) => <option key={y} value={y}>{y}</option>)}</Select></Field>
+          {companies.length > 1 && (
+            <Field label="Company" hint="Each entity is paid from its own account">
+              <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                {companies.map((c) => <option key={c.id} value={c.id}>{c.name} ({c.codePrefix})</option>)}
+                <option value="">All companies</option>
+              </Select>
+            </Field>
+          )}
           <Field label="Search"><Input value={q} onChange={(e) => setQ(e.target.value)} placeholder="Name or employee ID" /></Field>
           <Button variant="ghost" onClick={load}>Refresh</Button>
+          <Button variant="outline" onClick={openPolicy}>Attendance rules</Button>
           <div className="flex-1" />
           <div className="flex items-end gap-2 flex-wrap">
-            <ConfirmClick onConfirm={generateAll} confirmLabel="Run payroll for the whole month?"
+            <ConfirmClick onConfirm={generateAll}
+              confirmLabel={`Run payroll for ${companies.length > 1
+                ? (companies.find((c) => String(c.id) === String(companyId))?.name || 'ALL companies')
+                : 'the whole month'}?`}
               className="rounded-xl bg-brand-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-brand-700 disabled:opacity-50">
               {bulkBusy ? 'Working…' : 'Generate all'}
             </ConfirmClick>
             {summary?.draft > 0 && (
-              <ConfirmClick onConfirm={publishAll} confirmLabel={`Publish ${summary.draft} draft(s) & email employees?`}
+              <ConfirmClick onConfirm={publishAll}
+                confirmLabel={`Publish ${summary.draft} draft(s) for ${companies.length > 1
+                  ? (companies.find((c) => String(c.id) === String(companyId))?.name || 'ALL companies')
+                  : 'this month'} & email employees?`}
                 className="rounded-xl bg-emerald-600 text-white text-sm font-semibold px-4 py-2.5 hover:bg-emerald-700 disabled:opacity-50">
                 Publish all + notify
               </ConfirmClick>
@@ -270,6 +354,7 @@ export default function PayrollPage() {
                 <th className="text-left px-5 py-3 font-medium">Employee</th>
                 <th className="text-right px-5 py-3 font-medium">Monthly CTC</th>
                 <th className="text-left px-5 py-3 font-medium">Status — {MONTHS[month - 1]} {year}</th>
+                <th className="text-left px-5 py-3 font-medium">Attendance</th>
                 <th className="text-right px-5 py-3 font-medium">Net pay</th>
                 <th className="text-right px-5 py-3 font-medium">Actions</th>
               </tr>
@@ -288,7 +373,7 @@ export default function PayrollPage() {
                       </div>
                     </div>
                   </td>
-                  <td className="px-5 py-3 text-right tabular-nums text-ink-soft">
+                  <td className="px-5 py-3 text-right tabular-nums text-ink-soft" data-cell="ctc">
                     {r.hasStructure ? `₹${inr(r.monthlyCtc)}` : (
                       <button onClick={() => openStructure(r)}
                         className="text-xs font-semibold text-amber-700 bg-amber-50 ring-1 ring-inset ring-amber-200 rounded-full px-2.5 py-1 hover:bg-amber-100">
@@ -308,6 +393,25 @@ export default function PayrollPage() {
                     ) : (
                       <span className="text-xs text-ink-faint">Not generated</span>
                     )}
+                  </td>
+                  {/* Attendance breakdown — how days paid was arrived at. */}
+                  <td className="px-5 py-3">
+                    {r.status && r.attendanceBasis === 'ATTENDANCE' ? (
+                      <div className="text-xs">
+                        <div className="text-ink-soft tabular-nums">
+                          <span className="font-semibold text-ink">{r.daysPaid}</span>/{r.daysInMonth} days paid
+                        </div>
+                        <div className="text-ink-faint tabular-nums">
+                          {[r.presentDays != null && `${r.presentDays}P`, r.leaveDays ? `${r.leaveDays}L` : null,
+                             r.lopDays ? `${r.lopDays} LOP` : null].filter(Boolean).join(' · ')}
+                        </div>
+                        {r.needsReview && (
+                          <span className="inline-flex mt-1 rounded-full bg-amber-50 text-amber-700 ring-1 ring-inset ring-amber-200 px-2 py-0.5 text-[10px] font-semibold">
+                            {r.unexplainedDays} day{r.unexplainedDays === 1 ? '' : 's'} unaccounted
+                          </span>
+                        )}
+                      </div>
+                    ) : <span className="text-xs text-ink-faint">—</span>}
                   </td>
                   <td className="px-5 py-3 text-right tabular-nums font-semibold text-ink">
                     {r.netPay != null ? `₹${inr(r.netPay)}` : <span className="text-ink-faint font-normal">—</span>}
@@ -387,15 +491,111 @@ export default function PayrollPage() {
       <Modal open={!!genFor} onClose={() => setGenFor(null)} title={`Generate payslip — ${genFor?.name || ''}`}
         actions={<><Button variant="ghost" onClick={() => setGenFor(null)}>Cancel</Button><Button onClick={runGenerate} disabled={genBusy}>{genBusy ? <Spinner /> : 'Generate draft'}</Button></>}>
         <div className="grid sm:grid-cols-2 gap-3">
-          <Field label={`Days paid (of ${daysInMonth(year, month)})`} hint="Blank = auto (joining/exit dates & LWP)">
+          <Field label={`Days paid (of ${daysInMonth(year, month)})`}
+            hint={policy?.attendanceBased
+              ? 'Blank = worked out from attendance, joining/exit dates and approved leave'
+              : 'Blank = auto (joining/exit dates & LWP)'}>
             <Input type="number" value={gen.daysPaid} placeholder="Auto" onChange={(e) => setGen({ ...gen, daysPaid: e.target.value })} />
           </Field>
+          {/* What attendance already says for this person this month. */}
+          {genFor?.attendanceBasis === 'ATTENDANCE' && (
+            <div className="sm:col-span-2 rounded-xl border border-line bg-slate-50/60 px-4 py-3 text-xs">
+              <div className="font-semibold text-ink mb-1">From attendance this month</div>
+              <div className="flex flex-wrap gap-x-4 gap-y-1 text-ink-soft tabular-nums">
+                <span>Present <b className="text-ink">{genFor.presentDays ?? '—'}</b></span>
+                <span>Paid leave <b className="text-ink">{genFor.leaveDays ?? 0}</b></span>
+                <span>Unpaid leave <b className="text-ink">{genFor.lopDays ?? 0}</b></span>
+                <span>Days paid <b className="text-ink">{genFor.daysPaid ?? '—'}</b></span>
+              </div>
+              {genFor.unexplainedDays > 0 && (
+                <div className="mt-1.5 text-amber-700">
+                  {genFor.unexplainedDays} day{genFor.unexplainedDays === 1 ? '' : 's'} with no punch and no approved leave
+                  {policy?.deductUnexplained ? ' — deducted.' : ' — not deducted.'}
+                </div>
+              )}
+            </div>
+          )}
           <Field label="Arrears"><Input type="number" value={gen.arrears} onChange={(e) => setGen({ ...gen, arrears: e.target.value })} /></Field>
           <Field label="Bonus / Incentive"><Input type="number" value={gen.bonus} onChange={(e) => setGen({ ...gen, bonus: e.target.value })} /></Field>
           <Field label="TDS"><Input type="number" value={gen.tds} onChange={(e) => setGen({ ...gen, tds: e.target.value })} /></Field>
           <p className="sm:col-span-2 text-xs text-ink-faint">Generates a draft for {MONTHS[month - 1]} {year}. Review the PDF, then Publish to make it visible to the employee.</p>
         </div>
       </Modal>
+    {/* ── Attendance rules for this organisation ───────────────────────── */}
+    <Modal
+      open={policyOpen}
+      onClose={() => setPolicyOpen(false)}
+      title="Attendance rules for payroll"
+      actions={(
+        <>
+          <Button variant="ghost" onClick={() => setPolicyOpen(false)}>Cancel</Button>
+          <Button onClick={savePolicy} disabled={policyBusy}>{policyBusy ? <Spinner /> : 'Save rules'}</Button>
+        </>
+      )}
+    >
+      {policyForm && (
+        <div className="space-y-5">
+          <label className="flex items-start gap-3 rounded-xl border border-line p-4 cursor-pointer hover:bg-slate-50/60">
+            <input type="checkbox" checked={policyForm.attendanceBased}
+              onChange={(ev) => setPolicyForm({ ...policyForm, attendanceBased: ev.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+            <span>
+              <span className="block text-sm font-semibold text-ink">Work out salary from attendance</span>
+              <span className="block text-xs text-ink-soft mt-0.5">
+                Days paid comes from punches, approved on-duty, approved leave, holidays and weekly offs.
+                Turn this off to prorate by joining/exit dates and unpaid leave only.
+              </span>
+            </span>
+          </label>
+
+          <label className={`flex items-start gap-3 rounded-xl border p-4 cursor-pointer ${
+            policyForm.attendanceBased ? 'border-line hover:bg-slate-50/60' : 'border-line opacity-50 cursor-not-allowed'}`}>
+            <input type="checkbox" checked={policyForm.deductUnexplained}
+              disabled={!policyForm.attendanceBased}
+              onChange={(ev) => setPolicyForm({ ...policyForm, deductUnexplained: ev.target.checked })}
+              className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500 disabled:opacity-40" />
+            <span>
+              <span className="block text-sm font-semibold text-ink">Deduct days that attendance cannot explain</span>
+              <span className="block text-xs text-ink-soft mt-0.5">
+                A day with no punch and no approved leave becomes loss of pay. Leave this off and those days
+                are flagged for you to review instead — safer while you are still trusting the punch data,
+                because a missed punch at the gate would otherwise cut someone's salary.
+              </span>
+            </span>
+          </label>
+
+          <div>
+            <div className="text-sm font-semibold text-ink mb-2">Weekly off</div>
+            <div className="flex flex-wrap gap-2">
+              {['Sunday','Monday','Tuesday','Wednesday','Thursday','Friday','Saturday'].map((d, idx) => {
+                const on = policyForm.weekOffDays.includes(idx);
+                return (
+                  <button key={d} type="button"
+                    onClick={() => setPolicyForm({
+                      ...policyForm,
+                      weekOffDays: on
+                        ? policyForm.weekOffDays.filter((x) => x !== idx)
+                        : [...policyForm.weekOffDays, idx].sort((a, b) => a - b),
+                    })}
+                    className={`rounded-full px-3 py-1.5 text-xs font-semibold ring-1 ring-inset transition ${
+                      on ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-white text-ink-soft ring-line hover:bg-slate-50'}`}>
+                    {d}
+                  </button>
+                );
+              })}
+            </div>
+            <p className="text-xs text-ink-faint mt-2">
+              These days are paid without needing a punch. Most organisations here use Sunday.
+            </p>
+          </div>
+
+          <p className="text-xs text-ink-faint border-t border-line pt-3">
+            Changing these rules does not alter payslips already generated. Regenerate the month to apply them.
+          </p>
+        </div>
+      )}
+    </Modal>
+
     </div>
   );
 }

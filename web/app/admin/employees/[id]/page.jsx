@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { useParams, useSearchParams } from 'next/navigation';
 import { api, getStoredAuth } from '@/lib/api.js';
+import { usePerms } from '@/lib/perms.jsx';
 import { Card, Button, Spinner, Textarea, Modal, Input, Select, Field, ConfirmClick } from '@/components/ui.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
-import { IconArrowLeft, IconCheck, IconFile } from '@/components/icons.jsx';
+import { IconArrowLeft, IconCheck, IconFile, IconExit } from '@/components/icons.jsx';
 
 const DOC_LABELS = {
   PHOTO: 'Photograph', SIGNATURE_IMAGE: 'Signature image',
@@ -50,6 +51,66 @@ export default function EmployeeDetailPage() {
     try { const r = await api.post(`/onboarding/${data.onboarding.id}/approve`); setMsg(`Approved. Employee ID ${r.employeeCode} created; credentials emailed.`); await load(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
+  // ── Termination (employer-initiated exit) ─────────────────────────────────
+  // Kept on the profile because this is where HR is already looking when the
+  // decision is made, rather than on a separate list screen.
+  const { canManage: canManageModule, canView: canViewModule } = usePerms();
+  const mayTerminate = canManageModule('TERMINATION');
+  const [terms, setTerms] = useState([]);          // this employee's history
+  const [termTypes, setTermTypes] = useState([]);
+  const [termOpen, setTermOpen] = useState(false);
+  const [termConfirm, setTermConfirm] = useState(false);
+  const [termBusy, setTermBusy] = useState(false);
+  const [termForm, setTermForm] = useState({
+    type: 'TERMINATION', reason: '', notes: '',
+    lastWorkingDate: new Date().toISOString().slice(0, 10),
+    noticeWaived: false, rehireEligible: true,
+  });
+  const liveTermination = terms.find((t) => t.status === 'ACTIVE') || null;
+
+  async function loadTerminations() {
+    if (!canViewModule('TERMINATION')) return;
+    try { setTerms(await api.get(`/admin/employees/${id}/termination`) || []); } catch { setTerms([]); }
+  }
+  useEffect(() => {
+    loadTerminations();
+    if (canViewModule('TERMINATION')) {
+      api.get('/admin/termination-types').then((t) => setTermTypes(t || [])).catch(() => setTermTypes([]));
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [id]);
+
+  async function submitTermination() {
+    setTermBusy(true);
+    try {
+      await api.post(`/admin/employees/${id}/terminate`, {
+        type: termForm.type,
+        reason: termForm.reason.trim(),
+        notes: termForm.notes.trim() || undefined,
+        lastWorkingDate: termForm.lastWorkingDate,
+        noticeWaived: termForm.noticeWaived,
+        rehireEligible: termForm.rehireEligible,
+      });
+      setTermOpen(false); setTermConfirm(false);
+      setMsg(`Recorded as leaving on ${termForm.lastWorkingDate}. Their access is now blocked.`);
+      await Promise.all([load(), loadTerminations()]);
+    } catch (e) { setMsg(''); alert(e.message); setTermConfirm(false); }
+    finally { setTermBusy(false); }
+  }
+
+  async function reverseTermination() {
+    const reason = window.prompt('Why is this being reversed? (kept on the record)');
+    if (reason == null) return;
+    if (reason.trim().length < 5) { alert('Please give a reason of at least 5 characters.'); return; }
+    try {
+      await api.post(`/admin/terminations/${liveTermination.id}/revoke`, { reason: reason.trim() });
+      setMsg('Termination reversed — this person is active again and can sign in.');
+      await Promise.all([load(), loadTerminations()]);
+    } catch (e) { alert(e.message); }
+  }
+
+  const termReady = termForm.reason.trim().length >= 5 && termForm.lastWorkingDate;
+
   const [bs, setBs] = useState(null); // bank/statutory edit form
   const [bsBusy, setBsBusy] = useState(false);
   async function saveBankStatutory() {
@@ -198,9 +259,37 @@ export default function EmployeeDetailPage() {
               Activate
             </ConfirmClick>
           )}
+          {mayTerminate && !liveTermination && e.onboarding_status === 'ACTIVE' && (
+            <Button variant="danger" size="sm" onClick={() => { setTermConfirm(false); setTermOpen(true); }}>
+              <IconExit width={15} height={15} /> Terminate
+            </Button>
+          )}
           <StatusBadge status={e.onboarding_status} />
         </div>
       </div>
+
+      {/* An exit in force is the most important fact about this record, so it
+          sits above everything else. */}
+      {liveTermination && (
+        <div className="rounded-xl bg-rose-50 ring-1 ring-inset ring-rose-200 px-4 py-3.5">
+          <div className="flex flex-wrap items-start justify-between gap-3">
+            <div className="min-w-0">
+              <div className="font-semibold text-rose-800 flex items-center gap-2">
+                <IconExit width={16} height={16} /> {liveTermination.typeLabel} — last working day {liveTermination.lastWorkingDate}
+              </div>
+              <div className="text-sm text-rose-700 mt-1">{liveTermination.reason}</div>
+              <div className="text-[11px] text-rose-600/80 mt-1">
+                Recorded by {liveTermination.initiatedBy || 'an administrator'}
+                {liveTermination.initiatedAt ? ` on ${new Date(liveTermination.initiatedAt).toLocaleDateString()}` : ''}
+                {liveTermination.rehireEligible === false ? ' · not eligible for rehire' : ''}
+              </div>
+            </div>
+            {mayTerminate && (
+              <Button variant="outline" size="sm" onClick={reverseTermination} className="shrink-0">Reverse</Button>
+            )}
+          </div>
+        </div>
+      )}
 
       {msg && <div className="text-sm text-brand-700 bg-brand-50 rounded-xl px-4 py-3">{msg}</div>}
 
@@ -422,6 +511,84 @@ export default function EmployeeDetailPage() {
           </div>
         </div>
       )}
+    {/* ── Terminate ─────────────────────────────────────────────────────── */}
+    <Modal
+      open={termOpen}
+      onClose={() => { setTermOpen(false); setTermConfirm(false); }}
+      tone={termConfirm ? 'danger' : 'brand'}
+      title={termConfirm ? 'Confirm this termination' : `Terminate ${e.first_name} ${e.last_name}`}
+      actions={termConfirm ? (
+        <>
+          <Button variant="ghost" onClick={() => setTermConfirm(false)}>Back</Button>
+          <Button variant="danger" onClick={submitTermination} disabled={termBusy}>
+            {termBusy ? <Spinner /> : 'Confirm termination'}
+          </Button>
+        </>
+      ) : (
+        <>
+          <Button variant="ghost" onClick={() => setTermOpen(false)}>Cancel</Button>
+          <Button onClick={() => setTermConfirm(true)} disabled={!termReady}>Review</Button>
+        </>
+      )}
+    >
+      {!termConfirm ? (
+        <div className="space-y-4">
+          <div className="grid sm:grid-cols-2 gap-4">
+            <Field label="Type" required>
+              <Select value={termForm.type} onChange={(ev) => setTermForm({ ...termForm, type: ev.target.value })}>
+                {(termTypes.length ? termTypes : [{ key: 'TERMINATION', label: 'Termination' }])
+                  .map((t) => <option key={t.key} value={t.key}>{t.label}</option>)}
+              </Select>
+            </Field>
+            <Field label="Last working day" required hint="Payroll pays up to this date">
+              <Input type="date" value={termForm.lastWorkingDate}
+                onChange={(ev) => setTermForm({ ...termForm, lastWorkingDate: ev.target.value })} />
+            </Field>
+          </div>
+          <Field label="Reason" required hint="Kept on the permanent record — at least 5 characters">
+            <Textarea rows={3} value={termForm.reason}
+              placeholder="Repeated unauthorised absence after two written warnings"
+              onChange={(ev) => setTermForm({ ...termForm, reason: ev.target.value })} />
+          </Field>
+          <Field label="Internal notes" hint="Not shown to the employee">
+            <Textarea rows={2} value={termForm.notes}
+              onChange={(ev) => setTermForm({ ...termForm, notes: ev.target.value })} />
+          </Field>
+          <div className="space-y-2 rounded-xl border border-line bg-slate-50/60 p-4">
+            <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="checkbox" checked={termForm.noticeWaived}
+                onChange={(ev) => setTermForm({ ...termForm, noticeWaived: ev.target.checked })}
+                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+              Notice period waived
+            </label>
+            <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
+              <input type="checkbox" checked={termForm.rehireEligible}
+                onChange={(ev) => setTermForm({ ...termForm, rehireEligible: ev.target.checked })}
+                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+              May be considered for rehire in future
+            </label>
+          </div>
+        </div>
+      ) : (
+        <div className="space-y-4 text-sm">
+          <div className="rounded-xl border border-rose-200 bg-rose-50 p-4">
+            <div className="font-semibold text-rose-800">
+              {e.first_name} {e.last_name} will lose access immediately.
+            </div>
+            <ul className="mt-2 space-y-1 text-rose-700 text-[13px] list-disc pl-5">
+              <li>Their login is blocked as soon as you confirm — including the mobile app.</li>
+              <li>They are removed from directories, team lists and future payroll runs.</li>
+              <li>Payroll pays them up to <b>{termForm.lastWorkingDate}</b> and no further.</li>
+              <li>The reason is kept permanently and appears in the audit log.</li>
+            </ul>
+          </div>
+          <p className="text-ink-soft">
+            If this was raised in error you can reverse it from this page, which restores their access.
+          </p>
+        </div>
+      )}
+    </Modal>
+
     </div>
   );
 }

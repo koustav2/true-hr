@@ -1,4 +1,9 @@
-// Role hierarchy: SUPER_ADMIN → HR_ADMIN → IT_ADMIN
+// Role labels and capability checks.
+//
+// Access is no longer a fixed role list: a Super Admin defines roles per
+// organisation and ticks which modules each may open. The portal asks the server
+// what it may show via /me/permissions (see usePerms in lib/perms.jsx) and falls
+// back to these static checks only before that payload has arrived.
 export const ROLE_LABEL = {
   SUPER_ADMIN: 'Super Admin',
   HR_ADMIN: 'HR Admin',
@@ -6,7 +11,8 @@ export const ROLE_LABEL = {
   EMPLOYEE: 'Employee',
 };
 
-// Capability checks
+// Capability checks against the base role (the fallback for anything not yet
+// expressed as a module).
 export const can = {
   // HR data: employees, onboarding, review queue
   hr: (role) => role === 'HR_ADMIN' || role === 'SUPER_ADMIN',

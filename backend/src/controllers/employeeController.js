@@ -32,7 +32,23 @@ export async function createEmployee(req, res, next) {
     const dupe = await query(`SELECT 1 FROM employees WHERE lower(official_email)=lower($1)`, [b.officialEmail]);
     if (dupe.rowCount) return res.status(409).json({ error: 'An employee with this official email already exists.' });
 
-    const company = (await query(`SELECT id FROM companies ORDER BY id LIMIT 1`)).rows[0];
+    // Which legal entity is this person joining? An organisation may run several
+    // companies, so honour an explicit choice and validate it belongs to this
+    // tenant; fall back to the organisation's first active company.
+    let company;
+    if (b.companyId) {
+      company = (await query(
+        `SELECT id FROM companies
+          WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+        [b.companyId, req.orgId || null])).rows[0];
+      if (!company) return res.status(400).json({ error: 'That company does not belong to this organisation.' });
+    } else {
+      company = (await query(
+        `SELECT id FROM companies
+          WHERE ($1::bigint IS NULL OR organisation_id=$1) AND active IS NOT FALSE
+          ORDER BY id LIMIT 1`, [req.orgId || null])).rows[0];
+    }
+    if (!company) return res.status(409).json({ error: 'This organisation has no company set up yet.' });
 
     // Optional offer-letter PDF: { name, dataUrl: "data:application/pdf;base64,..." }
     let olName = null, olMime = null, olData = null;
@@ -49,8 +65,9 @@ export async function createEmployee(req, res, next) {
           (company_id, first_name, last_name, dob, gender, phone, personal_email, official_email,
            department_id, designation_id, reporting_manager_id, function_manager_id, operational_manager_id,
            date_of_joining, employment_type, location, onboarding_status, created_by,
-           offer_letter_name, offer_letter_mime, offer_letter_data)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'OFFER_SENT',$17,$18,$19,$20)
+           offer_letter_name, offer_letter_mime, offer_letter_data, organisation_id)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,'OFFER_SENT',$17,$18,$19,$20,
+                 (SELECT organisation_id FROM companies WHERE id=$1))
          RETURNING *`,
         [company.id, b.firstName, b.lastName, b.dob || null, b.gender || null, b.phone || null,
          b.personalEmail.toLowerCase(), b.officialEmail.toLowerCase(),
@@ -118,11 +135,14 @@ export async function listEmployees(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.personal_email, e.official_email,
-              e.onboarding_status, e.date_of_joining, d.title AS designation, dep.name AS department, e.created_at
+              e.onboarding_status, e.date_of_joining, d.title AS designation, dep.name AS department,
+              e.created_at, e.company_id, co.name AS company
        FROM employees e
        LEFT JOIN designations d ON d.id=e.designation_id
        LEFT JOIN departments dep ON dep.id=e.department_id
-       ORDER BY e.created_at DESC`);
+       LEFT JOIN companies co ON co.id=e.company_id
+       WHERE ($1::bigint IS NULL OR e.organisation_id=$1)
+       ORDER BY e.created_at DESC`, [req.orgId || null]);
     res.json(rows);
   } catch (e) { next(e); }
 }
@@ -135,7 +155,8 @@ export async function reviewQueue(req, res, next) {
        FROM onboarding o JOIN employees e ON e.id=o.employee_id
        LEFT JOIN designations d ON d.id=e.designation_id
        WHERE o.state IN ('DETAILS_SUBMITTED','HR_REVIEW')
-       ORDER BY o.submitted_at ASC NULLS LAST`);
+         AND ($1::bigint IS NULL OR e.organisation_id=$1)
+       ORDER BY o.submitted_at ASC NULLS LAST`, [req.orgId || null]);
     res.json(rows);
   } catch (e) { next(e); }
 }

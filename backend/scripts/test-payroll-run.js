@@ -9,9 +9,10 @@ const check = (label, cond, extra = '') => {
   if (cond) { passed++; console.log(`  ok  ${label}`); }
   else { failed++; console.error(`FAIL  ${label} ${extra}`); }
 };
-function call(fn, { params = {}, body = {}, q = {}, user } = {}) {
+function call(fn, { params = {}, body = {}, q = {}, user, auth, orgId } = {}) {
   return new Promise((resolve) => {
-    const req = { params, query: q, body, user };
+    // auth/orgId mirror what middleware/auth.js attaches on a real request.
+    const req = { params, query: q, body, user, auth, orgId };
     let sent = '';
     const res = {
       _s: 200, _h: {},
@@ -33,9 +34,9 @@ async function main() {
   const hash = await hashPassword('Pass@1234');
 
   const mkEmp = async (code, doj) => (await query(
-    `INSERT INTO employees (company_id, first_name, last_name, personal_email, official_email, employee_code, onboarding_status, date_of_joining)
-     VALUES ($1,$2,'T',$3,$3,$2,'ACTIVE',$4) RETURNING id`,
-    [co.id, code, `${code.toLowerCase()}@t.t`, doj])).rows[0].id;
+    `INSERT INTO employees (company_id, organisation_id, first_name, last_name, personal_email, official_email, employee_code, onboarding_status, date_of_joining)
+     VALUES ($1,$2,$3,'T',$4,$4,$3,'ACTIVE',$5) RETURNING id`,
+    [co.id, org.id, code, `${code.toLowerCase()}@t.t`, doj])).rows[0].id;
   const mkStruct = (id, ctc) => query(
     `INSERT INTO salary_structures (employee_id, monthly_ctc) VALUES ($1,$2)`, [id, ctc]);
 
@@ -57,8 +58,12 @@ async function main() {
                VALUES ($1,'2026-05-10','2026-06-10','APPROVED')`, [leaver]);
 
   const hr = { id: 1, role: 'HR_ADMIN', employeeId: null };
+  // These suites invoke controllers directly, so they must supply the tenant
+  // context that middleware/auth.js attaches on a real request — otherwise the
+  // run sheet and bank sheet would span every organisation in the database.
+  const ORG = { orgId: org.id, auth: { orgId: org.id, baseRole: 'HR_ADMIN', roleRank: 10, perms: new Map(), isPlatformAdmin: false } };
 
-  let r = await call(payroll.generateAll, { body: { year: YEAR, month: MONTH }, user: hr });
+  let r = await call(payroll.generateAll, { ...ORG, body: { year: YEAR, month: MONTH }, user: hr });
   check('generate-all runs', r.status === 200 && r.data.ok, JSON.stringify(r.data));
   check('generated 4 payable employees', r.data.generated === 4, `got ${r.data.generated}`);
   const reasons = Object.fromEntries((r.data.skipped || []).map((s) => [s.employeeCode, s.reason]));
@@ -83,7 +88,7 @@ async function main() {
   s = await slip(leaver);
   check('leaver (LWD 10th) → 10 days paid', Number(s.days_paid) === 10, `got ${s.days_paid}`);
 
-  r = await call(payroll.publishAll, { body: { year: YEAR, month: MONTH }, user: hr });
+  r = await call(payroll.publishAll, { ...ORG, body: { year: YEAR, month: MONTH }, user: hr });
   check('publish-all publishes 4', r.status === 200 && r.data.published === 4, JSON.stringify(r.data));
 
   const mail = (await query(
@@ -91,14 +96,14 @@ async function main() {
   check('payslip-published email queued', !!mail && /Net pay/i.test(mail.html));
 
   // Published slips are locked for regeneration
-  r = await call(payroll.generate, { body: { employeeId: full, year: YEAR, month: MONTH }, user: hr });
+  r = await call(payroll.generate, { ...ORG, body: { employeeId: full, year: YEAR, month: MONTH }, user: hr });
   check('published slip locked → 409', r.status === 409);
 
   // generate-all again: everything already published → 0 generated
-  r = await call(payroll.generateAll, { body: { year: YEAR, month: MONTH }, user: hr });
+  r = await call(payroll.generateAll, { ...ORG, body: { year: YEAR, month: MONTH }, user: hr });
   check('re-run generates 0 (all locked)', r.data.generated === 0, JSON.stringify(r.data));
 
-  r = await call(payroll.exportBankSheet, { q: { year: String(YEAR), month: String(MONTH) }, user: hr });
+  r = await call(payroll.exportBankSheet, { ...ORG, q: { year: String(YEAR), month: String(MONTH) }, user: hr });
   check('bank sheet CSV exports', r.status === 200 && String(r.data).includes('Employee Code'));
   check('CSV has the 4 published rows', String(r.data).trim().split('\n').length === 5, String(r.data).split('\n').length);
 

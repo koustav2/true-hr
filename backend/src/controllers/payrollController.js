@@ -5,6 +5,7 @@ import { buildPayslipPdf } from '../services/paySlipPdf.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { payslipPublishedEmail } from '../services/emailTemplates.js';
 import { isoDate } from '../utils/joining.js';
+import { classifyMonth, loadPayrollPolicy, warningsFor } from '../services/attendancePayroll.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -19,6 +20,25 @@ function defaultStructure() {
     professionalTax: 200, welfareTrust: 0,
     lta: 0, personalAllowance: 0, miscellaneous: 0, cityAllowance: 0, performancePay: 0,
   };
+}
+
+/**
+ * Resolve an optional company filter for a payroll run.
+ *
+ * An organisation may run several companies, each its own legal/payroll entity
+ * with its own bank relationship — so a run is normally scoped to one of them.
+ * Returns { companyId } or { error } when the id does not belong to this tenant.
+ */
+async function companyFilter(req, raw) {
+  const v = raw ?? req.query?.companyId ?? req.body?.companyId;
+  if (v === undefined || v === null || v === '' || v === 'all') return { companyId: null };
+  const id = parseInt(v, 10);
+  if (!Number.isFinite(id)) return { error: 'Invalid company' };
+  const row = (await query(
+    `SELECT id FROM companies WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+    [id, req.orgId || null])).rows[0];
+  if (!row) return { error: 'That company does not belong to this organisation.' };
+  return { companyId: id };
 }
 
 // Resolve the company the requesting HR belongs to (single-org fallback otherwise).
@@ -283,23 +303,39 @@ export async function adminList(req, res, next) {
   try {
     const year = parseInt(req.query.year, 10) || new Date().getFullYear();
     const month = parseInt(req.query.month, 10) || new Date().getMonth() + 1;
+    const cf = await companyFilter(req);
+    if (cf.error) return res.status(400).json({ error: cf.error });
     const rows = (await query(
       `SELECT e.id AS employee_id, e.employee_code, e.first_name, e.last_name,
               (ss.id IS NOT NULL) AS has_structure, ss.monthly_ctc,
-              p.id AS payslip_id, p.status, p.net_pay
+              p.id AS payslip_id, p.status, p.net_pay, p.days_paid, p.days_in_month,
+              p.present_days, p.leave_days, p.lop_days, p.unexplained_days, p.attendance_basis
          FROM employees e
          LEFT JOIN salary_structures ss ON ss.employee_id=e.id
          LEFT JOIN payslips p ON p.employee_id=e.id AND p.year=$1 AND p.month=$2
         WHERE e.onboarding_status NOT IN ('REJECTED','EXPIRED')
-        ORDER BY e.first_name, e.last_name`, [year, month])).rows;
+          AND ($3::bigint IS NULL OR e.organisation_id = $3)
+          AND ($4::bigint IS NULL OR e.company_id = $4)
+        ORDER BY e.first_name, e.last_name`, [year, month, req.orgId || null, cf.companyId])).rows;
+    const num = (v) => (v != null ? Number(v) : null);
     const shaped = rows.map((r) => ({
       employeeId: r.employee_id, employeeCode: r.employee_code,
       name: `${r.first_name || ''} ${r.last_name || ''}`.trim(),
-      hasStructure: r.has_structure, monthlyCtc: r.monthly_ctc != null ? Number(r.monthly_ctc) : null,
-      payslipId: r.payslip_id, status: r.status, netPay: r.net_pay != null ? Number(r.net_pay) : null,
+      hasStructure: r.has_structure, monthlyCtc: num(r.monthly_ctc),
+      payslipId: r.payslip_id, status: r.status, netPay: num(r.net_pay),
+      daysPaid: num(r.days_paid), daysInMonth: r.days_in_month ?? null,
+      presentDays: num(r.present_days), leaveDays: num(r.leave_days),
+      lopDays: num(r.lop_days), unexplainedDays: num(r.unexplained_days),
+      attendanceBasis: r.attendance_basis || null,
+      // Surfaced on the run sheet so HR can see, before publishing, who has
+      // days that attendance cannot account for.
+      needsReview: Number(r.unexplained_days || 0) > 0,
     }));
+    const policy = await loadPayrollPolicy(req.orgId);
     res.json({
       year, month, monthName: MONTHS[month - 1],
+      companyId: cf.companyId,
+      policy: { attendanceBased: policy.attendanceBased, deductUnexplained: policy.deductUnexplained },
       summary: {
         employees: shaped.length,
         withStructure: shaped.filter((r) => r.hasStructure).length,
@@ -308,6 +344,8 @@ export async function adminList(req, res, next) {
         draft: shaped.filter((r) => r.status === 'DRAFT').length,
         netTotal: shaped.reduce((a, r) => a + (r.netPay || 0), 0),
         publishedNetTotal: shaped.filter((r) => r.status === 'PUBLISHED').reduce((a, r) => a + (r.netPay || 0), 0),
+        needingReview: shaped.filter((r) => r.needsReview).length,
+        unexplainedDays: shaped.reduce((a, r) => a + (r.unexplainedDays || 0), 0),
       },
       rows: shaped,
     });
@@ -326,16 +364,25 @@ async function runInputs(employeeId, year, month) {
   const first = `${year}-${mm}-01`;
   const last = `${year}-${mm}-${String(dim).padStart(2, '0')}`;
 
-  const doj = (await query(`SELECT date_of_joining FROM employees WHERE id=$1`, [employeeId]))
-    .rows[0]?.date_of_joining;
-  const lwd = (await query(
+  const emp = (await query(
+    `SELECT date_of_joining, organisation_id FROM employees WHERE id=$1`, [employeeId])).rows[0] || {};
+  const doj = emp.date_of_joining;
+
+  // An exit can come from either side: an approved resignation, or an
+  // employer-initiated termination. Whichever ends the service first wins.
+  const resignLwd = (await query(
     `SELECT last_working_date FROM resignations
       WHERE employee_id=$1 AND status='APPROVED' ORDER BY id DESC LIMIT 1`, [employeeId]))
     .rows[0]?.last_working_date;
+  const termLwd = (await query(
+    `SELECT last_working_date FROM terminations
+      WHERE employee_id=$1 AND status='ACTIVE' ORDER BY id DESC LIMIT 1`, [employeeId]))
+    .rows[0]?.last_working_date;
+  const lwdCandidates = [isoDate(resignLwd), isoDate(termLwd)].filter(Boolean).sort();
+  const lwdIso = lwdCandidates[0] || null;
 
   let start = 1, end = dim;
   const dojIso = isoDate(doj);
-  const lwdIso = isoDate(lwd);
   if (dojIso) {
     if (dojIso > last) return null;                       // joins after this month
     if (dojIso >= first) start = Number(dojIso.slice(8, 10));
@@ -346,6 +393,20 @@ async function runInputs(employeeId, year, month) {
   }
   if (end < start) return null;
 
+  const policy = await loadPayrollPolicy(emp.organisation_id);
+
+  // ── Attendance-driven (default) ────────────────────────────────────────────
+  if (policy.attendanceBased) {
+    const c = await classifyMonth(employeeId, year, month, { start, end }, policy);
+    return {
+      dim, daysPaid: c.daysPaid, lopDays: c.lopDays, payableDays: c.payableDays,
+      presentDays: c.presentDays, leaveDays: c.leaveDays, holidayDays: c.holidayDays,
+      weekOffDays: c.weekOffDays, unexplainedDays: c.unexplainedDays,
+      basis: 'ATTENDANCE', warnings: warningsFor(c), dayMap: c.days,
+    };
+  }
+
+  // ── Calendar fallback (organisation opted out of attendance-based pay) ─────
   const from = `${year}-${mm}-${String(start).padStart(2, '0')}`;
   const to = `${year}-${mm}-${String(end).padStart(2, '0')}`;
   const lop = Number((await query(
@@ -356,7 +417,10 @@ async function runInputs(employeeId, year, month) {
     [employeeId, from, to])).rows[0].d) || 0;
 
   const payableDays = end - start + 1;
-  return { dim, daysPaid: Math.max(0, payableDays - lop), lopDays: lop, payableDays };
+  return {
+    dim, daysPaid: Math.max(0, payableDays - lop), lopDays: lop, payableDays,
+    basis: 'CALENDAR', warnings: [],
+  };
 }
 
 // Shared by single + bulk generation. Returns { ok } or { skip: reason }.
@@ -382,24 +446,48 @@ async function generateFor(employeeId, year, month, opts, reqUser) {
   const meta = await loadMeta(employeeId);
   meta.grade = s.grade;
   meta.lopDays = auto.lopDays;
-  const data = { earnings: calc.earnings, deductions: calc.deductions, arrears: calc.arrears, meta };
+  // Attendance breakdown travels with the slip so a published payslip always
+  // explains how its days-paid figure was reached, even if punches change later.
+  meta.attendance = auto.basis === 'ATTENDANCE' ? {
+    basis: 'ATTENDANCE',
+    payableDays: auto.payableDays,
+    presentDays: auto.presentDays,
+    leaveDays: auto.leaveDays,
+    holidayDays: auto.holidayDays,
+    weekOffDays: auto.weekOffDays,
+    lopDays: auto.lopDays,
+    unexplainedDays: auto.unexplainedDays,
+    manualOverride: opts.daysPaid != null && opts.daysPaid !== '',
+  } : { basis: 'CALENDAR', payableDays: auto.payableDays, lopDays: auto.lopDays };
+  const data = {
+    earnings: calc.earnings, deductions: calc.deductions, arrears: calc.arrears, meta,
+    warnings: auto.warnings || [],
+  };
 
   const row = (await query(
     `INSERT INTO payslips
        (employee_id, year, month, status, days_in_month, days_paid, arrears, bonus, tds,
-        gross_earnings, total_deductions, net_pay, data, generated_by, generated_at)
-     VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now())
+        gross_earnings, total_deductions, net_pay, data, generated_by, generated_at,
+        present_days, leave_days, holiday_days, weekoff_days, lop_days, unexplained_days, attendance_basis)
+     VALUES ($1,$2,$3,'DRAFT',$4,$5,$6,$7,$8,$9,$10,$11,$12,$13, now(),
+             $14,$15,$16,$17,$18,$19,$20)
      ON CONFLICT (employee_id, year, month) DO UPDATE SET
        status='DRAFT', days_in_month=EXCLUDED.days_in_month, days_paid=EXCLUDED.days_paid,
        arrears=EXCLUDED.arrears, bonus=EXCLUDED.bonus, tds=EXCLUDED.tds,
        gross_earnings=EXCLUDED.gross_earnings, total_deductions=EXCLUDED.total_deductions,
        net_pay=EXCLUDED.net_pay, data=EXCLUDED.data, generated_by=EXCLUDED.generated_by,
-       generated_at=now(), published_at=NULL
+       generated_at=now(), published_at=NULL,
+       present_days=EXCLUDED.present_days, leave_days=EXCLUDED.leave_days,
+       holiday_days=EXCLUDED.holiday_days, weekoff_days=EXCLUDED.weekoff_days,
+       lop_days=EXCLUDED.lop_days, unexplained_days=EXCLUDED.unexplained_days,
+       attendance_basis=EXCLUDED.attendance_basis
      RETURNING *`,
     [employeeId, year, month, dim, daysPaid, calc.arrears, Number(opts.bonus) || 0, Number(opts.tds) || 0,
-     calc.grossEarnings, calc.totalDeductions, calc.netPay, JSON.stringify(data), reqUser.employeeId || null])).rows[0];
+     calc.grossEarnings, calc.totalDeductions, calc.netPay, JSON.stringify(data), reqUser.employeeId || null,
+     auto.presentDays ?? null, auto.leaveDays ?? null, auto.holidayDays ?? null,
+     auto.weekOffDays ?? null, auto.lopDays ?? 0, auto.unexplainedDays ?? 0, auto.basis || 'CALENDAR'])).rows[0];
   await audit(reqUser.id, 'PAYSLIP_GENERATE', 'payslip', row.id, { employeeId, year, month });
-  return { ok: true, row };
+  return { ok: true, row, warnings: auto.warnings || [] };
 }
 
 // POST /admin/payslips/generate { employeeId, year, month, daysPaid?, arrears, bonus, tds }
@@ -421,11 +509,17 @@ export async function generateAll(req, res, next) {
   try {
     const { year, month } = req.body || {};
     if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const cf = await companyFilter(req);
+    if (cf.error) return res.status(400).json({ error: cf.error });
+    // Scoped to the caller's organisation (and optionally one company): without
+    // this the run would generate payslips for every tenant in the database.
     const emps = (await query(
       `SELECT e.id, e.employee_code, e.first_name, e.last_name
          FROM employees e JOIN salary_structures ss ON ss.employee_id=e.id
         WHERE e.onboarding_status='ACTIVE'
-        ORDER BY e.first_name, e.last_name`)).rows;
+          AND ($1::bigint IS NULL OR e.organisation_id=$1)
+          AND ($2::bigint IS NULL OR e.company_id=$2)
+        ORDER BY e.first_name, e.last_name`, [req.orgId || null, cf.companyId])).rows;
     let generated = 0;
     const skipped = [];
     for (const e of emps) {
@@ -433,8 +527,9 @@ export async function generateAll(req, res, next) {
       if (out.ok) generated += 1;
       else skipped.push({ employeeCode: e.employee_code, name: `${e.first_name} ${e.last_name}`.trim(), reason: out.skip });
     }
-    await audit(req.user.id, 'PAYROLL_RUN_GENERATE_ALL', 'payslip', null, { year, month, generated, skipped: skipped.length });
-    res.json({ ok: true, generated, skipped });
+    await audit(req.user.id, 'PAYROLL_RUN_GENERATE_ALL', 'payslip', null,
+      { year, month, generated, skipped: skipped.length, organisationId: req.orgId, companyId: cf.companyId });
+    res.json({ ok: true, generated, skipped, companyId: cf.companyId });
   } catch (e) { next(e); }
 }
 
@@ -476,12 +571,23 @@ export async function publishAll(req, res, next) {
   try {
     const { year, month } = req.body || {};
     if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const cf = await companyFilter(req);
+    if (cf.error) return res.status(400).json({ error: cf.error });
+    // Publishing emails every affected employee, so the update MUST be limited to
+    // the caller's own organisation (and optionally one company). Unscoped, this
+    // would finalise and notify another tenant's payroll.
     const rows = (await query(
-      `UPDATE payslips SET status='PUBLISHED', published_at=now()
-        WHERE year=$1 AND month=$2 AND status='DRAFT' RETURNING id`, [year, month])).rows;
+      `UPDATE payslips p SET status='PUBLISHED', published_at=now()
+         FROM employees e
+        WHERE e.id = p.employee_id
+          AND p.year=$1 AND p.month=$2 AND p.status='DRAFT'
+          AND ($3::bigint IS NULL OR e.organisation_id=$3)
+          AND ($4::bigint IS NULL OR e.company_id=$4)
+        RETURNING p.id`, [year, month, req.orgId || null, cf.companyId])).rows;
     for (const r of rows) await notifyPublished(r.id);
-    await audit(req.user.id, 'PAYROLL_RUN_PUBLISH_ALL', 'payslip', null, { year, month, published: rows.length });
-    res.json({ ok: true, published: rows.length });
+    await audit(req.user.id, 'PAYROLL_RUN_PUBLISH_ALL', 'payslip', null,
+      { year, month, published: rows.length, organisationId: req.orgId, companyId: cf.companyId });
+    res.json({ ok: true, published: rows.length, companyId: cf.companyId });
   } catch (e) { next(e); }
 }
 
@@ -492,27 +598,41 @@ export async function exportBankSheet(req, res, next) {
     const year = parseInt(req.query.year, 10);
     const month = parseInt(req.query.month, 10);
     if (!year || !month) return res.status(400).json({ error: 'year and month are required' });
+    const cf = await companyFilter(req);
+    if (cf.error) return res.status(400).json({ error: cf.error });
+    // Scoped to the caller's organisation: this file carries decrypted bank
+    // account numbers, so it must never span tenants. Optionally narrowed to one
+    // company, because each legal entity pays from its own bank account.
     const rows = (await query(
       `SELECT e.employee_code, e.first_name, e.last_name,
               b.bank_name, b.ifsc, b.account_number_enc, b.account_holder,
-              p.net_pay, p.status
+              p.net_pay, p.status, p.days_paid, p.days_in_month, p.lop_days
          FROM payslips p
          JOIN employees e ON e.id=p.employee_id
          LEFT JOIN employee_bank b ON b.employee_id=e.id
         WHERE p.year=$1 AND p.month=$2 AND p.status='PUBLISHED'
-        ORDER BY e.first_name, e.last_name`, [year, month])).rows;
+          AND ($3::bigint IS NULL OR e.organisation_id=$3)
+          AND ($4::bigint IS NULL OR e.company_id=$4)
+        ORDER BY e.first_name, e.last_name`, [year, month, req.orgId || null, cf.companyId])).rows;
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const lines = [
-      ['Employee Code', 'Name', 'Account Holder', 'Bank', 'IFSC', 'Account Number', 'Net Pay (INR)'].join(','),
+      ['Employee Code', 'Name', 'Account Holder', 'Bank', 'IFSC', 'Account Number',
+       'Days Paid', 'Days in Month', 'LOP Days', 'Net Pay (INR)'].join(','),
       ...rows.map((r) => [
         r.employee_code, `${r.first_name || ''} ${r.last_name || ''}`.trim(), r.account_holder || '',
         r.bank_name || '', r.ifsc || '', r.account_number_enc ? decrypt(r.account_number_enc) : '',
+        r.days_paid != null ? Number(r.days_paid) : '', r.days_in_month ?? '',
+        r.lop_days != null ? Number(r.lop_days) : '',
         Number(r.net_pay).toFixed(2),
       ].map(esc).join(',')),
     ];
     await audit(req.user.id, 'PAYROLL_BANK_SHEET_EXPORT', 'payslip', null, { year, month, rows: rows.length });
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
-    res.setHeader('Content-Disposition', `attachment; filename="bank-advice-${year}-${String(month).padStart(2, '0')}.csv"`);
+    const prefix = cf.companyId
+      ? ((await query(`SELECT code_prefix FROM companies WHERE id=$1`, [cf.companyId])).rows[0]?.code_prefix || 'CO')
+      : 'ALL';
+    res.setHeader('Content-Disposition',
+      `attachment; filename="bank-advice-${prefix}-${year}-${String(month).padStart(2, '0')}.csv"`);
     res.send(lines.join('\n'));
   } catch (e) { next(e); }
 }

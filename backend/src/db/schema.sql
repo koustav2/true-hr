@@ -1041,6 +1041,21 @@ CREATE TABLE IF NOT EXISTS app_banners (
   created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 
+-- Sales leads: "Request a demo" submissions from the public marketing site
+-- (truehr.co.in). Not scoped to an organisation — these are prospects for the
+-- platform itself, reviewed by the platform owner (same reasoning as `organisations`).
+CREATE TABLE IF NOT EXISTS leads (
+  id             BIGSERIAL PRIMARY KEY,
+  full_name      TEXT NOT NULL,
+  work_email     TEXT NOT NULL,
+  phone          TEXT,
+  company_name   TEXT,
+  employee_count TEXT,
+  message        TEXT,
+  status         TEXT NOT NULL DEFAULT 'NEW', -- NEW | CONTACTED | CONVERTED | DROPPED
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
 -- Forgot-password OTPs (6-digit code emailed to the user; verified on reset).
 CREATE TABLE IF NOT EXISTS password_reset_otps (
   id         BIGSERIAL PRIMARY KEY,
@@ -1102,3 +1117,162 @@ CREATE TABLE IF NOT EXISTS device_tokens (
   updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_device_tokens_user ON device_tokens(user_id);
+
+-- =====================================================================
+-- GreenHR-parity gap closure (feature/greenhr-parity-gaps) — ADDITIVE.
+-- Statutory records/reports, investment declaration, F&F settlement,
+-- letters engine, asset management, statutory-rate masters.
+-- Nothing here alters or removes the NFA / expense suite.
+-- =====================================================================
+
+-- 1) Statutory identifiers + nominations (PF / ESIC / Gratuity) -------
+CREATE TABLE IF NOT EXISTS statutory_profiles (
+  employee_id     BIGINT PRIMARY KEY REFERENCES employees(id) ON DELETE CASCADE,
+  uan             TEXT,
+  pf_number       TEXT,
+  pension_number  TEXT,
+  esic_number     TEXT,
+  esic_dispensary TEXT,
+  pf_join_date    DATE,
+  pf_applicable   BOOLEAN NOT NULL DEFAULT true,
+  esic_applicable BOOLEAN NOT NULL DEFAULT false,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+
+CREATE TABLE IF NOT EXISTS statutory_nominees (
+  id          BIGSERIAL PRIMARY KEY,
+  employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  scheme      TEXT NOT NULL CHECK (scheme IN ('PF','GRATUITY','ESIC','PENSION')),
+  name        TEXT NOT NULL,
+  relation    TEXT,
+  date_of_birth DATE,
+  share_pct   NUMERIC(5,2) NOT NULL DEFAULT 0,
+  address     TEXT,
+  guardian    TEXT,
+  created_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_stat_nominees_emp ON statutory_nominees(employee_id, scheme);
+
+-- 2) Income-tax investment declaration -------------------------------
+CREATE TABLE IF NOT EXISTS investment_declarations (
+  id           BIGSERIAL PRIMARY KEY,
+  employee_id  BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  financial_year TEXT NOT NULL,                 -- e.g. '2024-25'
+  regime       TEXT NOT NULL DEFAULT 'new' CHECK (regime IN ('old','new')),
+  status       TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','submitted','verified','rejected')),
+  submitted_at TIMESTAMPTZ,
+  verified_by  BIGINT REFERENCES user_accounts(id),
+  verified_at  TIMESTAMPTZ,
+  remarks      TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (employee_id, financial_year)
+);
+CREATE TABLE IF NOT EXISTS investment_declaration_items (
+  id             BIGSERIAL PRIMARY KEY,
+  declaration_id BIGINT NOT NULL REFERENCES investment_declarations(id) ON DELETE CASCADE,
+  section        TEXT NOT NULL,                 -- 80C / 80D / 80CCD1B / SEC24 / HRA ...
+  description    TEXT,
+  declared_amount NUMERIC(12,2) NOT NULL DEFAULT 0,
+  approved_amount NUMERIC(12,2),
+  proof_doc_id   BIGINT REFERENCES documents(id),
+  admin_remark   TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_decl_items_decl ON investment_declaration_items(declaration_id);
+
+-- 3) Full & Final settlement (exit pay) ------------------------------
+CREATE TABLE IF NOT EXISTS fnf_settlements (
+  id             BIGSERIAL PRIMARY KEY,
+  employee_id    BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  resignation_id BIGINT REFERENCES resignations(id),
+  status         TEXT NOT NULL DEFAULT 'draft' CHECK (status IN ('draft','finalised','paid','cancelled')),
+  last_working_date DATE,
+  inputs         JSONB NOT NULL DEFAULT '{}'::jsonb,
+  computed       JSONB NOT NULL DEFAULT '{}'::jsonb,
+  net_amount     NUMERIC(12,2) NOT NULL DEFAULT 0,
+  payable_by     TEXT,                          -- 'company' | 'employee'
+  created_by     BIGINT REFERENCES user_accounts(id),
+  finalised_by   BIGINT REFERENCES user_accounts(id),
+  finalised_at   TIMESTAMPTZ,
+  paid_at        TIMESTAMPTZ,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_fnf_emp ON fnf_settlements(employee_id);
+
+-- 4) Letters engine --------------------------------------------------
+CREATE TABLE IF NOT EXISTS letter_templates (
+  id          BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE,
+  type_code   TEXT NOT NULL,                    -- CONFIRMATION / TRANSFER / ... / CUSTOM
+  title       TEXT NOT NULL,
+  body        TEXT NOT NULL,
+  is_active   BOOLEAN NOT NULL DEFAULT true,
+  created_by  BIGINT REFERENCES user_accounts(id),
+  updated_at  TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_letter_tpl_org ON letter_templates(organisation_id, type_code);
+
+CREATE TABLE IF NOT EXISTS issued_letters (
+  id          BIGSERIAL PRIMARY KEY,
+  employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  type_code   TEXT NOT NULL,
+  ref_no      TEXT,
+  title       TEXT NOT NULL,
+  body_rendered TEXT NOT NULL,
+  meta        JSONB NOT NULL DEFAULT '{}'::jsonb,
+  issued_by   BIGINT REFERENCES user_accounts(id),
+  issued_at   TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_issued_letters_emp ON issued_letters(employee_id);
+
+-- 5) Asset management ------------------------------------------------
+CREATE TABLE IF NOT EXISTS assets (
+  id           BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE,
+  company_id   BIGINT REFERENCES companies(id),
+  asset_tag    TEXT NOT NULL,
+  category     TEXT,                            -- Laptop / Phone / Furniture / Non-IT ...
+  is_it        BOOLEAN NOT NULL DEFAULT true,
+  brand        TEXT,
+  model        TEXT,
+  serial_no    TEXT,
+  purchase_date DATE,
+  invoice_no   TEXT,
+  vendor       TEXT,
+  cost         NUMERIC(12,2),
+  condition    TEXT,
+  status       TEXT NOT NULL DEFAULT 'in_stock' CHECK (status IN ('in_stock','assigned','repair','retired','lost')),
+  notes        TEXT,
+  created_at   TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (organisation_id, asset_tag)
+);
+CREATE TABLE IF NOT EXISTS asset_assignments (
+  id          BIGSERIAL PRIMARY KEY,
+  asset_id    BIGINT NOT NULL REFERENCES assets(id) ON DELETE CASCADE,
+  employee_id BIGINT NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  assigned_at TIMESTAMPTZ NOT NULL DEFAULT now(),
+  assigned_by BIGINT REFERENCES user_accounts(id),
+  returned_at TIMESTAMPTZ,
+  returned_condition TEXT,
+  acknowledged BOOLEAN NOT NULL DEFAULT false,
+  notes       TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_asset_assign_asset ON asset_assignments(asset_id);
+CREATE INDEX IF NOT EXISTS idx_asset_assign_emp ON asset_assignments(employee_id);
+
+-- 6) Statutory-rate masters (admin overrides for the built-in tables) --
+CREATE TABLE IF NOT EXISTS professional_tax_slabs (
+  id        BIGSERIAL PRIMARY KEY,
+  state     TEXT NOT NULL,
+  upto_gross NUMERIC(12,2) NOT NULL,
+  amount    NUMERIC(10,2) NOT NULL,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE
+);
+CREATE TABLE IF NOT EXISTS minimum_wages (
+  id        BIGSERIAL PRIMARY KEY,
+  state     TEXT NOT NULL,
+  category  TEXT NOT NULL,
+  monthly_amount NUMERIC(12,2) NOT NULL,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE,
+  UNIQUE (organisation_id, state, category)
+);
+-- end gap-closure schema ---------------------------------------------

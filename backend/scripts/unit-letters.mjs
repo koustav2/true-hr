@@ -1,0 +1,14 @@
+import { LETTER_TYPES, placeholders, renderLetter, buildLetter } from '../src/services/letters.js';
+let p=0,f=0; const ok=(l,c)=>{c?(p++,console.log('  ok  '+l)):(f++,console.error('FAIL  '+l));};
+ok('catalogue has 10 types', Object.keys(LETTER_TYPES).length===10);
+ok('placeholders parsed', placeholders('Hi {{employeeName}} at {{companyName}}').length===2);
+const r=renderLetter('Dear {{employeeName}}, role {{designation}}.',{employeeName:'Asha',designation:'Analyst'});
+ok('merge substitutes', r.text==='Dear Asha, role Analyst.' && r.missing.length===0);
+const r2=renderLetter('Dear {{employeeName}}, at {{missingField}}.',{employeeName:'Asha'});
+ok('missing → marker + reported', r2.text.includes('[missingField]') && r2.missing.includes('missingField'));
+const b=buildLetter({typeCode:'RELIEVING'},{employeeName:'Ravi',companyName:'True HR',lastWorkingDate:'2026-06-30',signatoryName:'HR'});
+ok('built relieving title', b.title==='Relieving Letter');
+ok('built relieving no-missing', b.missing.length===0 && b.text.includes('Ravi'));
+const c=buildLetter({typeCode:'CUSTOMX',customTitle:'Bonus Note',customBody:'Hello {{x}}'},{x:'World'});
+ok('custom template works', c.title==='Bonus Note' && c.text==='Hello World');
+console.log(`\n${p} passed, ${f} failed`); process.exit(f?1:0);

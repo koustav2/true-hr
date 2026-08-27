@@ -30,6 +30,13 @@ import * as org from '../controllers/organisationController.js';
 import * as roles from '../controllers/roleController.js';
 import * as termination from '../controllers/terminationController.js';
 import * as company from '../controllers/companyController.js';
+// --- GreenHR-parity gap-closure controllers (additive) ---
+import * as assets from '../controllers/assetController.js';
+import * as statRates from '../controllers/statutoryRatesController.js';
+import * as fnf from '../controllers/fnfController.js';
+import * as letters from '../controllers/letterController.js';
+import * as taxDecl from '../controllers/taxDeclarationController.js';
+import * as statutory from '../controllers/statutoryController.js';
 import {
   authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
   requireModule, requirePlatformAdmin, requireOrg,
@@ -351,5 +358,61 @@ r.get('/admin/terminations', authenticate, requireOrg, requireModule('TERMINATIO
 r.get('/admin/employees/:id/termination', authenticate, requireOrg, requireModule('TERMINATION'), termination.forEmployee);
 r.post('/admin/employees/:id/terminate', authenticate, requireOrg, requireModule('TERMINATION', 'manage'), termination.terminate);
 r.post('/admin/terminations/:id/revoke', authenticate, requireOrg, requireModule('TERMINATION', 'manage'), termination.revoke);
+
+// =====================================================================
+// GreenHR-parity gap closure (additive; NFA suite untouched)
+// =====================================================================
+
+// --- Asset management (IT / non-IT register + assignment) ---
+r.get('/admin/assets', authenticate, requireAnyAdmin, assets.listAssets);
+r.post('/admin/assets', authenticate, requireAnyAdmin, assets.createAsset);
+r.patch('/admin/assets/:id', authenticate, requireAnyAdmin, assets.updateAsset);
+r.post('/admin/assets/:id/assign', authenticate, requireAnyAdmin, assets.assignAsset);
+r.post('/admin/assets/:id/return', authenticate, requireAnyAdmin, assets.returnAsset);
+r.get('/admin/employees/:employeeId/assets', authenticate, requireAnyAdmin, assets.employeeAssets);
+r.get('/me/assets', authenticate, assets.myAssets);
+r.post('/me/assets/:id/acknowledge', authenticate, assets.acknowledgeAsset);
+
+// --- Statutory-rate masters + payroll compliance (PT / minimum wage) ---
+r.get('/admin/statutory/categories', authenticate, requireAnyAdmin, statRates.categories);
+r.get('/admin/statutory/pt-slabs', authenticate, requireAnyAdmin, statRates.listPtSlabs);
+r.post('/admin/statutory/pt-slabs', authenticate, requireAnyAdmin, statRates.savePtSlabs);
+r.get('/admin/statutory/min-wages', authenticate, requireAnyAdmin, statRates.listMinWages);
+r.post('/admin/statutory/min-wages', authenticate, requireAnyAdmin, statRates.saveMinWage);
+r.get('/admin/statutory/compliance-check', authenticate, requireAnyAdmin, statRates.checkCompliance);
+
+// --- Statutory records (PF/ESIC/Gratuity profiles + nominees) + reports ---
+r.get('/admin/employees/:employeeId/statutory', authenticate, requireAnyAdmin, statutory.getProfile);
+r.put('/admin/employees/:employeeId/statutory', authenticate, requireAnyAdmin, statutory.upsertProfile);
+r.post('/admin/employees/:employeeId/statutory/nominees', authenticate, requireAnyAdmin, statutory.addNominee);
+r.delete('/admin/statutory/nominees/:id', authenticate, requireAnyAdmin, statutory.deleteNominee);
+r.get('/admin/reports/pf-register', authenticate, requireAnyAdmin, statutory.pfRegister);
+r.get('/admin/reports/esic-register', authenticate, requireAnyAdmin, statutory.esicRegister);
+r.get('/admin/reports/form16/:employeeId', authenticate, requireAnyAdmin, statutory.form16);
+
+// --- Income-tax investment declaration (ESS submit -> HR verify) ---
+r.get('/me/tax-declaration/sections', authenticate, taxDecl.sections);
+r.get('/me/tax-declaration', authenticate, taxDecl.getMine);
+r.post('/me/tax-declaration', authenticate, taxDecl.saveMine);
+r.post('/me/tax-declaration/submit', authenticate, taxDecl.submitMine);
+r.get('/admin/tax-declarations', authenticate, requireAnyAdmin, taxDecl.adminList);
+r.get('/admin/tax-declarations/:id', authenticate, requireAnyAdmin, taxDecl.adminGet);
+r.post('/admin/tax-declarations/:id/verify', authenticate, requireAnyAdmin, taxDecl.verify);
+
+// --- Letters engine (templates + issue + PDF) ---
+r.get('/admin/letters/types', authenticate, requireAnyAdmin, letters.types);
+r.post('/admin/letters/templates', authenticate, requireAnyAdmin, letters.saveTemplate);
+r.post('/admin/letters/issue', authenticate, requireAnyAdmin, letters.issue);
+r.get('/admin/letters/issued', authenticate, requireAnyAdmin, letters.listIssued);
+r.get('/admin/letters/:id/pdf', authenticate, requireAnyAdmin, letters.pdf);
+r.get('/me/letters', authenticate, letters.myLetters);
+
+// --- Full & Final settlement (exit pay; ties to resignation, not NFA) ---
+r.post('/admin/fnf/preview/:employeeId', authenticate, requireAnyAdmin, fnf.preview);
+r.post('/admin/fnf/:employeeId', authenticate, requireAnyAdmin, fnf.save);
+r.post('/admin/fnf/:id/finalise', authenticate, requireAnyAdmin, fnf.finalise);
+r.post('/admin/fnf/:id/paid', authenticate, requireAnyAdmin, fnf.markPaid);
+r.get('/admin/fnf', authenticate, requireAnyAdmin, fnf.list);
+r.get('/admin/fnf/:id/pdf', authenticate, requireAnyAdmin, fnf.pdf);
 
 export default r;

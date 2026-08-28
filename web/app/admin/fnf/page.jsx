@@ -17,7 +17,7 @@ export default function FnfPage() {
 
   const load = () => api.get('/admin/fnf').then((r) => setRows(r.settlements || [])).catch((e) => { setMsg(e.message); setRows([]); });
   useEffect(() => { load(); }, []);
-  useEffect(() => { api.get('/admin/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
+  useEffect(() => { api.get('/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
   const empLabel = (e) => `${e.first_name || ''} ${e.last_name || ''} (${e.employee_code || e.id})`.trim();
 
   async function doPreview() {

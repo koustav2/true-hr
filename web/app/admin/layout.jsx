@@ -51,7 +51,7 @@ const ADMINISTRATION = [
   { href: '/admin/companies', label: 'Companies', Icon: IconBriefcase, module: 'COMPANIES' },
   { href: '/admin/users', label: 'Users & accounts', Icon: IconShield, module: 'USERS' },
   { href: '/admin/roles', label: 'Roles & permissions', Icon: IconShield, module: 'ROLES' },
-  { href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' },
+  { href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' },
   { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, module: 'AUDIT' },
   { href: '/admin/assets', label: 'Asset management', Icon: IconBriefcase, module: 'ASSETS' },
 ];

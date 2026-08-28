@@ -12,7 +12,7 @@ export default function StatutoryPage() {
   const [nomOpen, setNomOpen] = useState(false);
   const [nom, setNom] = useState({ scheme: 'PF', name: '', relation: '', sharePct: '' });
 
-  useEffect(() => { api.get('/admin/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
+  useEffect(() => { api.get('/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
   const empLabel = (e) => `${e.first_name || ''} ${e.last_name || ''} (${e.employee_code || e.id})`.trim();
 
   function loadProfile(id) {

@@ -102,9 +102,8 @@ export const SYSTEM_ROLES = [
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
-    // HR needs to see the company list to hire into one, but creating legal
-    // entities is a Super Admin decision.
-    view: ['COMPANIES'],
+    // Companies & organisations are a Super Admin / platform-owner concern only —
+    // HR hires into a company via the /meta/companies lookup, not the admin screen.
   },
   {
     key: 'IT_ADMIN',

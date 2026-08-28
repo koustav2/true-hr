@@ -26,7 +26,7 @@ export default function AssetsPage() {
     return api.get('/admin/assets?' + p.toString()).then((r) => setAssets(r.assets || [])).catch((e) => { setMsg(e.message); setAssets([]); });
   };
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [statusF]);
-  useEffect(() => { api.get('/admin/employees').then((r) => setEmps(Array.isArray(r) ? r : (r.employees || []))).catch(() => {}); }, []);
+  useEffect(() => { api.get('/employees').then((r) => setEmps(Array.isArray(r) ? r : (r.employees || []))).catch(() => {}); }, []);
 
   const empLabel = (e) => `${e.first_name || ''} ${e.last_name || ''} (${e.employee_code || e.id})`.trim();
 

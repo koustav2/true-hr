@@ -106,8 +106,11 @@ export async function list(req, res) {
 export async function pdf(req, res) {
   const id = parseInt(req.params.id, 10);
   const row = (await query(
-    `SELECT f.*, e.first_name, e.last_name, e.employee_code, e.designation
-       FROM fnf_settlements f JOIN employees e ON e.id=f.employee_id WHERE f.id=$1`, [id])).rows[0];
+    `SELECT f.*, e.first_name, e.last_name, e.employee_code, d.title AS designation
+       FROM fnf_settlements f
+       JOIN employees e ON e.id=f.employee_id
+       LEFT JOIN designations d ON d.id=e.designation_id
+      WHERE f.id=$1`, [id])).rows[0];
   if (!row) return res.status(404).json({ error: 'Settlement not found.' });
   const computed = row.computed || {};
   res.setHeader('Content-Type', 'application/pdf');

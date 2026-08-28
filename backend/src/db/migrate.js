@@ -37,6 +37,12 @@ async function main() {
   await pool.query(tenancySql);
   await migrateTenancy(pool);
 
+  // Companies belong to Super Admin / platform owner only. Revoke any prior grant
+  // to system HR/IT roles (adoptNewModules only adds, so this one-off removes).
+  await pool.query(`DELETE FROM org_role_modules WHERE module_key='COMPANIES'
+    AND role_id IN (SELECT id FROM org_roles WHERE key IN ('HR_ADMIN','IT_ADMIN'))`);
+  console.log('[migrate] companies restricted to super admin / platform owner');
+
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_employees_official_email ON employees (lower(official_email))`);

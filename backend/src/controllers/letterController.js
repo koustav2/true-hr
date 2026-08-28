@@ -37,14 +37,20 @@ export async function saveTemplate(req, res) {
 
 // Merge default employee facts so most placeholders auto-fill.
 async function employeeMergeData(employeeId) {
-  const e = (await query(`SELECT * FROM employees WHERE id=$1`, [employeeId])).rows[0];
+  const e = (await query(
+    `SELECT e.*, d.title AS designation_title, dep.name AS department_name, co.name AS company_name
+       FROM employees e
+       LEFT JOIN designations d ON d.id=e.designation_id
+       LEFT JOIN departments dep ON dep.id=e.department_id
+       LEFT JOIN companies co ON co.id=e.company_id
+      WHERE e.id=$1`, [employeeId])).rows[0];
   if (!e) return null;
   return {
     employeeName: `${e.first_name || ''} ${e.last_name || ''}`.trim(),
-    designation: e.designation || '', department: e.department || '',
+    designation: e.designation_title || '', department: e.department_name || '',
     dateOfJoining: e.date_of_joining ? String(e.date_of_joining).slice(0, 10) : '',
     employeeCode: e.employee_code || '',
-    companyName: process.env.COMPANY_NAME || 'True HR Pvt Ltd',
+    companyName: e.company_name || process.env.COMPANY_NAME || 'True HR Pvt Ltd',
   };
 }
 

@@ -19,7 +19,7 @@ export default function LettersPage() {
     api.get('/admin/letters/issued').then((r) => setIssued(r.letters || [])).catch(() => {});
   };
   useEffect(() => { load(); }, []);
-  useEffect(() => { api.get('/admin/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
+  useEffect(() => { api.get('/employees').then((r) => setEmps(Array.isArray(r) ? r : [])).catch(() => {}); }, []);
 
   const empLabel = (e) => `${e.first_name || ''} ${e.last_name || ''} (${e.employee_code || e.id})`.trim();
   const allTypes = types ? [...(types.builtin || []), ...(types.custom || [])] : [];

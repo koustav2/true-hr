@@ -161,53 +161,66 @@ export default function OrganisationsPage() {
           </>
         )}
       >
-        <div className="space-y-4">
-          <Field label="Organisation name" required>
-            <Input value={form.name} placeholder="Acme Industries Pvt Ltd"
-              onChange={(e) => setForm({ ...form, name: e.target.value })} />
-          </Field>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Short code" hint="2–16 characters, used for employee IDs">
-              <Input value={form.code} placeholder="ACME"
-                onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} />
-            </Field>
-            <Field label="Legal name">
-              <Input value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} />
-            </Field>
-          </div>
-          <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Contact email">
-              <Input type="email" value={form.contactEmail} onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
-            </Field>
-            <Field label="Contact phone">
-              <Input value={form.contactPhone} onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
-            </Field>
-          </div>
+        <div className="space-y-6">
+          <p className="text-sm text-ink-soft -mt-1">A new organisation is a fully separate workspace — its own people, payroll, roles and login.</p>
 
-          <div className="rounded-xl border border-line bg-slate-50/60 p-4">
-            <label className="flex items-center gap-2 text-sm font-medium text-ink cursor-pointer">
+          {/* Identity */}
+          <section className="space-y-4">
+            <div className="text-[11px] font-semibold uppercase tracking-wider text-ink-faint">Organisation details</div>
+            <Field label="Organisation name" required>
+              <Input value={form.name} placeholder="Acme Industries Pvt Ltd"
+                onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            </Field>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Short code" hint="2–16 characters, used for employee IDs">
+                <Input value={form.code} placeholder="ACME"
+                  onChange={(e) => setForm({ ...form, code: e.target.value.toUpperCase() })} />
+              </Field>
+              <Field label="Legal name" hint="As registered, if different">
+                <Input value={form.legalName} placeholder="Acme Industries Private Limited"
+                  onChange={(e) => setForm({ ...form, legalName: e.target.value })} />
+              </Field>
+            </div>
+            <div className="grid sm:grid-cols-2 gap-4">
+              <Field label="Contact email">
+                <Input type="email" value={form.contactEmail} placeholder="hr@acme.com"
+                  onChange={(e) => setForm({ ...form, contactEmail: e.target.value })} />
+              </Field>
+              <Field label="Contact phone">
+                <Input value={form.contactPhone} placeholder="+91 98765 43210"
+                  onChange={(e) => setForm({ ...form, contactPhone: e.target.value })} />
+              </Field>
+            </div>
+          </section>
+
+          {/* First Super Admin */}
+          <section className={`rounded-xl2 border p-4 transition-colors ${form.withAdmin ? 'border-brand-200 bg-brand-50/50' : 'border-line bg-slate-50/60'}`}>
+            <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={form.withAdmin}
                 onChange={(e) => setForm({ ...form, withAdmin: e.target.checked })}
-                className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
-              Also create the first Super Admin for this organisation
+                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+              <span className="min-w-0">
+                <span className="block text-sm font-semibold text-ink">Create this organisation's first Super Admin</span>
+                <span className="block text-xs text-ink-faint mt-0.5">They run the organisation and are prompted to set a new password at first sign-in.</span>
+              </span>
             </label>
-            <p className="text-[11px] text-ink-faint mt-1 ml-6">
-              They will be asked to change this password when they first sign in.
-            </p>
             {form.withAdmin && (
-              <div className="grid sm:grid-cols-2 gap-4 mt-3 ml-6">
+              <div className="grid sm:grid-cols-2 gap-4 mt-4 pl-7">
                 <Field label="Their email" required>
-                  <Input type="email" value={form.adminEmail} onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
+                  <Input type="email" value={form.adminEmail} placeholder="admin@acme.com"
+                    onChange={(e) => setForm({ ...form, adminEmail: e.target.value })} />
                 </Field>
                 <Field label="Temporary password" required hint="At least 8 characters">
-                  <Input value={form.adminPassword} onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} />
+                  <Input value={form.adminPassword} placeholder="••••••••"
+                    onChange={(e) => setForm({ ...form, adminPassword: e.target.value })} />
                 </Field>
               </div>
             )}
-          </div>
+          </section>
 
-          <p className="text-xs text-ink-faint">
-            The organisation gets its own company record, its four built-in roles and its own payroll settings.
+          <p className="text-xs text-ink-faint flex items-start gap-1.5">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" className="mt-px shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>
+            Comes with its own company record, four built-in roles and independent payroll settings.
           </p>
         </div>
       </Modal>

@@ -233,6 +233,12 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
       // fetches a 60s SSO token and opens the browser already signed in.
       EssWebScreen(onBack = { nav.popBackStack() })
     }
+    screen(
+      route = Routes.ESS_WEB,
+      arguments = listOf(navArgument("section") { type = NavType.StringType; defaultValue = "" }),
+    ) { entry ->
+      EssWebScreen(section = entry.arguments?.getString("section") ?: "", onBack = { nav.popBackStack() })
+    }
     screen(Routes.SETTLEMENT_APPROVALS) { SettlementApprovalsScreen(onBack = { nav.popBackStack() }) }
     screen(Routes.MY_PERFORMANCE) {
       MyPerformanceScreen(onBack = { nav.popBackStack() },

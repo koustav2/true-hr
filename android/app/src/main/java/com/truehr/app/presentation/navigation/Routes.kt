@@ -76,4 +76,7 @@ object Routes {
   // generic feature route: feature/{title}
   const val FEATURE = "feature/{title}"
   fun feature(title: String) = "feature/$title"
+  // Deep-link into a specific web ESS section via the SSO handoff (section = tax|letters|assets).
+  const val ESS_WEB = "ess_web?section={section}"
+  fun essWeb(section: String) = "ess_web?section=$section"
 }

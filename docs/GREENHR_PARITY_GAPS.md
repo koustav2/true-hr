@@ -79,3 +79,30 @@ The backend features are now wired end-to-end.
 Verified: every page passes esbuild JSX validation; 44 backend unit assertions pass;
 the full route graph imports clean. Still pending: a full `next build` on a machine with
 deps, Android screens, and confirming FY-dated statutory constants. NFA suite untouched.
+
+---
+
+## Round 3 — final follow-ups closed
+
+- **Statutory constants verified & updated.** PF ₹15,000 and ESIC ₹21,000 remain the
+  current statutory ceilings as of FY 2025-26 (hikes proposed, not yet notified) — kept,
+  now annotated, and admin-overridable. **New-regime income-tax slabs updated to Budget 2025
+  (FY 2025-26)**: ₹4L nil threshold, 5/10/15/20/25/30% bands, 87A rebate to ₹12L, ₹75k
+  standard deduction. `incomeTax.js` carries a `FINANCIAL_YEAR` marker; unit tests updated.
+- **Bulk Excel tool.** `admin/bulk-salary` — download an xlsx template pre-filled with
+  current CTC, edit "New Monthly CTC", re-upload → `salary_structures` updated by employee
+  code, with a per-row result report (exceljs).
+- **Recurring notification scheduler.** `scheduled_notifications` table + a worker
+  (`startNotificationScheduler`, registered in server.js) that fires due schedules to
+  ALL / a company / a department, then advances by cadence (ONCE/DAILY/WEEKLY/MONTHLY).
+  Admin page `admin/notification-scheduler` (create / pause / send-now / delete).
+- **Android.** The app opens web features via a tokenized SSO handoff; `/sso` now honours a
+  safe `?next=/ess/...` deep-link, and the **My ESS hub gained three tiles** — Tax
+  Declaration, My Letters, My Assets — that deep-link into the web ESS. (Statutory records
+  and F&F are HR-desk features and stay on the web admin.) *Android code needs an Android
+  Studio compile-verify per the project's standard workflow.*
+- **Production build.** A full `next build` could not run in this Linux VM (it lacks the
+  linux-arm64 swc binary and the download hung); every page was validated with esbuild
+  instead. Run `npm run build` in `web/` on a Mac/Linux machine with deps for the final pass.
+
+NFA suite untouched throughout.

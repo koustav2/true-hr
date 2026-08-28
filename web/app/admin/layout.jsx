@@ -27,11 +27,13 @@ const WORKSPACE = [
   { href: '/admin/wishes', label: 'Wishes', Icon: IconUsers, module: 'EMPLOYEES' },
   { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
   { href: '/admin/banners', label: 'App Banners', Icon: IconFile, module: 'BANNERS' },
+  { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
   { href: '/admin/statutory', label: 'Statutory', Icon: IconMoney, module: 'STATUTORY' },
   { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
   { href: '/admin/fnf', label: 'Full & Final', Icon: IconExit, module: 'FNF' },
   { href: '/admin/letters', label: 'Letters', Icon: IconFile, module: 'LETTERS' },
+  { href: '/admin/bulk-salary', label: 'Bulk Salary', Icon: IconMoney, module: 'PAYROLL' },
   { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, module: 'RESIGNATION' },
   { href: '/admin/terminations', label: 'Terminations', Icon: IconExit, module: 'TERMINATION' },
 ];

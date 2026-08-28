@@ -9,6 +9,7 @@ import { notFound, errorHandler } from './middleware/error.js';
 import { startEmailWorker } from './services/emailQueue.js';
 import { startExpiryWorker } from './services/expiryWorker.js';
 import { startSettlementWorker } from './services/settlementWorker.js';
+import { startNotificationScheduler } from './services/notificationScheduler.js';
 import { pool } from './db/pool.js';
 
 const app = express();
@@ -59,6 +60,7 @@ const server = app.listen(config.port, () => {
   startEmailWorker();
   startExpiryWorker();
   startSettlementWorker();
+  startNotificationScheduler();
 });
 
 // ── Graceful shutdown (docker stop / deploys): drain HTTP, then close the pool.

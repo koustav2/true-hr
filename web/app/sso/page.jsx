@@ -20,7 +20,11 @@ function SsoInner() {
         storeAuth({ token: data.token, user: data.user });
         // Full reload so the AuthProvider hydrates from storage (basePath-aware).
         const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
-        window.location.replace(base + (data.user.mustChangePassword ? '/change-password' : '/ess'));
+        // Optional deep-link: ?next=/ess/tax — only safe internal ESS/admin paths.
+        const raw = params.get('next') || '';
+        const safeNext = /^\/(ess|admin)(\/[\w./-]*)?$/.test(raw) ? raw : '';
+        const dest = data.user.mustChangePassword ? '/change-password' : (safeNext || '/ess');
+        window.location.replace(base + dest);
       })
       .catch((e) => setError(e.message));
   }, [params]);

@@ -1276,3 +1276,24 @@ CREATE TABLE IF NOT EXISTS minimum_wages (
   UNIQUE (organisation_id, state, category)
 );
 -- end gap-closure schema ---------------------------------------------
+
+-- Recurring notification scheduler (GreenHR-parity breadth extra) ---------
+CREATE TABLE IF NOT EXISTS scheduled_notifications (
+  id              BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE,
+  title           TEXT NOT NULL,
+  body            TEXT NOT NULL,
+  audience        TEXT NOT NULL DEFAULT 'ALL' CHECK (audience IN ('ALL','COMPANY','DEPARTMENT')),
+  company_id      BIGINT REFERENCES companies(id),
+  department_id   BIGINT REFERENCES departments(id),
+  cadence         TEXT NOT NULL DEFAULT 'ONCE' CHECK (cadence IN ('ONCE','DAILY','WEEKLY','MONTHLY')),
+  day_of_week     INT,
+  day_of_month    INT,
+  run_at_hour     INT NOT NULL DEFAULT 9,
+  next_run_at     TIMESTAMPTZ NOT NULL,
+  last_run_at     TIMESTAMPTZ,
+  active          BOOLEAN NOT NULL DEFAULT true,
+  created_by      BIGINT REFERENCES user_accounts(id),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_sched_notif_due ON scheduled_notifications(active, next_run_at);

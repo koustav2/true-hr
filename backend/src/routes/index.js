@@ -38,6 +38,8 @@ import * as letters from '../controllers/letterController.js';
 import * as taxDecl from '../controllers/taxDeclarationController.js';
 import * as statutory from '../controllers/statutoryController.js';
 import * as wishes from '../controllers/wishesController.js';
+import * as notifSched from '../controllers/notificationScheduleController.js';
+import * as bulk from '../controllers/bulkController.js';
 import {
   authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
   requireModule, requirePlatformAdmin, requireOrg,
@@ -411,6 +413,17 @@ r.get('/me/letters/:id/pdf', authenticate, letters.myPdf);
 
 // --- Wishes reminders (birthdays & anniversaries) ---
 r.get('/admin/wishes', authenticate, requireModule('EMPLOYEES'), wishes.upcoming);
+
+// --- Recurring notification scheduler (comms) ---
+r.get('/admin/notification-schedules', authenticate, requireModule('BANNERS'), notifSched.list);
+r.post('/admin/notification-schedules', authenticate, requireModule('BANNERS', 'manage'), notifSched.create);
+r.post('/admin/notification-schedules/:id/toggle', authenticate, requireModule('BANNERS', 'manage'), notifSched.toggle);
+r.post('/admin/notification-schedules/:id/run', authenticate, requireModule('BANNERS', 'manage'), notifSched.runNow);
+r.delete('/admin/notification-schedules/:id', authenticate, requireModule('BANNERS', 'manage'), notifSched.remove);
+
+// --- Bulk Excel tools ---
+r.get('/admin/bulk/salary/template', authenticate, requireModule('PAYROLL'), bulk.salaryTemplate);
+r.post('/admin/bulk/salary', authenticate, requireModule('PAYROLL', 'manage'), bulk.salaryUpload);
 
 // --- Full & Final settlement (exit pay; ties to resignation, not NFA) ---
 r.post('/admin/fnf/preview/:employeeId', authenticate, requireModule('FNF', 'manage'), fnf.preview);

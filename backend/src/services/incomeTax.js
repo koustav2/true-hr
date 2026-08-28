@@ -18,12 +18,18 @@ export const SECTION_CAPS = {
 export const STD_DEDUCTION = { old: 50000, new: 75000 };
 
 // Regime slabs (annual taxable, rate). FY 2024-25.
+// Financial year these rates apply to. Slabs/caps are admin-overridable per year;
+// update here (or via the rate masters) when the Budget changes them.
+export const FINANCIAL_YEAR = '2025-26';
 export const SLABS = {
+  // Old regime — unchanged since FY 2020-21.
   old: [[250000, 0], [500000, 0.05], [1000000, 0.20], [Infinity, 0.30]],
-  new: [[300000, 0], [700000, 0.05], [1000000, 0.10], [1200000, 0.15], [1500000, 0.20], [Infinity, 0.30]],
+  // New regime — Budget 2025 (FY 2025-26 / AY 2026-27): ₹4L nil, then 5/10/15/20/25/30%.
+  new: [[400000, 0], [800000, 0.05], [1200000, 0.10], [1600000, 0.15], [2000000, 0.20], [2400000, 0.25], [Infinity, 0.30]],
 };
 // Rebate u/s 87A: taxable income at/below this → tax nil.
-export const REBATE_87A = { old: 500000, new: 700000 };
+// New regime FY 2025-26 lifted this to ₹12L (salaried break-even ≈ ₹12.75L with std. deduction).
+export const REBATE_87A = { old: 500000, new: 1200000 };
 export const CESS = 0.04;
 
 const r0 = (n) => Math.round(Number(n) || 0);

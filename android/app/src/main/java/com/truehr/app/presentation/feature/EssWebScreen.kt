@@ -39,9 +39,12 @@ class EssWebViewModel @Inject constructor(
   val loading = MutableStateFlow(false)
 
   // Fetch a 60s handoff token and build the tokenized web link (GreenHR-style).
-  fun prepare() = viewModelScope.launch {
+  fun prepare(section: String = "") = viewModelScope.launch {
     loading.value = true; error.value = null; url.value = null
-    try { url.value = "${BuildConfig.WEB_URL}/sso?t=${repo.webSsoToken()}" }
+    try {
+      val next = if (section.isNotBlank()) "&next=/ess/$section" else ""
+      url.value = "${BuildConfig.WEB_URL}/sso?t=${repo.webSsoToken()}$next"
+    }
     catch (e: Exception) { error.value = e.apiMessage("Could not open the employee portal") }
     finally { loading.value = false }
   }
@@ -50,13 +53,13 @@ class EssWebViewModel @Inject constructor(
 // "My ESS" — opens the TrueHR web portal in the browser, already signed in.
 // NFA, settlements, performance, vendors and agreements all live on the web.
 @Composable
-fun EssWebScreen(onBack: () -> Unit, vm: EssWebViewModel = hiltViewModel()) {
+fun EssWebScreen(section: String = "", onBack: () -> Unit, vm: EssWebViewModel = hiltViewModel()) {
   val ctx = LocalContext.current
   val url by vm.url.collectAsState()
   val error by vm.error.collectAsState()
   val loading by vm.loading.collectAsState()
 
-  LaunchedEffect(Unit) { vm.prepare() }
+  LaunchedEffect(Unit) { vm.prepare(section) }
   // As soon as the tokenized link is ready, hand off to the browser.
   LaunchedEffect(url) {
     url?.let {

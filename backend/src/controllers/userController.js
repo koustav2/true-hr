@@ -11,12 +11,13 @@ export async function listUsers(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT ua.id, ua.email, ua.role, ua.status, ua.last_login_at, ua.created_at,
-              ua.org_role_id, ua.is_platform_admin, ua.organisation_id,
+              ua.org_role_id, ua.is_platform_admin, ua.organisation_id, ua.company_id,
               r.key AS role_key, r.label AS role_label, r.rank AS role_rank,
-              e.first_name, e.last_name, e.employee_code
+              e.first_name, e.last_name, e.employee_code, co.name AS company_name
        FROM user_accounts ua
        LEFT JOIN employees e ON e.id = ua.employee_id
        LEFT JOIN org_roles r ON r.id = ua.org_role_id
+       LEFT JOIN companies co ON co.id = ua.company_id
        WHERE ($1::bigint IS NULL OR ua.organisation_id = $1)
        ORDER BY COALESCE(r.rank, 100), ua.created_at DESC`, [req.orgId || null]);
     res.json(rows.map((u) => ({
@@ -30,7 +31,7 @@ export async function listUsers(req, res, next) {
 // SUPER_ADMIN: create an HR or Super Admin account
 export async function createUser(req, res, next) {
   try {
-    const { email, password, roleId } = req.body;
+    const { email, password, roleId, companyId } = req.body;
     let { role } = req.body;
     if (!email || !password) return res.status(400).json({ error: 'Email and password are required' });
     if (password.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
@@ -60,13 +61,20 @@ export async function createUser(req, res, next) {
     const exists = await query(`SELECT 1 FROM user_accounts WHERE lower(email)=lower($1)`, [email]);
     if (exists.rowCount) return res.status(409).json({ error: 'A user with this email already exists' });
 
+    // Per-company scope: HR/IT admins are bound to one company; Super Admins stay org-wide.
+    let companyScope = null;
+    if (role !== 'SUPER_ADMIN' && companyId) {
+      const co = (await query(`SELECT id FROM companies WHERE id=$1 AND organisation_id=$2`, [companyId, req.orgId])).rows[0];
+      if (!co) return res.status(400).json({ error: 'That company does not belong to this organisation.' });
+      companyScope = co.id;
+    }
     const hash = await hashPassword(password);
     const row = (await query(
       `INSERT INTO user_accounts (email, password_hash, role, status, must_change_password,
-                                  organisation_id, org_role_id)
-       VALUES ($1,$2,$3,'ACTIVE',true,$4,$5)
-       RETURNING id, email, role, status, created_at, org_role_id`,
-      [email.toLowerCase(), hash, role, req.orgId || null, orgRole?.id || null]
+                                  organisation_id, org_role_id, company_id)
+       VALUES ($1,$2,$3,'ACTIVE',true,$4,$5,$6)
+       RETURNING id, email, role, status, created_at, org_role_id, company_id`,
+      [email.toLowerCase(), hash, role, req.orgId || null, orgRole?.id || null, companyScope]
     )).rows[0];
     await audit(req.user.id, 'CREATE_USER', 'user_account', row.id,
       { role, roleKey: orgRole?.key, organisationId: req.orgId });

@@ -32,7 +32,8 @@ export default function UsersPage() {
   const [rows, setRows] = useState(null);
   const [roles, setRoles] = useState([]);
   const [show, setShow] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', roleId: '' });
+  const [form, setForm] = useState({ email: '', password: '', roleId: '', companyId: '' });
+  const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
@@ -49,6 +50,7 @@ export default function UsersPage() {
         setForm((f) => ({ ...f, roleId: f.roleId || String(r?.find((x) => x.key === 'HR_ADMIN')?.id || r?.[0]?.id || '') }));
       })
       .catch(() => setRoles([]));
+    api.get('/meta/companies').then((r) => setCompanies(Array.isArray(r) ? r : [])).catch(() => setCompanies([]));
   }, []);
 
   if (!canView('USERS')) {
@@ -60,9 +62,10 @@ export default function UsersPage() {
     try {
       const created = await api.post('/admin/users', {
         email: form.email, password: form.password, roleId: Number(form.roleId) || undefined,
+        companyId: form.companyId ? Number(form.companyId) : undefined,
       });
       setMsg(`${created.email} created as ${created.roleLabel || 'staff'}. They must change this password at first sign-in.`);
-      setForm({ email: '', password: '', roleId: form.roleId });
+      setForm({ email: '', password: '', roleId: form.roleId, companyId: form.companyId });
       setShow(false);
       await load();
     } catch (e) { setErr(e.message); } finally { setBusy(false); }
@@ -151,6 +154,14 @@ export default function UsersPage() {
                 ))}
               </Select>
             </Field>
+            {(() => { const sel = roles.find((r) => String(r.id) === String(form.roleId)); const isSuper = sel?.key === 'SUPER_ADMIN'; return !isSuper && (
+              <Field label="Company" hint="Scopes this HR/IT admin to one company. Leave blank for organisation-wide.">
+                <Select value={form.companyId} onChange={(e) => setForm((f) => ({ ...f, companyId: e.target.value }))}>
+                  <option value="">Whole organisation</option>
+                  {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
+                </Select>
+              </Field>
+            ); })()}
             {form.roleId && (
               <p className="sm:col-span-3 text-xs text-ink-faint -mt-2">
                 {roles.find((r) => String(r.id) === String(form.roleId))?.description || ''}
@@ -195,6 +206,11 @@ export default function UsersPage() {
                           {u.is_platform_admin && (
                             <span className="rounded-full bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 px-2 py-0.5 text-[10px] font-semibold">
                               Platform owner
+                            </span>
+                          )}
+                          {u.company_name && (
+                            <span className="rounded-full bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200 px-2 py-0.5 text-[10px] font-semibold">
+                              {u.company_name}
                             </span>
                           )}
                           {String(u.id) === String(user?.id) && (

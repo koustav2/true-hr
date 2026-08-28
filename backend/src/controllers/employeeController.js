@@ -142,7 +142,8 @@ export async function listEmployees(req, res, next) {
        LEFT JOIN departments dep ON dep.id=e.department_id
        LEFT JOIN companies co ON co.id=e.company_id
        WHERE ($1::bigint IS NULL OR e.organisation_id=$1)
-       ORDER BY e.created_at DESC`, [req.orgId || null]);
+         AND ($2::bigint IS NULL OR e.company_id=$2)
+       ORDER BY e.created_at DESC`, [req.orgId || null, req.companyScope || null]);
     res.json(rows);
   } catch (e) { next(e); }
 }
@@ -156,7 +157,8 @@ export async function reviewQueue(req, res, next) {
        LEFT JOIN designations d ON d.id=e.designation_id
        WHERE o.state IN ('DETAILS_SUBMITTED','HR_REVIEW')
          AND ($1::bigint IS NULL OR e.organisation_id=$1)
-       ORDER BY o.submitted_at ASC NULLS LAST`, [req.orgId || null]);
+         AND ($2::bigint IS NULL OR e.company_id=$2)
+       ORDER BY o.submitted_at ASC NULLS LAST`, [req.orgId || null, req.companyScope || null]);
     res.json(rows);
   } catch (e) { next(e); }
 }
@@ -177,6 +179,10 @@ export async function getEmployee(req, res, next) {
        LEFT JOIN employees om ON om.id=e.operational_manager_id
        WHERE e.id=$1`, [id])).rows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    // A per-company admin may only open employees of their own company.
+    if (req.companyScope && String(emp.company_id) !== String(req.companyScope)) {
+      return res.status(404).json({ error: 'Employee not found' });
+    }
     emp.has_offer_letter = !!emp.offer_letter_data;
     delete emp.offer_letter_data; // don't ship the base64 blob in the JSON
 

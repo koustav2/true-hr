@@ -33,8 +33,9 @@ export async function getCompanies(req, res, next) {
                   AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees
          FROM companies c
         WHERE ($1::bigint IS NULL OR c.organisation_id = $1)
+          AND ($2::bigint IS NULL OR c.id = $2)
           AND c.active IS NOT FALSE
-        ORDER BY c.id`, [req.orgId || null]);
+        ORDER BY c.id`, [req.orgId || null, req.companyScope || null]);
     res.json(rows.map((r) => ({
       id: r.id, name: r.name, legalName: r.legal_name,
       codePrefix: r.code_prefix, employees: Number(r.employees),

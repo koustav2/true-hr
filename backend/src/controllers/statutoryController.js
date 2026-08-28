@@ -60,7 +60,8 @@ export async function pfRegister(req, res) {
        LEFT JOIN statutory_profiles sp ON sp.employee_id=e.id
       WHERE e.onboarding_status='ACTIVE' AND (sp.pf_applicable IS DISTINCT FROM false)
         AND ($1::bigint IS NULL OR e.organisation_id=$1)
-      ORDER BY e.employee_code`, [req.orgId || null])).rows;
+        AND ($2::bigint IS NULL OR e.company_id=$2)
+      ORDER BY e.employee_code`, [req.orgId || null, req.companyScope || null])).rows;
   // Statutory ceilings current as of FY 2025-26 (EPF ₹15,000, EPS 8.33%). Hikes to
   // ₹21k/25k are proposed but not yet notified — override via the rate masters when they land.
   const PF_WAGE_CAP = 15000, RATE = 0.12;
@@ -86,7 +87,8 @@ export async function esicRegister(req, res) {
        FROM employees e JOIN salary_structures ss ON ss.employee_id=e.id
        LEFT JOIN statutory_profiles sp ON sp.employee_id=e.id
       WHERE e.onboarding_status='ACTIVE' AND ($1::bigint IS NULL OR e.organisation_id=$1)
-      ORDER BY e.employee_code`, [req.orgId || null])).rows;
+        AND ($2::bigint IS NULL OR e.company_id=$2)
+      ORDER BY e.employee_code`, [req.orgId || null, req.companyScope || null])).rows;
   const CAP = 21000; // ESIC wage limit current as of FY 2025-26 (hike to ₹25k/30k proposed, not notified).
   const register = rows.map((r) => {
     const gross = Number(r.monthly_ctc) || 0;

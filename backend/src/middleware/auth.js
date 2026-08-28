@@ -31,7 +31,7 @@ export function invalidateAllContexts() { ctxCache.clear(); }
 async function loadContext(userId) {
   const acc = (await query(
     `SELECT ua.id, ua.status, ua.role, ua.employee_id, ua.organisation_id,
-            ua.org_role_id, ua.is_platform_admin, ua.active_organisation_id,
+            ua.org_role_id, ua.is_platform_admin, ua.active_organisation_id, ua.company_id,
             r.key AS role_key, r.label AS role_label, r.base_role, r.rank AS role_rank
        FROM user_accounts ua
        LEFT JOIN org_roles r ON r.id = ua.org_role_id
@@ -67,6 +67,8 @@ async function loadContext(userId) {
     roleRank: acc.role_rank ?? 100,
     orgId,
     homeOrgId: acc.organisation_id,
+    // Per-company admins are pinned to one company; NULL = whole organisation.
+    companyId: acc.company_id || null,
     isPlatformAdmin: acc.is_platform_admin,
     perms,
   };
@@ -99,6 +101,7 @@ export async function authenticate(req, res, next) {
 
     req.auth = ctx;
     req.orgId = ctx.orgId;
+    req.companyScope = ctx.companyId || null;   // NULL = org-wide
     // Keep the legacy shape populated so existing controllers keep working
     // unchanged; `role` now reflects the custom role's base role.
     req.user.role = ctx.baseRole;

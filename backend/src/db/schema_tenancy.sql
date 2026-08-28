@@ -67,6 +67,8 @@ ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS organisation_id        BIGINT
 ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS org_role_id            BIGINT REFERENCES org_roles(id);
 ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS is_platform_admin      BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS active_organisation_id BIGINT REFERENCES organisations(id);
+-- Company scope for per-company admins (HR/IT admin of one company). NULL = org-wide (Super Admin).
+ALTER TABLE user_accounts ADD COLUMN IF NOT EXISTS company_id BIGINT REFERENCES companies(id);
 
 CREATE INDEX IF NOT EXISTS idx_user_accounts_org  ON user_accounts (organisation_id);
 CREATE INDEX IF NOT EXISTS idx_user_accounts_role ON user_accounts (org_role_id);

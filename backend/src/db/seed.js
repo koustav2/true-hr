@@ -70,6 +70,9 @@ async function main() {
   // The founding Super Admin owns the platform: it may create further
   // organisations and switch between them.
   await ensureUser('superadmin@truehr.example', 'Super@12345', 'SUPER_ADMIN', { platform: true });
+  // A dedicated organisation Super Admin (NOT the platform owner) — the Master only
+  // manages organisations, so each org has its own full-console Super Admin.
+  await ensureUser('admin@truehr.example', 'Admin@12345', 'SUPER_ADMIN');
   await ensureUser('hr@truehr.example', 'Hr@12345', 'HR_ADMIN');
   await ensureUser('itadmin@truehr.example', 'It@12345', 'IT_ADMIN');
   await pool.query(

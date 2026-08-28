@@ -56,6 +56,8 @@ const ADMINISTRATION = [
   { href: '/admin/assets', label: 'Asset management', Icon: IconBriefcase, module: 'ASSETS' },
 ];
 const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
+// The platform owner (Master) manages only organisations — nothing else shows.
+const MASTER = [{ href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' }];
 
 const ROLE_BADGE = {
   SUPER_ADMIN: 'bg-grape-50 text-grape-700 ring-grape-200',
@@ -164,7 +166,7 @@ function OrgSwitcher() {
 
 function AdminShell({ children }) {
   const { auth, user, logout, ready } = useAuth();
-  const { canView, loading: permsLoading, role: liveRole, activeOrg } = usePerms();
+  const { canView, loading: permsLoading, role: liveRole, activeOrg, isPlatformAdmin } = usePerms();
   const pathname = usePathname();
   const router = useRouter();
   const role = user?.role;
@@ -182,6 +184,10 @@ function AdminShell({ children }) {
   useEffect(() => {
     if (ready && !auth?.token) router.replace('/login');
   }, [ready, auth, router]);
+  // The Master (platform owner) works only in the Master Admin section.
+  useEffect(() => {
+    if (ready && auth?.token && isPlatformAdmin && pathname === '/admin') router.replace('/admin/organisations');
+  }, [ready, auth, isPlatformAdmin, pathname, router]);
 
   function toggleCollapse() {
     setCollapsed((c) => { localStorage.setItem('truehr_nav_collapsed', c ? '0' : '1'); return !c; });
@@ -202,10 +208,16 @@ function AdminShell({ children }) {
         <Logo size={collapsed ? 30 : 32} compact={collapsed} />
       </div>
       <div className={`pt-5 flex-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
-        <NavGroup title="Workspace" items={WORKSPACE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="NFA & Finance" items={FINANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="Performance" items={PERFORMANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        <NavGroup title="Administration" items={ADMINISTRATION} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        {isPlatformAdmin ? (
+          <NavGroup title="Master" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+        ) : (
+          <>
+            <NavGroup title="Workspace" items={WORKSPACE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+            <NavGroup title="NFA & Finance" items={FINANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+            <NavGroup title="Performance" items={PERFORMANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+            <NavGroup title="Administration" items={ADMINISTRATION} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+          </>
+        )}
       </div>
       <div className={`mt-auto border-t border-line ${collapsed ? 'p-2' : 'p-3'}`}>
         <div className={`flex items-center gap-3 py-2 ${collapsed ? 'justify-center' : 'px-2'}`}>

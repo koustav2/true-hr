@@ -15,7 +15,11 @@ export function storeAuth(auth) {
 
 async function req(method, path, body) {
   const headers = { 'Content-Type': 'application/json' };
-  if (token) headers.Authorization = `Bearer ${token}`;
+  // On a full page reload the in-memory token is null until AuthProvider rehydrates;
+  // fall back to the stored token so requests aren't sent unauthenticated (which
+  // would 401 and bounce the user to /login — seen when switching organisations).
+  const bearer = token || (typeof window !== 'undefined' ? getStoredAuth()?.token : null);
+  if (bearer) headers.Authorization = `Bearer ${bearer}`;
   const res = await fetch(BASE + path, {
     method, headers, body: body ? JSON.stringify(body) : undefined,
   });
@@ -52,7 +56,8 @@ export const api = {
 // triggers a browser download.
 export async function downloadFile(path, filename) {
   const headers = {};
-  if (token) headers.Authorization = `Bearer ${token}`;
+  const bearer = token || (typeof window !== 'undefined' ? getStoredAuth()?.token : null);
+  if (bearer) headers.Authorization = `Bearer ${bearer}`;
   const res = await fetch(BASE + path, { headers });
   if (!res.ok) throw new Error(`Download failed (${res.status})`);
   const blob = await res.blob();

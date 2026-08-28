@@ -94,6 +94,16 @@ export async function pdf(req, res) {
     date: String(row.issued_at).slice(0, 10) }, res);
 }
 
+// ESS: download one of my own letters as PDF.
+export async function myPdf(req, res) {
+  const id = parseInt(req.params.id, 10);
+  const row = (await query(`SELECT * FROM issued_letters WHERE id=$1 AND employee_id=$2`, [id, req.user.employeeId])).rows[0];
+  if (!row) return res.status(404).json({ error: 'Letter not found.' });
+  res.setHeader('Content-Type', 'application/pdf');
+  res.setHeader('Content-Disposition', `inline; filename="letter-${row.ref_no || row.id}.pdf"`);
+  buildLetterPdf({ title: row.title, text: row.body_rendered, refNo: row.ref_no, date: String(row.issued_at).slice(0, 10) }, res);
+}
+
 // ESS: my letters.
 export async function myLetters(req, res) {
   const rows = (await query(

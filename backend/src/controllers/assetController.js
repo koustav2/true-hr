@@ -94,7 +94,7 @@ export async function myAssets(req, res) {
   const empId = req.user.employeeId;
   if (!empId) return res.json({ assets: [] });
   const rows = (await query(
-    `SELECT a.asset_tag, a.category, a.brand, a.model, a.serial_no, aa.assigned_at, aa.acknowledged
+    `SELECT aa.id AS assignment_id, a.asset_tag, a.category, a.brand, a.model, a.serial_no, aa.assigned_at, aa.acknowledged
        FROM asset_assignments aa JOIN assets a ON a.id=aa.asset_id
       WHERE aa.employee_id=$1 AND aa.returned_at IS NULL ORDER BY aa.assigned_at DESC`, [empId])).rows;
   res.json({ assets: rows });

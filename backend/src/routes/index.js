@@ -37,6 +37,7 @@ import * as fnf from '../controllers/fnfController.js';
 import * as letters from '../controllers/letterController.js';
 import * as taxDecl from '../controllers/taxDeclarationController.js';
 import * as statutory from '../controllers/statutoryController.js';
+import * as wishes from '../controllers/wishesController.js';
 import {
   authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
   requireModule, requirePlatformAdmin, requireOrg,
@@ -364,55 +365,59 @@ r.post('/admin/terminations/:id/revoke', authenticate, requireOrg, requireModule
 // =====================================================================
 
 // --- Asset management (IT / non-IT register + assignment) ---
-r.get('/admin/assets', authenticate, requireAnyAdmin, assets.listAssets);
-r.post('/admin/assets', authenticate, requireAnyAdmin, assets.createAsset);
-r.patch('/admin/assets/:id', authenticate, requireAnyAdmin, assets.updateAsset);
-r.post('/admin/assets/:id/assign', authenticate, requireAnyAdmin, assets.assignAsset);
-r.post('/admin/assets/:id/return', authenticate, requireAnyAdmin, assets.returnAsset);
-r.get('/admin/employees/:employeeId/assets', authenticate, requireAnyAdmin, assets.employeeAssets);
+r.get('/admin/assets', authenticate, requireModule('ASSETS'), assets.listAssets);
+r.post('/admin/assets', authenticate, requireModule('ASSETS', 'manage'), assets.createAsset);
+r.patch('/admin/assets/:id', authenticate, requireModule('ASSETS', 'manage'), assets.updateAsset);
+r.post('/admin/assets/:id/assign', authenticate, requireModule('ASSETS', 'manage'), assets.assignAsset);
+r.post('/admin/assets/:id/return', authenticate, requireModule('ASSETS', 'manage'), assets.returnAsset);
+r.get('/admin/employees/:employeeId/assets', authenticate, requireModule('ASSETS'), assets.employeeAssets);
 r.get('/me/assets', authenticate, assets.myAssets);
 r.post('/me/assets/:id/acknowledge', authenticate, assets.acknowledgeAsset);
 
 // --- Statutory-rate masters + payroll compliance (PT / minimum wage) ---
-r.get('/admin/statutory/categories', authenticate, requireAnyAdmin, statRates.categories);
-r.get('/admin/statutory/pt-slabs', authenticate, requireAnyAdmin, statRates.listPtSlabs);
-r.post('/admin/statutory/pt-slabs', authenticate, requireAnyAdmin, statRates.savePtSlabs);
-r.get('/admin/statutory/min-wages', authenticate, requireAnyAdmin, statRates.listMinWages);
-r.post('/admin/statutory/min-wages', authenticate, requireAnyAdmin, statRates.saveMinWage);
-r.get('/admin/statutory/compliance-check', authenticate, requireAnyAdmin, statRates.checkCompliance);
+r.get('/admin/statutory/categories', authenticate, requireModule('STATUTORY'), statRates.categories);
+r.get('/admin/statutory/pt-slabs', authenticate, requireModule('STATUTORY'), statRates.listPtSlabs);
+r.post('/admin/statutory/pt-slabs', authenticate, requireModule('STATUTORY', 'manage'), statRates.savePtSlabs);
+r.get('/admin/statutory/min-wages', authenticate, requireModule('STATUTORY'), statRates.listMinWages);
+r.post('/admin/statutory/min-wages', authenticate, requireModule('STATUTORY', 'manage'), statRates.saveMinWage);
+r.get('/admin/statutory/compliance-check', authenticate, requireModule('STATUTORY'), statRates.checkCompliance);
 
 // --- Statutory records (PF/ESIC/Gratuity profiles + nominees) + reports ---
-r.get('/admin/employees/:employeeId/statutory', authenticate, requireAnyAdmin, statutory.getProfile);
-r.put('/admin/employees/:employeeId/statutory', authenticate, requireAnyAdmin, statutory.upsertProfile);
-r.post('/admin/employees/:employeeId/statutory/nominees', authenticate, requireAnyAdmin, statutory.addNominee);
-r.delete('/admin/statutory/nominees/:id', authenticate, requireAnyAdmin, statutory.deleteNominee);
-r.get('/admin/reports/pf-register', authenticate, requireAnyAdmin, statutory.pfRegister);
-r.get('/admin/reports/esic-register', authenticate, requireAnyAdmin, statutory.esicRegister);
-r.get('/admin/reports/form16/:employeeId', authenticate, requireAnyAdmin, statutory.form16);
+r.get('/admin/employees/:employeeId/statutory', authenticate, requireModule('STATUTORY'), statutory.getProfile);
+r.put('/admin/employees/:employeeId/statutory', authenticate, requireModule('STATUTORY', 'manage'), statutory.upsertProfile);
+r.post('/admin/employees/:employeeId/statutory/nominees', authenticate, requireModule('STATUTORY', 'manage'), statutory.addNominee);
+r.delete('/admin/statutory/nominees/:id', authenticate, requireModule('STATUTORY', 'manage'), statutory.deleteNominee);
+r.get('/admin/reports/pf-register', authenticate, requireModule('STATUTORY'), statutory.pfRegister);
+r.get('/admin/reports/esic-register', authenticate, requireModule('STATUTORY'), statutory.esicRegister);
+r.get('/admin/reports/form16/:employeeId', authenticate, requireModule('STATUTORY'), statutory.form16);
 
 // --- Income-tax investment declaration (ESS submit -> HR verify) ---
 r.get('/me/tax-declaration/sections', authenticate, taxDecl.sections);
 r.get('/me/tax-declaration', authenticate, taxDecl.getMine);
 r.post('/me/tax-declaration', authenticate, taxDecl.saveMine);
 r.post('/me/tax-declaration/submit', authenticate, taxDecl.submitMine);
-r.get('/admin/tax-declarations', authenticate, requireAnyAdmin, taxDecl.adminList);
-r.get('/admin/tax-declarations/:id', authenticate, requireAnyAdmin, taxDecl.adminGet);
-r.post('/admin/tax-declarations/:id/verify', authenticate, requireAnyAdmin, taxDecl.verify);
+r.get('/admin/tax-declarations', authenticate, requireModule('INVDECL'), taxDecl.adminList);
+r.get('/admin/tax-declarations/:id', authenticate, requireModule('INVDECL'), taxDecl.adminGet);
+r.post('/admin/tax-declarations/:id/verify', authenticate, requireModule('INVDECL', 'manage'), taxDecl.verify);
 
 // --- Letters engine (templates + issue + PDF) ---
-r.get('/admin/letters/types', authenticate, requireAnyAdmin, letters.types);
-r.post('/admin/letters/templates', authenticate, requireAnyAdmin, letters.saveTemplate);
-r.post('/admin/letters/issue', authenticate, requireAnyAdmin, letters.issue);
-r.get('/admin/letters/issued', authenticate, requireAnyAdmin, letters.listIssued);
-r.get('/admin/letters/:id/pdf', authenticate, requireAnyAdmin, letters.pdf);
+r.get('/admin/letters/types', authenticate, requireModule('LETTERS'), letters.types);
+r.post('/admin/letters/templates', authenticate, requireModule('LETTERS', 'manage'), letters.saveTemplate);
+r.post('/admin/letters/issue', authenticate, requireModule('LETTERS', 'manage'), letters.issue);
+r.get('/admin/letters/issued', authenticate, requireModule('LETTERS'), letters.listIssued);
+r.get('/admin/letters/:id/pdf', authenticate, requireModule('LETTERS'), letters.pdf);
 r.get('/me/letters', authenticate, letters.myLetters);
+r.get('/me/letters/:id/pdf', authenticate, letters.myPdf);
+
+// --- Wishes reminders (birthdays & anniversaries) ---
+r.get('/admin/wishes', authenticate, requireModule('EMPLOYEES'), wishes.upcoming);
 
 // --- Full & Final settlement (exit pay; ties to resignation, not NFA) ---
-r.post('/admin/fnf/preview/:employeeId', authenticate, requireAnyAdmin, fnf.preview);
-r.post('/admin/fnf/:employeeId', authenticate, requireAnyAdmin, fnf.save);
-r.post('/admin/fnf/:id/finalise', authenticate, requireAnyAdmin, fnf.finalise);
-r.post('/admin/fnf/:id/paid', authenticate, requireAnyAdmin, fnf.markPaid);
-r.get('/admin/fnf', authenticate, requireAnyAdmin, fnf.list);
-r.get('/admin/fnf/:id/pdf', authenticate, requireAnyAdmin, fnf.pdf);
+r.post('/admin/fnf/preview/:employeeId', authenticate, requireModule('FNF', 'manage'), fnf.preview);
+r.post('/admin/fnf/:employeeId', authenticate, requireModule('FNF', 'manage'), fnf.save);
+r.post('/admin/fnf/:id/finalise', authenticate, requireModule('FNF', 'manage'), fnf.finalise);
+r.post('/admin/fnf/:id/paid', authenticate, requireModule('FNF', 'manage'), fnf.markPaid);
+r.get('/admin/fnf', authenticate, requireModule('FNF'), fnf.list);
+r.get('/admin/fnf/:id/pdf', authenticate, requireModule('FNF'), fnf.pdf);
 
 export default r;

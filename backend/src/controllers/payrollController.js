@@ -6,6 +6,8 @@ import { enqueueEmail } from '../services/emailQueue.js';
 import { payslipPublishedEmail } from '../services/emailTemplates.js';
 import { isoDate } from '../utils/joining.js';
 import { classifyMonth, loadPayrollPolicy, warningsFor } from '../services/attendancePayroll.js';
+import { professionalTax as ptForState } from '../services/statutoryRates.js';
+import { config } from '../config/index.js';
 
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
   'July', 'August', 'September', 'October', 'November', 'December'];
@@ -439,11 +441,15 @@ async function generateFor(employeeId, year, month, opts, reqUser) {
   const dim = auto.dim;
   const daysPaid = opts.daysPaid != null && opts.daysPaid !== '' ? Number(opts.daysPaid) : auto.daysPaid;
 
+  const meta = await loadMeta(employeeId);
+  // Optional: derive Professional Tax from the employee's work state (opt-in via STATE_PT).
+  if (config.statePT && meta.state) {
+    s.professionalTax = ptForState(meta.state, s.monthlyCtc, { month });
+  }
   const calc = computePayslip(s, {
     daysInMonth: dim, daysPaid, arrears: Number(opts.arrears) || 0,
     bonus: Number(opts.bonus) || 0, tds: Number(opts.tds) || 0,
   });
-  const meta = await loadMeta(employeeId);
   meta.grade = s.grade;
   meta.lopDays = auto.lopDays;
   // Attendance breakdown travels with the slip so a published payslip always

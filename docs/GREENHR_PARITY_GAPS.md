@@ -56,3 +56,26 @@ Admin routes are guarded by `requireAnyAdmin` (HR/IT/Super); ESS routes by `auth
 4. **Android** screens (sandbox cannot build Android).
 5. Statutory rupee constants (PF 15k cap, ESIC 21k, tax slabs) are FY-dated defaults —
    confirm against the current year before go-live; all are admin-overridable.
+
+---
+
+## Round 2 — UI layer, RBAC, PT wiring, Wishes (follow-ups closed)
+
+The backend features are now wired end-to-end.
+
+- **RBAC**: 5 new modules registered in `config/modules.js` (STATUTORY, INVDECL, FNF,
+  LETTERS, ASSETS), granted to HR_ADMIN (Super Admin has all). `adoptNewModules`
+  grants them to existing roles on the next `npm run migrate`. All new admin routes
+  now enforce `requireModule('KEY')` (view) / `('KEY','manage')` (writes).
+- **Web admin pages** (Next.js): `admin/statutory`, `admin/tax-declarations`,
+  `admin/fnf`, `admin/letters`, `admin/assets`, `admin/wishes` — added to the sidebar,
+  gated by their module.
+- **ESS pages**: `ess/tax` (declare investments → submit), `ess/letters` (download my
+  letters), `ess/assets` (my assigned assets + acknowledge) — added to the ESS nav.
+- **PT into payroll**: the run derives Professional Tax from the employee's work state
+  when `STATE_PT=true` (default off → existing runs byte-for-byte unchanged).
+- **Wishes**: `/admin/wishes` — upcoming birthdays & work anniversaries.
+
+Verified: every page passes esbuild JSX validation; 44 backend unit assertions pass;
+the full route graph imports clean. Still pending: a full `next build` on a machine with
+deps, Android screens, and confirming FY-dated statutory constants. NFA suite untouched.

@@ -198,7 +198,7 @@ export default function OrganisationsPage() {
             <label className="flex items-start gap-3 cursor-pointer">
               <input type="checkbox" checked={form.withAdmin}
                 onChange={(e) => setForm({ ...form, withAdmin: e.target.checked })}
-                className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+                className="mt-0.5 h-4 w-4 accent-brand-600 cursor-pointer" />
               <span className="min-w-0">
                 <span className="block text-sm font-semibold text-ink">Create this organisation's first Super Admin</span>
                 <span className="block text-xs text-ink-faint mt-0.5">They run the organisation and are prompted to set a new password at first sign-in.</span>

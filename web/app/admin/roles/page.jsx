@@ -282,14 +282,14 @@ export default function RolesPage() {
                           <input type="checkbox" checked={!!m.canView}
                             disabled={!mayManage || editing.locked || !m.grantableView}
                             onChange={() => toggle(m.key, 'view')}
-                            className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500 disabled:opacity-40" />
+                            className="h-4 w-4 accent-brand-600 cursor-pointer disabled:opacity-40" />
                           View
                         </label>
                         <label className={`flex items-center gap-1.5 text-xs ${m.grantableManage && mayManage && !editing.locked ? 'text-ink-soft cursor-pointer' : 'text-ink-faint cursor-not-allowed'}`}>
                           <input type="checkbox" checked={!!m.canManage}
                             disabled={!mayManage || editing.locked || !m.grantableManage}
                             onChange={() => toggle(m.key, 'manage')}
-                            className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500 disabled:opacity-40" />
+                            className="h-4 w-4 accent-brand-600 cursor-pointer disabled:opacity-40" />
                           Manage
                         </label>
                       </div>

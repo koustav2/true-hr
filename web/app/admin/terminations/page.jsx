@@ -258,13 +258,13 @@ export default function TerminationsPage() {
               <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
                 <input type="checkbox" checked={form.noticeWaived}
                   onChange={(e) => setForm({ ...form, noticeWaived: e.target.checked })}
-                  className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+                  className="h-4 w-4 accent-brand-600 cursor-pointer" />
                 Notice period waived
               </label>
               <label className="flex items-center gap-2 text-sm text-ink cursor-pointer">
                 <input type="checkbox" checked={form.rehireEligible}
                   onChange={(e) => setForm({ ...form, rehireEligible: e.target.checked })}
-                  className="h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+                  className="h-4 w-4 accent-brand-600 cursor-pointer" />
                 May be considered for rehire in future
               </label>
             </div>

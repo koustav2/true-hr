@@ -538,7 +538,7 @@ export default function PayrollPage() {
           <label className="flex items-start gap-3 rounded-xl border border-line p-4 cursor-pointer hover:bg-slate-50/60">
             <input type="checkbox" checked={policyForm.attendanceBased}
               onChange={(ev) => setPolicyForm({ ...policyForm, attendanceBased: ev.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+              className="mt-0.5 h-4 w-4 accent-brand-600 cursor-pointer" />
             <span>
               <span className="block text-sm font-semibold text-ink">Work out salary from attendance</span>
               <span className="block text-xs text-ink-soft mt-0.5">
@@ -553,7 +553,7 @@ export default function PayrollPage() {
             <input type="checkbox" checked={policyForm.deductUnexplained}
               disabled={!policyForm.attendanceBased}
               onChange={(ev) => setPolicyForm({ ...policyForm, deductUnexplained: ev.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500 disabled:opacity-40" />
+              className="mt-0.5 h-4 w-4 accent-brand-600 cursor-pointer disabled:opacity-40" />
             <span>
               <span className="block text-sm font-semibold text-ink">Deduct days that attendance cannot explain</span>
               <span className="block text-xs text-ink-soft mt-0.5">

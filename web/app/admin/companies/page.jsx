@@ -272,7 +272,7 @@ export default function CompaniesPage() {
           <label className="flex items-start gap-3 rounded-xl border border-line bg-slate-50/60 p-4 cursor-pointer">
             <input type="checkbox" checked={form.seedStructure}
               onChange={(e) => setForm({ ...form, seedStructure: e.target.checked })}
-              className="mt-0.5 h-4 w-4 rounded border-line text-brand-600 focus:ring-brand-500" />
+              className="mt-0.5 h-4 w-4 accent-brand-600 cursor-pointer" />
             <span>
               <span className="block text-sm font-semibold text-ink">Start with a standard department list</span>
               <span className="block text-xs text-ink-soft mt-0.5">

@@ -7,7 +7,7 @@ import { can, ROLE_LABEL } from '@/lib/permissions.js';
 import { PermProvider, usePerms } from '@/lib/perms.jsx';
 import { FEATURES } from '@/lib/flags.js';
 import { Logo } from '@/components/Brand.jsx';
-import { Spinner } from '@/components/ui.jsx';
+import { Spinner, Button, Card } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
   IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
@@ -164,6 +164,31 @@ function OrgSwitcher() {
   );
 }
 
+// Shown when a role opens a section it cannot access (e.g. by typing the URL).
+// The sidebar already hides the link; this stops the page itself from rendering
+// and firing requests the server would only 403. Grant it from Roles & Permissions.
+function AccessDenied({ label, onHome }) {
+  return (
+    <div className="mx-auto max-w-md">
+      <Card className="px-8 py-12 text-center">
+        <div className="relative mx-auto mb-6 h-16 w-16">
+          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-100 to-rose-100 blur-[6px] opacity-80" />
+          <div className="relative grid place-items-center h-16 w-16 rounded-full bg-gradient-to-br from-amber-50 to-rose-50 text-amber-600 ring-1 ring-inset ring-amber-100">
+            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </div>
+        </div>
+        <div className="text-[15px] font-bold text-ink">Restricted section</div>
+        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-ink-faint">
+          You don&rsquo;t have access to <b className="text-ink-soft">{label}</b>. A Super Admin can grant it from Roles &amp; Permissions.
+        </p>
+        <div className="mt-6">
+          <Button onClick={onHome}>Go to a section you can open</Button>
+        </div>
+      </Card>
+    </div>
+  );
+}
+
 function AdminShell({ children }) {
   const { auth, user, logout, ready } = useAuth();
   const { canView, loading: permsLoading, role: liveRole, activeOrg, isPlatformAdmin } = usePerms();
@@ -184,9 +209,12 @@ function AdminShell({ children }) {
   useEffect(() => {
     if (ready && !auth?.token) router.replace('/login');
   }, [ready, auth, router]);
-  // The Master (platform owner) works only in the Master Admin section.
+  // The Master (platform owner) works only in the Master Admin section — any
+  // other admin route bounces back, so the organisation list is the whole surface.
   useEffect(() => {
-    if (ready && auth?.token && isPlatformAdmin && pathname === '/admin') router.replace('/admin/organisations');
+    if (ready && auth?.token && isPlatformAdmin && !pathname.startsWith('/admin/organisations')) {
+      router.replace('/admin/organisations');
+    }
   }, [ready, auth, isPlatformAdmin, pathname, router]);
 
   function toggleCollapse() {
@@ -201,6 +229,11 @@ function AdminShell({ children }) {
   const isActive = (href) => (href === '/admin' ? pathname === '/admin' : pathname.startsWith(href));
   const current = [...ALL].sort((a, b) => b.href.length - a.href.length).find((i) => isActive(i.href));
   const pageTitle = current?.label || 'Admin Console';
+  // Route-level permission gate. Nav hides links, but a directly-typed URL would
+  // still render; block it unless the live permissions allow this section.
+  const firstAllowed = ALL.find((i) => canView(i.module));
+  const masterElsewhere = isPlatformAdmin && !pathname.startsWith('/admin/organisations');
+  const blocked = !isPlatformAdmin && current && !canView(current.module);
 
   const SidebarBody = ({ collapsed }) => (
     <>
@@ -287,7 +320,13 @@ function AdminShell({ children }) {
           </div>
         </header>
         <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-[1440px] animate-in">{children}</div>
+          <div className="mx-auto w-full max-w-[1440px] animate-in">
+            {masterElsewhere ? (
+              <div className="grid place-items-center py-24"><Spinner className="text-brand-600 h-6 w-6" /></div>
+            ) : blocked ? (
+              <AccessDenied label={pageTitle} onHome={() => router.replace(firstAllowed?.href || '/ess')} />
+            ) : children}
+          </div>
         </main>
       </div>
     </div>

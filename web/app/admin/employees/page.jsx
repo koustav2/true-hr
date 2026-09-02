@@ -4,7 +4,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
 import { downloadCsv } from '@/lib/csv.js';
-import { Button, Select } from '@/components/ui.jsx';
+import { Button, Select, Avatar } from '@/components/ui.jsx';
 import DataTable from '@/components/DataTable.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconPlus } from '@/components/icons.jsx';
@@ -29,11 +29,10 @@ export default function EmployeesPage() {
       sortValue: (r) => `${r.first_name} ${r.last_name}`,
       render: (r) => (
         <div className="flex items-center gap-3">
-          <span className="grid place-items-center h-9 w-9 rounded-full bg-brand-50 text-brand-700 text-xs font-semibold shrink-0">
-            {((r.first_name?.[0] || '') + (r.last_name?.[0] || '')).toUpperCase()}</span>
+          <Avatar name={`${r.first_name} ${r.last_name}`} size={38} />
           <span className="min-w-0">
-            <span className="font-medium text-ink block">{r.first_name} {r.last_name}</span>
-            <span className="text-xs text-ink-faint">{r.official_email}</span>
+            <span className="font-semibold text-ink block">{r.first_name} {r.last_name}</span>
+            <span className="text-xs text-ink-faint font-mono">{r.official_email}</span>
           </span>
         </div>
       ),

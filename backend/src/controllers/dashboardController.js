@@ -42,7 +42,8 @@ export async function stats(req, res, next) {
     const recent = (await query(
       `SELECT e.id, e.first_name, e.last_name, e.official_email, e.onboarding_status, d.title AS designation
          FROM employees e LEFT JOIN designations d ON d.id=e.designation_id
-        ORDER BY e.created_at DESC LIMIT 6`)).rows;
+        WHERE ($1::bigint IS NULL OR e.organisation_id=$1)
+        ORDER BY e.created_at DESC LIMIT 6`, [org])).rows;
 
     res.json({
       headcount,

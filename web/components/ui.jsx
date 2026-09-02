@@ -141,3 +141,89 @@ export function SearchPicker({ value, onChange, options = [], getLabel, placehol
   );
 }
 
+
+// ─────────────────────────────────────────────────────────────────────────────
+// Premium primitives — the shared building blocks the whole app adopts so every
+// module reads as one system (identity avatars, status pills, KPI tiles, headers).
+// ─────────────────────────────────────────────────────────────────────────────
+
+const AVATAR_GRADIENTS = [
+  'linear-gradient(135deg,#1d4ed8,#12a150)', 'linear-gradient(135deg,#7c3aed,#a855f7)',
+  'linear-gradient(135deg,#0ea5e9,#1d4ed8)', 'linear-gradient(135deg,#12a150,#4ade80)',
+  'linear-gradient(135deg,#d68411,#f59e0b)', 'linear-gradient(135deg,#e0416a,#f472b6)',
+  'linear-gradient(135deg,#0891b2,#22d3ee)', 'linear-gradient(135deg,#4f46e5,#818cf8)',
+];
+export function initialsOf(name) {
+  return (name || '?').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+}
+function gradientFor(name) {
+  let h = 0; const t = name || '';
+  for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
+  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
+}
+/** Identity avatar — a deterministic gradient squircle with initials. */
+export function Avatar({ name, size = 40, className = '' }) {
+  return (
+    <span className={`grid place-items-center rounded-xl2 text-white font-bold shadow-soft shrink-0 ${className}`}
+      style={{ width: size, height: size, fontSize: size * 0.34, backgroundImage: gradientFor(name) }}>
+      {initialsOf(name)}
+    </span>
+  );
+}
+
+const BADGE_TONES = {
+  neutral: 'bg-slate-100 text-slate-600 ring-slate-200',
+  brand:   'bg-brand-50 text-brand-700 ring-brand-200',
+  ok:      'bg-emerald-50 text-emerald-700 ring-emerald-200',
+  warn:    'bg-amber-50 text-amber-700 ring-amber-200',
+  danger:  'bg-rose-50 text-rose-600 ring-rose-200',
+  info:    'bg-sky-50 text-sky-700 ring-sky-200',
+  grape:   'bg-grape-50 text-grape-700 ring-grape-200',
+};
+/** Status pill. tone: neutral|brand|ok|warn|danger|info|grape. dot adds a leading dot. */
+export function Badge({ tone = 'neutral', dot = false, children, className = '' }) {
+  return (
+    <span className={`inline-flex items-center gap-1.5 rounded-full px-2.5 py-0.5 text-[11px] font-semibold ring-1 ring-inset ${BADGE_TONES[tone] || BADGE_TONES.neutral} ${className}`}>
+      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current opacity-70" />}
+      {children}
+    </span>
+  );
+}
+
+/** Consistent page header: gradient-accented title, optional subtitle + action. */
+export function PageHeader({ title, subtitle, action, className = '' }) {
+  return (
+    <div className={`flex flex-wrap items-start justify-between gap-4 ${className}`}>
+      <div className="min-w-0">
+        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">{title}</h1>
+        {subtitle && <p className="text-ink-faint text-sm mt-2 max-w-2xl">{subtitle}</p>}
+      </div>
+      {action && <div className="shrink-0">{action}</div>}
+    </div>
+  );
+}
+
+const TILE_TONES = {
+  brand:  'bg-brand-50 text-brand-700 ring-brand-200/70',
+  ok:     'bg-emerald-50 text-emerald-600 ring-emerald-200/70',
+  warn:   'bg-amber-50 text-amber-600 ring-amber-200/70',
+  grape:  'bg-grape-50 text-grape-600 ring-grape-200/70',
+  info:   'bg-sky-50 text-sky-600 ring-sky-200/70',
+  neutral:'bg-slate-100 text-slate-600 ring-slate-200/70',
+};
+const TILE_ACCENT = { brand:'#1d4ed8', ok:'#12a150', warn:'#d68411', grape:'#7c3aed', info:'#0ea5e9', neutral:'#94a3b8' };
+/** KPI tile — icon chip, big tabular value, label, optional caption/trend. */
+export function StatTile({ Icon, tone = 'brand', label, value, caption, trend, className = '' }) {
+  return (
+    <Card hover className={`relative p-5 overflow-hidden h-full ${className}`}>
+      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${TILE_ACCENT[tone] || TILE_ACCENT.brand}, transparent 85%)` }} />
+      <div className="flex items-start justify-between">
+        <div className={`grid place-items-center h-11 w-11 rounded-xl2 ring-1 ring-inset ${TILE_TONES[tone] || TILE_TONES.brand}`}>{Icon && <Icon width={19} height={19} />}</div>
+        {trend && <span className="text-[11px] font-bold text-emerald-700 bg-emerald-50 rounded-full px-2 py-0.5">{trend}</span>}
+      </div>
+      <div className="text-[30px] leading-none font-extrabold mt-4 text-ink tracking-tight tabular-nums">{value}</div>
+      <div className="text-[13px] font-semibold text-ink-soft mt-2">{label}</div>
+      {caption && <div className="text-xs text-ink-faint mt-0.5">{caption}</div>}
+    </Card>
+  );
+}

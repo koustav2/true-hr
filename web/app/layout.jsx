@@ -1,8 +1,11 @@
 import './globals.css';
-import { Inter } from 'next/font/google';
+import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth.jsx';
 
-const inter = Inter({ subsets: ['latin'], variable: '--font-inter', display: 'swap' });
+// Plus Jakarta Sans — warmer, more distinctive than Inter, across the whole UI.
+// JetBrains Mono — for IDs, codes and money, where tabular data reads best.
+const sans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
+const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '600'], variable: '--font-mono', display: 'swap' });
 
 export const metadata = {
   title: 'TRUE HR',
@@ -11,7 +14,7 @@ export const metadata = {
 
 export default function RootLayout({ children }) {
   return (
-    <html lang="en" className={inter.variable}>
+    <html lang="en" className={`${sans.variable} ${mono.variable}`}>
       <body className="font-sans min-h-full">
         <AuthProvider>{children}</AuthProvider>
       </body>

@@ -4,7 +4,8 @@ module.exports = {
   theme: {
     extend: {
       fontFamily: {
-        sans: ['var(--font-inter)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        sans: ['var(--font-sans)', 'ui-sans-serif', 'system-ui', 'sans-serif'],
+        mono: ['var(--font-mono)', 'ui-monospace', 'SFMono-Regular', 'Menlo', 'monospace'],
       },
       colors: {
         // True Kind Foundation — primary BLUE (paired with leaf-green in the brand gradient)
@@ -22,22 +23,22 @@ module.exports = {
         grape: { 50: '#faf5ff', 100: '#f3e8ff', 200: '#e9d5ff', 600: '#7e22ce', 700: '#6b21a8' },
         coral: { 50: '#fef2f2', 100: '#fee2e2', 200: '#fecaca', 600: '#dc2626', 700: '#b91c1c' },
         // Neutral ink scale (slate-based)
-        ink: { DEFAULT: '#0f172a', soft: '#475569', faint: '#94a3b8' },
-        canvas: '#f7f8fa',
-        line: '#e9ecf1',
+        ink: { DEFAULT: '#0c1424', soft: '#3d4759', faint: '#7e8aa0' },
+        canvas: '#f4f6fb',
+        line: '#e7ebf3',
       },
       backgroundImage: {
         // the logo's blue -> green sweep, used on primary buttons, avatars, hero panels
-        'brand-gradient': 'linear-gradient(135deg, #2563eb 0%, #1d8bd6 45%, #16a34a 100%)',
-        'brand-gradient-r': 'linear-gradient(90deg, #2563eb 0%, #16a34a 100%)',
+        'brand-gradient': 'linear-gradient(120deg, #1d4ed8 0%, #2f7ad6 46%, #12a150 108%)',
+        'brand-gradient-r': 'linear-gradient(90deg, #1d4ed8 0%, #12a150 100%)',
       },
       boxShadow: {
-        card: '0 1px 2px rgba(15,23,42,.05), 0 6px 18px -8px rgba(15,23,42,.08)',
-        soft: '0 1px 2px rgba(15,23,42,.04)',
-        lift: '0 14px 34px -12px rgba(15,23,42,.16), 0 3px 8px -3px rgba(15,23,42,.07)',
-        pop: '0 10px 30px -10px rgba(37,99,235,.35)',
-        btn: '0 2px 6px -1px rgba(37,99,235,.28), inset 0 1px 0 rgba(255,255,255,.2)',
-        focus: '0 0 0 4px rgba(37,99,235,.14)',
+        card: '0 1px 2px rgba(12,20,36,.05), 0 12px 28px -14px rgba(12,20,36,.12)',
+        soft: '0 1px 2px rgba(12,20,36,.05)',
+        lift: '0 20px 46px -18px rgba(12,20,36,.20), 0 4px 12px -6px rgba(12,20,36,.10)',
+        pop: '0 18px 44px -16px rgba(29,78,216,.40)',
+        btn: '0 3px 10px -2px rgba(29,78,216,.32), inset 0 1px 0 rgba(255,255,255,.22)',
+        focus: '0 0 0 4px rgba(29,78,216,.15)',
       },
       borderRadius: { xl2: '1rem', xl3: '1.25rem' },
       transitionTimingFunction: { premium: 'cubic-bezier(.4,0,.2,1)' },

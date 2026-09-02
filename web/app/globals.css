@@ -7,7 +7,7 @@ html, body { height: 100%; }
 body {
   margin: 0;
   /* canvas with a whisper of warmth + depth, not a flat grey */
-  background-color: #f6f8fb;
+  background-color: #f4f6fb;
   background-image:
     radial-gradient(1100px 520px at 100% -8%, rgba(22,163,74,.05), transparent 60%),
     radial-gradient(900px 500px at -5% 0%, rgba(37,99,235,.05), transparent 55%);
@@ -15,10 +15,10 @@ body {
   color: #0f172a;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
-  letter-spacing: -0.006em;
+  letter-spacing: -0.011em;
 }
 
-::selection { background: rgba(37,99,235,.16); color: #1e3a8a; }
+::selection { background: rgba(29,78,216,.18); color: #12245c; }
 
 /* thin, quiet scrollbar */
 ::-webkit-scrollbar { width: 10px; height: 10px; }

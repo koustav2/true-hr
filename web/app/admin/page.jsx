@@ -9,6 +9,14 @@ import { Card, Button, Spinner } from '@/components/ui.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconPlus, IconUsers, IconReview, IconChevronRight, IconUserPlus, IconClock, IconSupport, IconMoney, IconCheck } from '@/components/icons.jsx';
 
+const AV_GRADS = [
+  'linear-gradient(135deg,#1d4ed8,#12a150)', 'linear-gradient(135deg,#7c3aed,#a855f7)',
+  'linear-gradient(135deg,#0ea5e9,#1d4ed8)', 'linear-gradient(135deg,#12a150,#4ade80)',
+  'linear-gradient(135deg,#d68411,#f59e0b)', 'linear-gradient(135deg,#e0416a,#f472b6)',
+];
+const initials = (n) => (n || '?').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
+const avatarGradient = (n) => { let h = 0; const t = n || ''; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return AV_GRADS[h % AV_GRADS.length]; };
+
 const PIPELINE = [
   { key: 'offerSent', label: 'Offer sent', color: '#f59e0b' },
   { key: 'filling', label: 'Filling details', color: '#0ea5e9' },
@@ -21,7 +29,7 @@ function Stat({ Icon, tint, accent, label, value, caption, href }) {
     <Card hover className="relative p-5 overflow-hidden h-full">
       <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, transparent 85%)` }} />
       <div className="flex items-start justify-between">
-        <div className={`grid place-items-center h-10 w-10 rounded-xl ring-1 ring-inset ${tint}`}><Icon width={18} height={18} /></div>
+        <div className={`grid place-items-center h-11 w-11 rounded-xl2 ring-1 ring-inset ${tint}`}><Icon width={19} height={19} /></div>
         {href && <IconChevronRight width={16} height={16} className="text-ink-faint" />}
       </div>
       <div className="text-[32px] leading-none font-bold mt-4 text-ink tracking-tight tabular-nums">{value}</div>
@@ -84,8 +92,8 @@ export default function DashboardPage() {
             <ul className="divide-y divide-line">
               {s.recentEmployees.map((r) => (
                 <li key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/70 transition-colors">
-                  <div className="grid place-items-center h-9 w-9 rounded-full bg-gradient-to-br from-brand-50 to-brand-100 text-brand-700 text-xs font-semibold ring-1 ring-inset ring-brand-100">
-                    {(r.name || '?').split(' ').map((x) => x[0]).slice(0, 2).join('').toUpperCase()}
+                  <div className="grid place-items-center h-10 w-10 rounded-xl2 text-white text-xs font-bold shadow-soft shrink-0" style={{ backgroundImage: avatarGradient(r.name) }}>
+                    {initials(r.name)}
                   </div>
                   <div className="min-w-0 flex-1">
                     <Link href={`/admin/employees/${r.id}`} className="font-medium text-ink hover:text-brand-700">{r.name}</Link>

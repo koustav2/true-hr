@@ -12,7 +12,7 @@ body {
     radial-gradient(1100px 520px at 100% -8%, rgba(22,163,74,.05), transparent 60%),
     radial-gradient(900px 500px at -5% 0%, rgba(37,99,235,.05), transparent 55%);
   background-attachment: fixed;
-  color: #0f172a;
+  color: #0c1424;
   -webkit-font-smoothing: antialiased;
   text-rendering: optimizeLegibility;
   letter-spacing: -0.011em;
@@ -59,11 +59,11 @@ main table thead th {
   font-size: 11px;
   letter-spacing: .07em;
   font-weight: 700;
-  color: #64748b;
-  background: linear-gradient(180deg, #f8fafc, #f1f5f9);
+  color: #7e8aa0;
+  background: linear-gradient(180deg, #fafbff, #f1f4fb);
 }
 main table tbody tr { transition: background .12s ease; }
-main table tbody tr:hover { background: rgba(37,99,235,.035); }
+main table tbody tr:hover { background: rgba(29,78,216,.04); }
 
 /* Section sub-headings (the small uppercase ones) get the brand tick */
 main section > h2 { display: flex; align-items: center; gap: 8px; }

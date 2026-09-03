@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api.js';
-import { Card, Button, Spinner, Empty } from '@/components/ui.jsx';
+import { Card, Button, Spinner, Empty, Avatar } from '@/components/ui.jsx';
 
 export default function ReviewQueuePage() {
   const [rows, setRows] = useState(null);
@@ -23,10 +23,9 @@ export default function ReviewQueuePage() {
           <ul className="divide-y divide-slate-50">
             {rows.map((r) => (
               <li key={r.onboarding_id} className="flex items-center gap-4 px-5 py-4 hover:bg-slate-50/60">
-                <div className="grid place-items-center h-10 w-10 rounded-full bg-violet-50 text-violet-700 text-xs font-bold">
-                  {(r.first_name[0] + r.last_name[0]).toUpperCase()}</div>
+                <Avatar name={`${r.first_name} ${r.last_name}`} size={40} />
                 <div className="flex-1 min-w-0">
-                  <div className="font-medium text-ink">{r.first_name} {r.last_name}</div>
+                  <div className="font-semibold text-ink">{r.first_name} {r.last_name}</div>
                   <div className="text-xs text-ink-faint">{r.designation || '—'} · submitted {r.submitted_at ? new Date(r.submitted_at).toLocaleDateString() : '—'}</div>
                 </div>
                 <Button as={Link} href={`/admin/employees/${r.employee_id}`} variant="soft">Review →</Button>

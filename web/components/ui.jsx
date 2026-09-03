@@ -2,7 +2,7 @@ import React from 'react';
 import { createPortal } from 'react-dom';
 export function Button({ as: As = 'button', variant = 'primary', size = 'md', className = '', children, ...props }) {
   const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded-xl transition-all duration-150 ease-premium outline-none focus-visible:ring-4 focus-visible:ring-brand-500/20 disabled:opacity-50 disabled:cursor-not-allowed whitespace-nowrap active:scale-[.985]';
-  const sizes = { md: 'px-5 py-2.5 text-sm', sm: 'px-3.5 py-1.5 text-[13px]' };
+  const sizes = { lg: 'px-6 py-3 text-[15px]', md: 'px-5 py-2.5 text-sm', sm: 'px-3.5 py-1.5 text-[13px]' };
   const styles = {
     primary: 'text-white bg-brand-gradient bg-[length:140%_140%] bg-[position:0%] hover:bg-[position:100%] transition-[background-position,box-shadow] shadow-btn hover:shadow-pop',
     soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100 ring-1 ring-inset ring-brand-100',

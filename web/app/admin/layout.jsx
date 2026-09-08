@@ -6,7 +6,6 @@ import { useAuth } from '@/lib/auth.jsx';
 import { can, ROLE_LABEL } from '@/lib/permissions.js';
 import { PermProvider, usePerms } from '@/lib/perms.jsx';
 import { FEATURES } from '@/lib/flags.js';
-import { Logo } from '@/components/Brand.jsx';
 import { Spinner, Button, Card } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
@@ -60,19 +59,18 @@ const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
 const MASTER = [{ href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' }];
 
 const ROLE_BADGE = {
-  SUPER_ADMIN: 'bg-grape-50 text-grape-700 ring-grape-200',
-  HR_ADMIN: 'bg-brand-50 text-brand-700 ring-brand-200',
-  IT_ADMIN: 'bg-sky-50 text-sky-700 ring-sky-200',
+  SUPER_ADMIN: 'bg-grape-50 text-grape-700',
+  HR_ADMIN: 'bg-brand-50 text-brand-700',
+  IT_ADMIN: 'bg-crit-bg text-crit',
 };
 
 function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate }) {
   return (
     <Link href={href} title={collapsed ? label : undefined} onClick={onNavigate}
-      className={`relative flex items-center gap-3 rounded-lg px-3 py-2.5 text-sm font-medium transition-all duration-150 ease-premium ${collapsed ? 'justify-center' : ''} ${
+      className={`relative flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors duration-100 border-l-[3px] ${collapsed ? 'justify-center' : ''} ${
         active
-          ? 'bg-gradient-to-r from-brand-50 to-brand-50/30 text-brand-700 ring-1 ring-inset ring-brand-100 shadow-soft'
-          : 'text-ink-soft hover:bg-slate-50 hover:text-ink'}`}>
-      {active && <span className="absolute left-0 top-1.5 bottom-1.5 w-1 rounded-r-full bg-gradient-to-b from-brand-400 to-brand-600" />}
+          ? 'bg-brand-50 text-brand-700 border-brand-600 font-semibold'
+          : 'text-ink-soft hover:bg-canvas hover:text-ink border-transparent font-medium'}`}>
       <Icon className={active ? 'text-brand-600' : 'text-ink-faint'} />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
@@ -83,10 +81,10 @@ function NavGroup({ title, items, canView, isActive, collapsed, onNavigate }) {
   const visible = items.filter((i) => (i.nfa ? FEATURES.nfaSuite : true) && canView(i.module));
   if (visible.length === 0) return null;
   return (
-    <div className="mt-6 first:mt-0">
-      {!collapsed && <div className="px-3 text-[11px] font-semibold uppercase tracking-wider text-ink-faint mb-2">{title}</div>}
-      {collapsed && <div className="mx-3 mb-2 border-t border-line" />}
-      <nav className="space-y-0.5">
+    <div className="mt-4 first:mt-0">
+      {!collapsed && <div className="px-2.5 text-[10px] font-bold uppercase tracking-[.1em] text-ink-faint mb-1.5">{title}</div>}
+      {collapsed && <div className="mx-2.5 mb-1.5 border-t border-line" />}
+      <nav className="space-y-px">
         {visible.map((item) => <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} onNavigate={onNavigate} />)}
       </nav>
     </div>
@@ -112,8 +110,8 @@ function OrgSwitcher() {
   const list = (orgs.organisations || []).filter((o) => o.status === 'ACTIVE');
   if (!orgs.canSwitch || list.length <= 1) {
     return (
-      <span className="hidden md:inline-flex items-center gap-1.5 rounded-full bg-slate-100 px-3 py-1 text-xs font-semibold text-ink-soft ring-1 ring-inset ring-line max-w-[220px]">
-        <IconBriefcase className="text-ink-faint shrink-0" />
+      <span className="hidden md:inline-flex items-center gap-1.5 rounded-sm bg-white/10 px-2.5 py-1 text-[11.5px] font-semibold text-white/80 max-w-[210px]">
+        <IconBriefcase className="text-white/55 shrink-0" />
         <span className="truncate">{activeOrg.name}</span>
       </span>
     );
@@ -121,17 +119,17 @@ function OrgSwitcher() {
   return (
     <div className="relative">
       <button onClick={() => setOpen((o) => !o)}
-        className="inline-flex items-center gap-1.5 rounded-full bg-white px-3 py-1.5 text-xs font-semibold text-ink ring-1 ring-inset ring-line hover:bg-slate-50 max-w-[240px]"
+        className="inline-flex items-center gap-1.5 rounded-sm bg-white/10 hover:bg-white/[.18] px-2.5 py-1.5 text-[11.5px] font-semibold text-white/90 max-w-[230px] transition-colors"
         title="Switch organisation">
-        <IconBriefcase className="text-brand-600 shrink-0" />
+        <IconBriefcase className="text-white/60 shrink-0" />
         <span className="truncate">{activeOrg.name}</span>
-        <IconChevronLeft className="-rotate-90 text-ink-faint shrink-0" />
+        <IconChevronLeft className="-rotate-90 text-white/60 shrink-0" />
       </button>
       {open && (
         <>
           <div className="fixed inset-0 z-30" onClick={() => setOpen(false)} />
-          <div className="absolute right-0 top-10 z-40 w-72 rounded-xl2 border border-line bg-white shadow-pop p-2 animate-in">
-            <div className="px-3 py-2 text-[11px] font-semibold uppercase tracking-wider text-ink-faint">
+          <div className="absolute right-0 top-9 z-40 w-72 rounded-xl2 border border-line bg-white shadow-pop p-1.5 animate-in">
+            <div className="px-2.5 py-1.5 text-[10px] font-bold uppercase tracking-[.1em] text-ink-faint">
               Switch organisation
             </div>
             <div className="max-h-72 overflow-y-auto">
@@ -169,20 +167,19 @@ function OrgSwitcher() {
 // and firing requests the server would only 403. Grant it from Roles & Permissions.
 function AccessDenied({ label, onHome }) {
   return (
-    <div className="mx-auto max-w-md">
-      <Card className="px-8 py-12 text-center">
-        <div className="relative mx-auto mb-6 h-16 w-16">
-          <div className="absolute inset-0 rounded-full bg-gradient-to-br from-amber-100 to-rose-100 blur-[6px] opacity-80" />
-          <div className="relative grid place-items-center h-16 w-16 rounded-full bg-gradient-to-br from-amber-50 to-rose-50 text-amber-600 ring-1 ring-inset ring-amber-100">
-            <svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+    <div className="mx-auto max-w-lg">
+      <Card className="p-6">
+        <div className="flex items-start gap-3.5">
+          <span className="grid place-items-center h-9 w-9 rounded bg-crit-bg text-crit shrink-0">
+            <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.9" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>
+          </span>
+          <div className="min-w-0">
+            <div className="text-[14px] font-semibold text-ink">Restricted section</div>
+            <p className="mt-1 text-[13px] leading-relaxed text-ink-faint">
+              You don&rsquo;t have access to <b className="text-ink-soft">{label}</b>. A Super Admin can grant it from Roles &amp; Permissions.
+            </p>
+            <div className="mt-4"><Button size="sm" onClick={onHome}>Go to a section you can open</Button></div>
           </div>
-        </div>
-        <div className="text-[15px] font-bold text-ink">Restricted section</div>
-        <p className="mx-auto mt-2 max-w-xs text-sm leading-relaxed text-ink-faint">
-          You don&rsquo;t have access to <b className="text-ink-soft">{label}</b>. A Super Admin can grant it from Roles &amp; Permissions.
-        </p>
-        <div className="mt-6">
-          <Button onClick={onHome}>Go to a section you can open</Button>
         </div>
       </Card>
     </div>
@@ -237,10 +234,7 @@ function AdminShell({ children }) {
 
   const SidebarBody = ({ collapsed }) => (
     <>
-      <div className={`h-16 flex items-center border-b border-line ${collapsed ? 'justify-center px-2' : 'px-5'}`}>
-        <Logo size={collapsed ? 30 : 32} compact={collapsed} />
-      </div>
-      <div className={`pt-5 flex-1 overflow-y-auto ${collapsed ? 'px-2' : 'px-3'}`}>
+      <div className={`pt-3 flex-1 overflow-y-auto ${collapsed ? 'px-1.5' : 'px-2'}`}>
         {isPlatformAdmin ? (
           <NavGroup title="Master" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         ) : (
@@ -252,18 +246,15 @@ function AdminShell({ children }) {
           </>
         )}
       </div>
-      <div className={`mt-auto border-t border-line ${collapsed ? 'p-2' : 'p-3'}`}>
-        <div className={`flex items-center gap-3 py-2 ${collapsed ? 'justify-center' : 'px-2'}`}>
-          <div className="grid place-items-center h-9 w-9 rounded-full bg-brand-gradient text-white text-xs font-bold shrink-0 shadow-pop">{initials}</div>
-          {!collapsed && (
-            <div className="min-w-0">
-              <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
-              <span className={`inline-flex mt-0.5 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
-            </div>
-          )}
-        </div>
+      <div className={`mt-auto border-t border-line ${collapsed ? 'p-1.5' : 'p-2'}`}>
+        {!collapsed && (
+          <div className="px-2.5 py-2 min-w-0">
+            <div className="text-[12px] font-semibold text-ink truncate">{user?.email}</div>
+            <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
+          </div>
+        )}
         <button onClick={() => { logout(); router.replace('/login'); }} title="Sign out"
-          className={`mt-1 flex items-center gap-3 w-full rounded-lg px-3 py-2.5 text-sm font-medium text-ink-soft hover:bg-slate-50 transition-colors ${collapsed ? 'justify-center' : ''}`}>
+          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
           <IconLogout className="text-ink-faint" />{!collapsed && 'Sign out'}
         </button>
       </div>
@@ -271,56 +262,62 @@ function AdminShell({ children }) {
   );
 
   return (
-    <div className="h-screen flex overflow-hidden bg-canvas">
-      {/* Desktop sidebar */}
-      <aside className={`shrink-0 hidden md:flex flex-col bg-white/95 backdrop-blur-sm border-r border-line h-screen transition-[width] duration-200 ease-premium ${collapsed ? 'w-[76px]' : 'w-[252px]'}`}>
-        <SidebarBody collapsed={collapsed} />
-      </aside>
-
-      {/* Mobile drawer */}
-      {mobileOpen && <div className="fixed inset-0 z-40 bg-slate-900/40 backdrop-blur-[2px] md:hidden" onClick={() => setMobileOpen(false)} />}
-      <aside className={`fixed z-50 md:hidden top-0 left-0 h-screen w-[260px] flex flex-col bg-white border-r border-line shadow-pop transition-transform duration-200 ease-premium ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
-        <button onClick={() => setMobileOpen(false)} className="absolute top-4 right-3 text-ink-faint hover:text-ink"><IconX /></button>
-        <SidebarBody collapsed={false} />
-      </aside>
-
-      {/* Main */}
-      <div className="flex-1 min-w-0 flex flex-col h-screen overflow-hidden">
-        <header className="h-16 shrink-0 bg-white/80 backdrop-blur-md border-b border-line/80 flex items-center justify-between gap-3 px-4 sm:px-6 sticky top-0 z-30">
-          <div className="flex items-center gap-2 min-w-0">
-            <button onClick={() => setMobileOpen(true)} className="md:hidden grid place-items-center h-9 w-9 rounded-lg text-ink-soft hover:bg-slate-100"><IconMenu /></button>
-            <button onClick={toggleCollapse} className="hidden md:grid place-items-center h-9 w-9 rounded-lg text-ink-soft hover:bg-slate-100" title={collapsed ? 'Expand' : 'Collapse'}>
-              <IconChevronLeft className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
-            </button>
-            <div className="min-w-0">
-              <h1 className="text-[15px] font-bold text-ink leading-tight truncate">{pageTitle}</h1>
-              <div className="hidden sm:block text-[11px] text-ink-faint leading-tight truncate">
-                {activeOrg?.name || 'True HR'} · Admin Console
-              </div>
-            </div>
-          </div>
-          <div className="relative flex items-center gap-3">
-            <OrgSwitcher />
-            <span className={`hidden sm:inline-flex rounded-full px-2.5 py-1 text-xs font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
-            <button onClick={() => setMenuOpen((o) => !o)} className="grid place-items-center h-9 w-9 rounded-full bg-brand-gradient text-white text-xs font-bold ring-2 ring-brand-100 shadow-pop">{initials}</button>
-            {menuOpen && (
-              <>
-                <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
-                <div className="absolute right-0 top-12 z-40 w-60 rounded-xl2 border border-line bg-white shadow-pop p-2 animate-in">
-                  <div className="px-3 py-2 border-b border-line mb-1">
-                    <div className="text-sm font-semibold text-ink truncate">{user?.email}</div>
-                    <span className={`inline-flex mt-1 rounded-full px-2 py-0.5 text-[10px] font-semibold ring-1 ring-inset ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-slate-600 ring-slate-200'}`}>{roleLabel}</span>
-                  </div>
-                  <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-3 w-full rounded-lg px-3 py-2 text-sm font-medium text-ink-soft hover:bg-slate-50">
-                    <IconLogout className="text-ink-faint" /> Sign out
-                  </button>
+    <div className="h-screen flex flex-col overflow-hidden bg-canvas">
+      {/* ── Shell bar: the console's fixed chrome ───────────────────────── */}
+      <header className="h-12 shrink-0 bg-shell text-white flex items-center gap-2.5 px-2.5 sm:px-3.5 z-40">
+        <button onClick={() => setMobileOpen(true)} className="md:hidden grid place-items-center h-8 w-8 rounded text-white/85 hover:bg-white/10"><IconMenu /></button>
+        <button onClick={toggleCollapse} className="hidden md:grid place-items-center h-8 w-8 rounded text-white/85 hover:bg-white/10" title={collapsed ? 'Expand navigation' : 'Collapse navigation'}>
+          <IconChevronLeft className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
+        </button>
+        <Link href="/admin" className="flex items-center gap-2.5 shrink-0">
+          <span className="grid place-items-center h-6 w-6 rounded bg-brand-gradient text-[9.5px] font-bold">TK</span>
+          <span className="hidden sm:block font-semibold text-[14px] tracking-tight">True HR</span>
+        </Link>
+        <span className="hidden md:block h-5 w-px bg-white/20 shrink-0" />
+        <div className="hidden md:block min-w-0 text-[12.5px] text-white/70 truncate">
+          {activeOrg?.name || 'True HR'} · {pageTitle}
+        </div>
+        <div className="ml-auto flex items-center gap-2 relative">
+          <OrgSwitcher />
+          <span className="hidden sm:inline-flex rounded-sm bg-white/10 px-2 py-0.5 text-[10.5px] font-bold text-white/85">{roleLabel}</span>
+          <button onClick={() => setMenuOpen((o) => !o)} title={user?.email}
+            className="grid place-items-center h-7 w-7 rounded-full bg-white/[.18] hover:bg-white/25 text-[10.5px] font-bold transition-colors">{initials}</button>
+          {menuOpen && (
+            <>
+              <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
+              <div className="absolute right-0 top-9 z-40 w-60 rounded-xl2 border border-line bg-white shadow-pop p-1.5 animate-in">
+                <div className="px-2.5 py-2 border-b border-line mb-1">
+                  <div className="text-[12.5px] font-semibold text-ink truncate">{user?.email}</div>
+                  <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
                 </div>
-              </>
-            )}
+                <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
+                  <IconLogout className="text-ink-faint" /> Sign out
+                </button>
+              </div>
+            </>
+          )}
+        </div>
+      </header>
+
+      <div className="flex-1 min-w-0 flex overflow-hidden">
+        {/* Desktop navigation */}
+        <aside className={`shrink-0 hidden md:flex flex-col bg-white border-r border-line overflow-hidden transition-[width] duration-150 ${collapsed ? 'w-[60px]' : 'w-[228px]'}`}>
+          <SidebarBody collapsed={collapsed} />
+        </aside>
+
+        {/* Mobile drawer */}
+        {mobileOpen && <div className="fixed inset-0 z-40 bg-shell/50 md:hidden" onClick={() => setMobileOpen(false)} />}
+        <aside className={`fixed z-50 md:hidden top-0 left-0 h-screen w-[248px] flex flex-col bg-white border-r border-line shadow-pop transition-transform duration-150 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
+          <div className="h-12 flex items-center justify-between px-3 bg-shell text-white shrink-0">
+            <span className="font-semibold text-[13.5px]">True HR</span>
+            <button onClick={() => setMobileOpen(false)} className="text-white/80 hover:text-white"><IconX /></button>
           </div>
-        </header>
-        <main className="flex-1 overflow-y-auto p-4 sm:p-6 lg:p-8">
-          <div className="mx-auto w-full max-w-[1440px] animate-in">
+          <SidebarBody collapsed={false} />
+        </aside>
+
+        {/* Work area */}
+        <main className="flex-1 overflow-y-auto min-w-0">
+          <div className="mx-auto w-full max-w-[1600px] p-4 sm:p-5 lg:p-6 animate-in">
             {masterElsewhere ? (
               <div className="grid place-items-center py-24"><Spinner className="text-brand-600 h-6 w-6" /></div>
             ) : blocked ? (

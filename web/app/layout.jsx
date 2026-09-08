@@ -1,11 +1,11 @@
 import './globals.css';
-import { Plus_Jakarta_Sans, JetBrains_Mono } from 'next/font/google';
+import { IBM_Plex_Sans, IBM_Plex_Mono } from 'next/font/google';
 import { AuthProvider } from '@/lib/auth.jsx';
 
-// Plus Jakarta Sans — warmer, more distinctive than Inter, across the whole UI.
-// JetBrains Mono — for IDs, codes and money, where tabular data reads best.
-const sans = Plus_Jakarta_Sans({ subsets: ['latin'], variable: '--font-sans', display: 'swap' });
-const mono = JetBrains_Mono({ subsets: ['latin'], weight: ['500', '600'], variable: '--font-mono', display: 'swap' });
+// Enterprise console typography: IBM Plex Sans for UI, Plex Mono for data
+// (IDs, codes, money) where tabular precision matters.
+const sans = IBM_Plex_Sans({ subsets: ['latin'], weight: ['400', '500', '600', '700'], variable: '--font-sans', display: 'swap' });
+const mono = IBM_Plex_Mono({ subsets: ['latin'], weight: ['400', '500', '600'], variable: '--font-mono', display: 'swap' });
 
 export const metadata = {
   title: 'TRUE HR',

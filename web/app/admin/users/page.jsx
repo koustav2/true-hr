@@ -1,4 +1,5 @@
 'use client';
+import Link from 'next/link';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { useAuth } from '@/lib/auth.jsx';
@@ -113,17 +114,29 @@ export default function UsersPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Users &amp; accounts</h1>
-          <p className="text-ink-faint text-sm mt-0.5">
+          <div className="text-[12px] text-ink-faint">Administration › Users &amp; accounts</div>
+          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Users &amp; accounts</h1>
+          <p className="text-ink-faint text-[13px] mt-1">
             Who can sign in, and which role each person holds.
-            {canView('ROLES') && <> Define what a role can open under <b>Roles &amp; permissions</b>.</>}
+            {canView('ROLES') && (
+              <> To choose <b>which sections a role can see</b>, open{' '}
+                <Link href="/admin/roles" className="text-brand-600 font-semibold hover:underline">Roles &amp; permissions</Link>.
+              </>
+            )}
           </p>
         </div>
-        {mayManage && (
-          <Button onClick={() => { setShow((s) => !s); setErr(''); setMsg(''); }}>
-            <IconPlus width={16} height={16} /> Add user
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {canView('ROLES') && (
+            <Button as={Link} href="/admin/roles" variant="outline">
+              <IconShield width={15} height={15} /> Roles &amp; permissions
+            </Button>
+          )}
+          {mayManage && (
+            <Button onClick={() => { setShow((s) => !s); setErr(''); setMsg(''); }}>
+              <IconPlus width={15} height={15} /> Add user
+            </Button>
+          )}
+        </div>
       </div>
 
       {msg && (

@@ -445,14 +445,21 @@ export async function updateEmployee(req, res, next) {
 // so the existing view / email flows pick it up unchanged.
 export async function generateOfferLetter(req, res, next) {
   try {
+    // CTC lives in two places: employees.ctc (annual, captured at hire) and
+    // salary_structures.monthly_ctc (set later from the Payroll screen). Honour
+    // either, otherwise setting salary from Payroll never satisfies this check.
     const e = (await query(
-      `SELECT e.*, d.title AS designation, dep.name AS department
+      `SELECT e.*, d.title AS designation, dep.name AS department,
+              COALESCE(NULLIF(e.ctc, 0), NULLIF(ss.monthly_ctc, 0) * 12) AS effective_ctc
          FROM employees e
          LEFT JOIN designations d ON d.id = e.designation_id
          LEFT JOIN departments dep ON dep.id = e.department_id
+         LEFT JOIN salary_structures ss ON ss.employee_id = e.id
         WHERE e.id=$1`, [req.params.id])).rows[0];
     if (!e) return res.status(404).json({ error: 'Employee not found' });
-    if (!e.ctc) return res.status(400).json({ error: 'Set the CTC first — Annexure A needs it' });
+    if (!e.effective_ctc) {
+      return res.status(400).json({ error: 'Set the CTC or a salary structure first — Annexure A needs it' });
+    }
 
     const stream = new PassThrough();
     const chunks = [];
@@ -460,7 +467,7 @@ export async function generateOfferLetter(req, res, next) {
     const done = new Promise((resolve, reject) => { stream.on('end', resolve); stream.on('error', reject); });
     buildOfferLetterPdf({
       name: `${e.first_name} ${e.last_name}`.trim(), designation: e.designation, department: e.department,
-      joiningDate: e.date_of_joining, ctc: e.ctc, location: null,
+      joiningDate: e.date_of_joining, ctc: e.effective_ctc, location: null,
     }, stream);
     await done;
     const pdf = Buffer.concat(chunks).toString('base64');

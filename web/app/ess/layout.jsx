@@ -3,7 +3,6 @@ import { useEffect } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
-import { Logo } from '@/components/Brand.jsx';
 import { Spinner } from '@/components/ui.jsx';
 import { FEATURES } from '@/lib/flags.js';
 
@@ -56,53 +55,47 @@ export default function EssLayout({ children }) {
   const initials = email.slice(0, 2).toUpperCase() || 'ME';
 
   return (
-    <div className="min-h-screen flex flex-col">
-      {/* Brand banner (scrolls away) */}
-      <div className="relative overflow-hidden text-white"
-        style={{ background: 'linear-gradient(135deg,#0f2557 0%,#1d4ed8 48%,#16a34a 120%)' }}>
-        <div className="absolute -right-24 -top-24 h-72 w-72 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="absolute left-1/3 -bottom-28 h-56 w-56 rounded-full bg-white/10 blur-3xl pointer-events-none" />
-        <div className="relative max-w-6xl mx-auto px-4 py-4 flex items-center justify-between gap-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <Logo light size={32} />
-            <div className="hidden sm:block h-6 w-px bg-white/25" />
-            <span className="hidden sm:block text-sm font-medium text-white/85 tracking-wide">Employee Self-Service</span>
-          </div>
-          <div className="flex items-center gap-2.5 min-w-0">
-            <div className="hidden sm:flex items-center gap-2.5 rounded-full bg-white/10 ring-1 ring-white/20 backdrop-blur pl-1.5 pr-4 py-1.5 min-w-0">
-              <span className="grid place-items-center h-7 w-7 rounded-full bg-white text-brand-700 text-[11px] font-extrabold shrink-0">{initials}</span>
-              <span className="text-xs text-white/90 truncate max-w-[200px]">{email}</span>
-            </div>
-            <button onClick={logout}
-              className="text-xs font-semibold text-white/90 hover:text-white rounded-full ring-1 ring-white/30 hover:ring-white/60 hover:bg-white/10 px-3.5 py-2 transition-all">
-              Log out
-            </button>
-          </div>
+    <div className="min-h-screen flex flex-col bg-canvas">
+      {/* ── Shell bar ─────────────────────────────────────────────────── */}
+      <header className="h-12 shrink-0 bg-shell text-white flex items-center gap-2.5 px-3 sm:px-4 sticky top-0 z-40">
+        <Link href="/ess" className="flex items-center gap-2.5 shrink-0">
+          <span className="grid place-items-center h-6 w-6 rounded bg-brand-gradient text-[9.5px] font-bold">TK</span>
+          <span className="hidden sm:block font-semibold text-[14px] tracking-tight">True HR</span>
+        </Link>
+        <span className="hidden md:block h-5 w-px bg-white/20 shrink-0" />
+        <span className="hidden md:block text-[12.5px] text-white/70 truncate">Employee Self-Service</span>
+        <div className="ml-auto flex items-center gap-2 min-w-0">
+          <span className="hidden sm:block text-[11.5px] text-white/70 truncate max-w-[190px] font-mono">{email}</span>
+          <span className="grid place-items-center h-7 w-7 rounded-full bg-white/[.18] text-[10.5px] font-bold shrink-0">{initials}</span>
+          <button onClick={logout}
+            className="text-[11.5px] font-semibold text-white/85 hover:text-white rounded-sm bg-white/10 hover:bg-white/[.18] px-2.5 py-1.5 transition-colors">
+            Sign out
+          </button>
         </div>
-      </div>
+      </header>
 
-      {/* Sticky glass pill-nav */}
-      <header className="sticky top-0 z-40 border-b border-line/80 bg-white/80 backdrop-blur-xl supports-[backdrop-filter]:bg-white/65">
-        <nav className="max-w-6xl mx-auto px-3 flex gap-1 overflow-x-auto py-2 scrollbar-none">
+      {/* ── Section tabs ──────────────────────────────────────────────── */}
+      <div className="sticky top-12 z-30 border-b border-line bg-white">
+        <nav className="max-w-[1400px] mx-auto px-3 flex gap-1 overflow-x-auto scrollbar-none">
           {NAV.map((n) => {
             const active = isActive(n.href);
             return (
               <Link key={n.href} href={n.href}
-                className={`px-3.5 py-1.5 text-[13px] font-medium whitespace-nowrap rounded-full transition-all duration-150 ease-premium ${
+                className={`px-3 py-2.5 text-[13px] whitespace-nowrap border-b-2 transition-colors duration-100 ${
                   active
-                    ? 'text-white bg-brand-gradient shadow-pop'
-                    : 'text-ink-soft hover:text-ink hover:bg-slate-100'}`}>
+                    ? 'text-brand-600 border-brand-600 font-semibold'
+                    : 'text-ink-faint hover:text-ink border-transparent font-medium'}`}>
                 {n.label}
               </Link>
             );
           })}
         </nav>
-      </header>
+      </div>
 
-      <main className="flex-1 w-full max-w-6xl mx-auto px-4 py-7 animate-in">{children}</main>
+      <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 py-5 animate-in">{children}</main>
 
-      <footer className="border-t border-line/70 py-5 mt-4">
-        <div className="max-w-6xl mx-auto px-4 flex flex-wrap items-center justify-between gap-2 text-xs text-ink-faint">
+      <footer className="border-t border-line bg-white py-4 mt-2">
+        <div className="max-w-[1400px] mx-auto px-4 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-faint">
           <span>© {new Date().getFullYear()} TRUE KIND Foundation · TRUE HR</span>
           <span className="flex gap-4">
             <Link href="/privacy" className="hover:text-ink-soft">Privacy</Link>

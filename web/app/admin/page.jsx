@@ -5,40 +5,22 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
 import { useAuth } from '@/lib/auth.jsx';
 import { can } from '@/lib/permissions.js';
-import { Card, Button, Spinner } from '@/components/ui.jsx';
-import StatusBadge from '@/components/StatusBadge.jsx';
-import { IconPlus, IconUsers, IconReview, IconChevronRight, IconUserPlus, IconClock, IconSupport, IconMoney, IconCheck } from '@/components/icons.jsx';
-
-const AV_GRADS = [
-  'linear-gradient(135deg,#1d4ed8,#12a150)', 'linear-gradient(135deg,#7c3aed,#a855f7)',
-  'linear-gradient(135deg,#0ea5e9,#1d4ed8)', 'linear-gradient(135deg,#12a150,#4ade80)',
-  'linear-gradient(135deg,#d68411,#f59e0b)', 'linear-gradient(135deg,#e0416a,#f472b6)',
-];
-const initials = (n) => (n || '?').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
-const avatarGradient = (n) => { let h = 0; const t = n || ''; for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0; return AV_GRADS[h % AV_GRADS.length]; };
+import { Card, Button, Spinner, Avatar, Badge, StatTile, Empty } from '@/components/ui.jsx';
+import { IconPlus, IconUsers, IconReview, IconChevronRight, IconUserPlus, IconSupport, IconMoney, IconExit, IconFile } from '@/components/icons.jsx';
 
 const PIPELINE = [
-  { key: 'offerSent', label: 'Offer sent', color: '#f59e0b' },
-  { key: 'filling', label: 'Filling details', color: '#0ea5e9' },
-  { key: 'review', label: 'In review', color: '#8b5cf6' },
-  { key: 'active', label: 'Active', color: '#16a34a' },
+  { key: 'offerSent', label: 'Offer sent', color: '#c9700c' },
+  { key: 'filling', label: 'Filling details', color: '#1a70da' },
+  { key: 'review', label: 'In review', color: '#7c3aed' },
+  { key: 'active', label: 'Active', color: '#0e7a3c' },
 ];
 
-function Stat({ Icon, tint, accent, label, value, caption, href }) {
-  const body = (
-    <Card hover className="relative p-5 overflow-hidden h-full">
-      <span className="absolute inset-x-0 top-0 h-[3px]" style={{ background: `linear-gradient(90deg, ${accent}, transparent 85%)` }} />
-      <div className="flex items-start justify-between">
-        <div className={`grid place-items-center h-11 w-11 rounded-xl2 ring-1 ring-inset ${tint}`}><Icon width={19} height={19} /></div>
-        {href && <IconChevronRight width={16} height={16} className="text-ink-faint" />}
-      </div>
-      <div className="text-[32px] leading-none font-bold mt-4 text-ink tracking-tight tabular-nums">{value}</div>
-      <div className="text-[13px] font-medium text-ink-soft mt-1.5">{label}</div>
-      {caption && <div className="text-xs text-ink-faint mt-0.5">{caption}</div>}
-    </Card>
-  );
-  return href ? <Link href={href} className="block h-full">{body}</Link> : body;
-}
+const STATUS_TONE = {
+  ACTIVE: 'ok', OFFER_SENT: 'warn', OFFER_ACCEPTED: 'info',
+  DETAILS_PENDING: 'warn', SENT_BACK: 'warn', DETAILS_SUBMITTED: 'info',
+  HR_REVIEW: 'grape', REJECTED: 'danger', EXITED: 'neutral',
+};
+const pretty = (s) => (s || '').replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
 
 export default function DashboardPage() {
   const { user } = useAuth();
@@ -50,102 +32,126 @@ export default function DashboardPage() {
 
   if (user && !can.hr(user.role)) return <div className="grid place-items-center py-24"><Spinner className="text-brand-600 h-6 w-6" /></div>;
   if (s === null) return <div className="grid place-items-center py-24"><Spinner className="text-brand-600 h-6 w-6" /></div>;
-  if (s === false) return <Card className="p-10 text-center text-ink-faint">Couldn't load dashboard stats.</Card>;
+  if (s === false) return <Card className="p-10 text-center text-ink-faint text-[13px]">Couldn&apos;t load dashboard stats.</Card>;
 
   const pipe = PIPELINE.map((p) => ({ ...p, n: s.pipeline[p.key] || 0 }));
   const pipeTotal = pipe.reduce((a, p) => a + p.n, 0) || 1;
   const inProgress = (s.pipeline.offerSent || 0) + (s.pipeline.filling || 0);
+  const payrollDone = s.payroll.published >= s.payroll.headcount && s.payroll.headcount > 0;
 
   return (
-    <div className="space-y-7">
-      <div className="flex flex-wrap items-center justify-between gap-4">
+    <div className="space-y-5">
+      {/* ── Page header ─────────────────────────────────────────────── */}
+      <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Welcome back</h1>
-          <p className="text-ink-faint text-sm mt-0.5">Here's what's happening across True HR today.</p>
+          <div className="text-[12px] text-ink-faint">Workspace › Overview</div>
+          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Organisation Overview</h1>
+          <p className="text-[13px] text-ink-faint mt-1">Everything moving across the organisation today.</p>
         </div>
-        <Button as={Link} href="/admin/employees/new"><IconPlus width={16} height={16} /> Onboard employee</Button>
+        <Button as={Link} href="/admin/employees/new"><IconPlus width={15} height={15} /> Onboard employee</Button>
       </div>
 
-      {/* Primary metrics */}
-      <div className="grid grid-cols-2 lg:grid-cols-4 gap-4">
-        <Stat Icon={IconUsers} tint="bg-slate-100 text-slate-600 ring-slate-200/70" accent="#94a3b8" label="Total employees" value={s.headcount} caption="across the company" href="/admin/employees" />
-        <Stat Icon={IconReview} tint="bg-violet-50 text-violet-600 ring-violet-200/70" accent="#8b5cf6" label="Awaiting review" value={s.pipeline.review} caption={s.pipeline.review ? 'needs approval' : 'all clear'} href="/admin/review" />
-        <Stat Icon={IconSupport} tint="bg-sky-50 text-sky-600 ring-sky-200/70" accent="#0ea5e9" label="Open tickets" value={s.openTickets} caption="support desk" href="/admin/support" />
-        <Stat Icon={IconMoney} tint="bg-brand-50 text-brand-700 ring-brand-200/70" accent="#2563eb" label={`Payroll · ${s.payroll.monthName}`} value={`${s.payroll.published}/${s.payroll.headcount}`} caption="payslips published" href="/admin/payroll" />
+      {/* ── Launchpad tiles ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
+        <Link href="/admin/employees"><StatTile Icon={IconUsers} label="Headcount" caption="Total employees" value={s.headcount} tone="brand" /></Link>
+        <Link href="/admin/review"><StatTile Icon={IconReview} label="Awaiting review" caption="Onboarding submissions"
+          value={s.pipeline.review} tone={s.pipeline.review ? 'warn' : 'ok'} foot={s.pipeline.review ? 'Needs approval' : 'All clear'} footTone={s.pipeline.review ? 'warn' : 'ok'} /></Link>
+        <Link href="/admin/payroll"><StatTile Icon={IconMoney} label={`Payroll · ${s.payroll.monthName}`} caption="Payslips published"
+          value={s.payroll.published} unit={`/${s.payroll.headcount}`} tone={payrollDone ? 'ok' : 'warn'}
+          foot={payrollDone ? 'Complete' : `${Math.max(0, s.payroll.headcount - s.payroll.published)} pending`} footTone={payrollDone ? 'ok' : 'warn'} /></Link>
+        <Link href="/admin/support"><StatTile Icon={IconSupport} label="Open tickets" caption="Support desk" value={s.openTickets} tone={s.openTickets ? 'brand' : 'ok'} /></Link>
+        <StatTile Icon={IconExit} label="Pending approvals" caption="Leave · OD · Comp-off" value={s.approvals.total}
+          tone={s.approvals.total ? 'warn' : 'ok'} foot={s.approvals.total ? 'Awaiting managers' : 'All clear'} footTone={s.approvals.total ? 'warn' : 'ok'} />
       </div>
 
-      <div className="grid lg:grid-cols-3 gap-6 items-start">
-        {/* Recent employees */}
-        <Card className="lg:col-span-2 overflow-hidden">
-          <div className="flex items-center justify-between px-5 py-4 border-b border-line">
-            <h2 className="font-semibold text-ink">Recent employees</h2>
-            <Link href="/admin/employees" className="inline-flex items-center gap-1 text-sm text-brand-700 font-medium hover:text-brand-800">View all <IconChevronRight width={14} height={14} /></Link>
+      <div className="grid xl:grid-cols-3 gap-4 items-start">
+        {/* ── Recent employees ──────────────────────────────────────── */}
+        <Card className="xl:col-span-2 overflow-hidden">
+          <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+            <span className="text-[13.5px] font-semibold text-ink">Recent employees</span>
+            <span className="text-[11.5px] text-ink-faint">{(s.recentEmployees || []).length} of {s.headcount}</span>
+            <Link href="/admin/employees" className="ml-auto text-[12.5px] font-semibold text-brand-600 hover:underline">View all</Link>
           </div>
           {(!s.recentEmployees || s.recentEmployees.length === 0) ? (
-            <div className="p-12 text-center">
-              <div className="mx-auto mb-3 grid place-items-center h-11 w-11 rounded-full bg-brand-50 text-brand-700"><IconUserPlus width={20} height={20} /></div>
-              <div className="font-medium text-ink">No employees yet</div>
-              <div className="text-sm text-ink-faint mt-0.5 mb-4">Onboard your first employee to get started.</div>
-              <Button as={Link} href="/admin/employees/new" variant="soft"><IconPlus width={15} height={15} /> Onboard employee</Button>
-            </div>
+            <Empty title="No employees yet" subtitle="Onboard your first employee to get started." icon={<IconUserPlus width={19} height={19} />} />
           ) : (
-            <ul className="divide-y divide-line">
-              {s.recentEmployees.map((r) => (
-                <li key={r.id} className="flex items-center gap-4 px-5 py-3.5 hover:bg-slate-50/70 transition-colors">
-                  <div className="grid place-items-center h-10 w-10 rounded-xl2 text-white text-xs font-bold shadow-soft shrink-0" style={{ backgroundImage: avatarGradient(r.name) }}>
-                    {initials(r.name)}
-                  </div>
-                  <div className="min-w-0 flex-1">
-                    <Link href={`/admin/employees/${r.id}`} className="font-medium text-ink hover:text-brand-700">{r.name}</Link>
-                    <div className="text-xs text-ink-faint truncate">{r.designation || '—'} · {r.email}</div>
-                  </div>
-                  <StatusBadge status={r.status} />
-                </li>
-              ))}
-            </ul>
+            <div className="overflow-x-auto">
+              <table className="w-full">
+                <thead><tr><th className="text-left px-4">Employee</th><th className="text-left px-4">Designation</th><th className="text-left px-4">Status</th></tr></thead>
+                <tbody className="divide-y divide-line">
+                  {s.recentEmployees.map((r) => (
+                    <tr key={r.id}>
+                      <td className="px-4">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Avatar name={r.name} size={28} />
+                          <span className="min-w-0">
+                            <Link href={`/admin/employees/${r.id}`} className="block font-semibold text-ink hover:text-brand-600 text-[13px]">{r.name}</Link>
+                            <span className="block text-[11px] text-ink-faint font-mono truncate">{r.email}</span>
+                          </span>
+                        </div>
+                      </td>
+                      <td className="px-4 text-ink-soft">{r.designation || '—'}</td>
+                      <td className="px-4"><Badge tone={STATUS_TONE[r.status] || 'neutral'} dot>{pretty(r.status)}</Badge></td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
         </Card>
 
-        {/* Right rail */}
-        <div className="space-y-6">
-          <Card className="p-5">
-            <h2 className="font-semibold text-ink">Onboarding pipeline</h2>
-            <p className="text-xs text-ink-faint mt-0.5 mb-4">{inProgress + s.pipeline.review} in flight · {s.pipeline.active} active</p>
-            <div className="flex h-2.5 w-full overflow-hidden rounded-full bg-slate-100">
-              {pipe.map((p) => p.n > 0 && <div key={p.key} style={{ width: `${(p.n / pipeTotal) * 100}%`, background: p.color }} />)}
+        {/* ── Right rail ────────────────────────────────────────────── */}
+        <div className="space-y-4">
+          <Card>
+            <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+              <span className="text-[13.5px] font-semibold text-ink">Onboarding pipeline</span>
+              <span className="ml-auto text-[11.5px] text-ink-faint">{inProgress + s.pipeline.review} in flight</span>
             </div>
-            <ul className="mt-4 space-y-2.5">
-              {pipe.map((p) => (
-                <li key={p.key} className="flex items-center justify-between text-sm">
-                  <span className="flex items-center gap-2 text-ink-soft"><span className="h-2.5 w-2.5 rounded-full" style={{ background: p.color }} />{p.label}</span>
-                  <span className="font-semibold text-ink tabular-nums">{p.n}</span>
-                </li>
-              ))}
-            </ul>
+            <div className="p-4">
+              <div className="flex h-2 w-full overflow-hidden rounded-sm bg-slate-200">
+                {pipe.map((p) => p.n > 0 && <div key={p.key} style={{ width: `${(p.n / pipeTotal) * 100}%`, background: p.color }} />)}
+              </div>
+              <ul className="mt-3.5 space-y-2">
+                {pipe.map((p) => (
+                  <li key={p.key} className="flex items-center justify-between text-[13px]">
+                    <span className="flex items-center gap-2 text-ink-soft"><span className="h-2 w-2 rounded-sm" style={{ background: p.color }} />{p.label}</span>
+                    <span className="font-semibold text-ink tabular-nums">{p.n}</span>
+                  </li>
+                ))}
+              </ul>
+            </div>
           </Card>
 
-          <Card className="p-5">
-            <div className="flex items-center justify-between mb-3">
-              <h2 className="font-semibold text-ink">Pending approvals</h2>
-              <span className="rounded-full bg-amber-100 text-amber-700 text-xs font-semibold px-2 py-0.5">{s.approvals.total}</span>
+          <Card>
+            <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+              <span className="text-[13.5px] font-semibold text-ink">Pending approvals</span>
+              <span className="ml-auto"><Badge tone={s.approvals.total ? 'warn' : 'neutral'}>{s.approvals.total}</Badge></span>
             </div>
-            <ul className="space-y-2.5 text-sm">
-              {[['Leave', s.approvals.leave], ['On-duty', s.approvals.od], ['Miss-punch', s.approvals.missPunch], ['Comp-off', s.approvals.compOff]].map(([l, n]) => (
-                <li key={l} className="flex items-center justify-between">
+            <ul className="divide-y divide-line">
+              {[['Leave requests', s.approvals.leave], ['On-duty', s.approvals.od], ['Miss-punch', s.approvals.missPunch], ['Comp-off', s.approvals.compOff]].map(([l, n]) => (
+                <li key={l} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
                   <span className="text-ink-soft">{l}</span>
-                  <span className="font-semibold text-ink tabular-nums">{n}</span>
+                  <span className={`font-semibold tabular-nums ${n ? 'text-ink' : 'text-ink-faint'}`}>{n}</span>
                 </li>
               ))}
             </ul>
-            <p className="text-xs text-ink-faint mt-3">Managers action these in the employee app.</p>
+            <p className="text-[11.5px] text-ink-faint px-4 py-2.5 border-t border-line">Managers action these in the employee app.</p>
           </Card>
 
-          <Card className="p-5">
-            <h2 className="font-semibold text-ink mb-3">Quick actions</h2>
-            <div className="space-y-2">
-              <Button as={Link} href="/admin/employees/new" className="w-full justify-start"><IconUserPlus width={16} height={16} /> Onboard employee</Button>
-              <Button as={Link} href="/admin/review" variant="outline" className="w-full justify-between">Review queue <span className="inline-flex items-center gap-2">{s.pipeline.review > 0 && <span className="rounded-full bg-violet-100 text-violet-700 text-xs font-semibold px-2 py-0.5">{s.pipeline.review}</span>}<IconChevronRight width={14} height={14} /></span></Button>
-              <Button as={Link} href="/admin/payroll" variant="outline" className="w-full justify-between">Run payroll <IconChevronRight width={14} height={14} /></Button>
+          <Card>
+            <div className="px-4 py-2.5 border-b border-line bg-canvas"><span className="text-[13.5px] font-semibold text-ink">Quick actions</span></div>
+            <div className="p-3 grid grid-cols-1 gap-2">
+              <Button as={Link} href="/admin/employees/new" className="w-full justify-start"><IconUserPlus width={15} height={15} /> Onboard employee</Button>
+              <Button as={Link} href="/admin/review" variant="outline" className="w-full justify-between">
+                <span className="inline-flex items-center gap-2"><IconReview width={15} height={15} /> Review queue</span>
+                <span className="inline-flex items-center gap-2">{s.pipeline.review > 0 && <Badge tone="grape">{s.pipeline.review}</Badge>}<IconChevronRight width={13} height={13} /></span>
+              </Button>
+              <Button as={Link} href="/admin/payroll" variant="outline" className="w-full justify-between">
+                <span className="inline-flex items-center gap-2"><IconMoney width={15} height={15} /> Run payroll</span><IconChevronRight width={13} height={13} />
+              </Button>
+              <Button as={Link} href="/admin/letters" variant="outline" className="w-full justify-between">
+                <span className="inline-flex items-center gap-2"><IconFile width={15} height={15} /> Issue letter</span><IconChevronRight width={13} height={13} />
+              </Button>
             </div>
           </Card>
         </div>

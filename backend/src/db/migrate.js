@@ -1,6 +1,7 @@
 import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
+import { SELLABLE_MODULES } from '../config/modules.js';
 import { pool } from './pool.js';
 import { migrateTenancy } from './tenancyMigration.js';
 
@@ -48,6 +49,19 @@ async function main() {
   await pool.query(`DELETE FROM org_role_modules WHERE module_key='USERS'
     AND role_id IN (SELECT id FROM org_roles WHERE key = 'HR_ADMIN')`);
   console.log('[migrate] user creation restricted away from HR admin');
+
+  // Subscription entitlements: every existing organisation keeps everything it
+  // has today. Without this backfill the new gate in hasModule() would read an
+  // empty set — it fails open on zero rows, but an explicit grant is clearer
+  // and lets the Master start revoking from a known-good baseline.
+  await pool.query(
+    `INSERT INTO organisation_modules (organisation_id, module_key, enabled)
+     SELECT o.id, m.key, true
+       FROM organisations o
+       CROSS JOIN (SELECT unnest($1::text[]) AS key) m
+     ON CONFLICT (organisation_id, module_key) DO NOTHING`,
+    [SELLABLE_MODULES]);
+  console.log('[migrate] organisation module entitlements backfilled');
 
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {

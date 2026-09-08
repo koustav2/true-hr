@@ -1,6 +1,6 @@
 import { verifyToken } from '../utils/jwt.js';
 import { query } from '../db/pool.js';
-import { PLATFORM_ONLY } from '../config/modules.js';
+import { PLATFORM_ONLY, GRACE_MODULES } from '../config/modules.js';
 
 // ============================================================================
 // Authentication, organisation scoping and module permissions.
@@ -45,6 +45,34 @@ async function loadContext(userId) {
     ? (acc.active_organisation_id || acc.organisation_id)
     : acc.organisation_id;
 
+  // ── Subscription entitlement ────────────────────────────────────────────
+  // What the organisation has bought. A role can never grant beyond this.
+  // Fail OPEN when an organisation has no rows at all: that means the backfill
+  // migration has not run yet, and a tenant entitled to nothing is nonsense.
+  let orgModules = null;
+  let subscription = null;
+  if (orgId) {
+    const org = (await query(
+      `SELECT plan, subscription_status, subscription_expires_at
+         FROM organisations WHERE id = $1`, [orgId])).rows[0];
+    if (org) {
+      const expired = org.subscription_status === 'EXPIRED'
+        || (org.subscription_expires_at && new Date(org.subscription_expires_at) < new Date(new Date().toDateString()));
+      subscription = {
+        plan: org.plan, status: expired ? 'EXPIRED' : org.subscription_status,
+        expiresAt: org.subscription_expires_at, expired: !!expired,
+      };
+      if (expired) {
+        orgModules = new Set(GRACE_MODULES);
+      } else {
+        const rows = (await query(
+          `SELECT module_key FROM organisation_modules
+            WHERE organisation_id = $1 AND enabled = true`, [orgId])).rows;
+        orgModules = rows.length ? new Set(rows.map((r) => r.module_key)) : null;
+      }
+    }
+  }
+
   const perms = new Map();
   if (acc.org_role_id) {
     const rows = (await query(
@@ -70,6 +98,9 @@ async function loadContext(userId) {
     // Per-company admins are pinned to one company; NULL = whole organisation.
     companyId: acc.company_id || null,
     isPlatformAdmin: acc.is_platform_admin,
+    // NULL = unrestricted (no entitlement rows yet); otherwise the sold set.
+    orgModules,
+    subscription,
     perms,
   };
 }
@@ -136,6 +167,8 @@ export function hasModule(ctx, moduleKey, level = 'view') {
   if (ctx.isPlatformAdmin) return true;
   // Platform-only modules are never reachable by an org-scoped role.
   if (PLATFORM_ONLY.includes(moduleKey)) return false;
+  // The organisation must be entitled to it (subscription), before any role grant.
+  if (ctx.orgModules && !ctx.orgModules.has(moduleKey)) return false;
   const p = ctx.perms.get(moduleKey);
   if (!p) return false;
   return level === 'manage' ? p.manage : p.view;

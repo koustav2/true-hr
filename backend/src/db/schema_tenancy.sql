@@ -146,3 +146,22 @@ CREATE INDEX IF NOT EXISTS idx_companies_org ON companies (organisation_id);
 -- or two companies would hand out the same employee ID.
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_company_prefix_per_org
   ON companies (organisation_id, upper(code_prefix));
+
+-- ── 8. Per-organisation module entitlements (subscription) ─────────────────
+-- A second, higher gate above the role matrix. The Master (platform owner)
+-- decides which modules an organisation has bought; a Super Admin's role
+-- matrix can only grant from within that set. Effective access is therefore
+-- `organisation entitlement ∩ role grant`.
+ALTER TABLE organisations ADD COLUMN IF NOT EXISTS plan                    TEXT NOT NULL DEFAULT 'ENTERPRISE';
+ALTER TABLE organisations ADD COLUMN IF NOT EXISTS subscription_status     TEXT NOT NULL DEFAULT 'ACTIVE';
+ALTER TABLE organisations ADD COLUMN IF NOT EXISTS subscription_expires_at DATE;
+ALTER TABLE organisations ADD COLUMN IF NOT EXISTS subscription_note       TEXT;
+
+CREATE TABLE IF NOT EXISTS organisation_modules (
+  organisation_id BIGINT      NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  module_key      TEXT        NOT NULL,
+  enabled         BOOLEAN     NOT NULL DEFAULT TRUE,
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  PRIMARY KEY (organisation_id, module_key)
+);
+CREATE INDEX IF NOT EXISTS idx_org_modules_org ON organisation_modules (organisation_id);

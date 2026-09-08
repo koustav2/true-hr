@@ -327,6 +327,9 @@ r.post('/admin/organisations', authenticate, requirePlatformAdmin, org.create);
 r.post('/admin/organisations/switch', authenticate, requirePlatformAdmin, org.switchOrg);
 r.patch('/admin/organisations/:id', authenticate, requirePlatformAdmin, org.update);
 r.post('/admin/organisations/:id/status', authenticate, requirePlatformAdmin, org.setStatus);
+// Module entitlements are sold per organisation by the platform owner only.
+r.get('/admin/organisations/:id/subscription', authenticate, requirePlatformAdmin, org.getSubscription);
+r.put('/admin/organisations/:id/subscription', authenticate, requirePlatformAdmin, org.setSubscription);
 
 // --- Payroll policy for the current organisation (attendance rules) ---
 r.get('/admin/payroll-settings', authenticate, requireOrg, requireModule('PAYROLL'), org.getPayrollSettings);

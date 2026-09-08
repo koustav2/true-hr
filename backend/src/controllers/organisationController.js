@@ -3,6 +3,7 @@ import { audit } from '../utils/audit.js';
 import { hashPassword } from '../utils/password.js';
 import { invalidateAccountStatus, invalidateAllContexts } from '../middleware/auth.js';
 import { ensureSystemRoles } from '../db/tenancyMigration.js';
+import { MODULES, SELLABLE_MODULES, PLANS, planModules, isPlan, isModule, SUBSCRIPTION_STATUSES } from '../config/modules.js';
 import { pool } from '../db/pool.js';
 
 // ============================================================================
@@ -26,6 +27,10 @@ const shape = (r) => ({
   createdAt: r.created_at,
   employees: r.employees != null ? Number(r.employees) : undefined,
   users: r.users != null ? Number(r.users) : undefined,
+  plan: r.plan,
+  subscriptionStatus: r.subscription_status,
+  subscriptionExpiresAt: r.subscription_expires_at,
+  moduleCount: r.module_count != null ? Number(r.module_count) : undefined,
 });
 
 // GET /admin/organisations — every organisation this owner manages, with counts.
@@ -36,7 +41,9 @@ export async function list(req, res, next) {
               (SELECT count(*) FROM employees e
                 WHERE e.organisation_id = o.id
                   AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees,
-              (SELECT count(*) FROM user_accounts u WHERE u.organisation_id = o.id) AS users
+              (SELECT count(*) FROM user_accounts u WHERE u.organisation_id = o.id) AS users,
+              (SELECT count(*) FROM organisation_modules om
+                WHERE om.organisation_id = o.id AND om.enabled) AS module_count
          FROM organisations o
         ORDER BY o.id`);
     res.json({ activeOrganisationId: req.orgId, organisations: rows.map(shape) });
@@ -72,6 +79,7 @@ export async function create(req, res, next) {
     if (!name) return res.status(400).json({ error: 'Organisation name is required' });
     if (name.length > 120) return res.status(400).json({ error: 'Organisation name is too long' });
 
+    const planKey = isPlan(b.plan) && b.plan !== 'CUSTOM' ? b.plan : 'ENTERPRISE';
     const code = String(b.code || '').trim().toUpperCase() || null;
     if (code && !/^[A-Z0-9_-]{2,16}$/.test(code)) {
       return res.status(400).json({ error: 'Code must be 2–16 letters, digits, hyphen or underscore' });
@@ -101,6 +109,7 @@ export async function create(req, res, next) {
          VALUES ($1,$2,$3,'ACTIVE',$4,$5,$6,$7) RETURNING *`,
         [name, b.legalName || name, code, req.user.id,
          b.contactEmail || null, b.contactPhone || null, b.address || null])).rows[0];
+      await c.query(`UPDATE organisations SET plan = $2 WHERE id = $1`, [org.id, planKey]);
 
       // Employees hang off a company, so every organisation needs at least one.
       await c.query(
@@ -118,6 +127,9 @@ export async function create(req, res, next) {
     // System roles use their own idempotent helper (outside the tx is fine —
     // it is safe to re-run and migrate.js would heal it on the next deploy).
     await ensureSystemRoles(pool, result.id);
+
+    // Seed the subscription entitlement from the chosen plan (default: everything).
+    await setOrgModules(result.id, planModules(planKey) || SELLABLE_MODULES);
 
     let createdAdmin = null;
     if (admin) {
@@ -258,5 +270,105 @@ export async function setPayrollSettings(req, res, next) {
        (days && days.length ? days : [0]).join(',')]);
     await audit(req.user.id, 'SET_PAYROLL_SETTINGS', 'organisation', req.orgId, b);
     res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// ── Subscription / module entitlements (platform owner only) ────────────────
+// The Master sells modules per organisation. This is a *higher* gate than the
+// role matrix: a Super Admin can only grant what the organisation is entitled
+// to, so revoking here removes the section for everyone in that tenant.
+
+/** Replace an organisation's entitlement set. */
+async function setOrgModules(organisationId, keys) {
+  const wanted = [...new Set((keys || []).filter((k) => isModule(k) && SELLABLE_MODULES.includes(k)))];
+  await tx(async (c) => {
+    await c.query(`DELETE FROM organisation_modules WHERE organisation_id = $1`, [organisationId]);
+    for (const k of wanted) {
+      await c.query(
+        `INSERT INTO organisation_modules (organisation_id, module_key, enabled)
+         VALUES ($1,$2,true)
+         ON CONFLICT (organisation_id, module_key) DO UPDATE SET enabled = true, updated_at = now()`,
+        [organisationId, k]);
+    }
+  });
+  return wanted;
+}
+
+// GET /admin/organisations/:id/subscription
+export async function getSubscription(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const org = (await query(
+      `SELECT id, name, code, plan, subscription_status, subscription_expires_at, subscription_note
+         FROM organisations WHERE id = $1`, [id])).rows[0];
+    if (!org) return res.status(404).json({ error: 'Organisation not found' });
+
+    const enabled = new Set((await query(
+      `SELECT module_key FROM organisation_modules
+        WHERE organisation_id = $1 AND enabled = true`, [id])).rows.map((r) => r.module_key));
+
+    res.json({
+      organisation: { id: Number(org.id), name: org.name, code: org.code },
+      plan: org.plan,
+      status: org.subscription_status,
+      expiresAt: org.subscription_expires_at,
+      note: org.subscription_note,
+      plans: PLANS.map((p) => ({ key: p.key, label: p.label, description: p.description })),
+      statuses: SUBSCRIPTION_STATUSES,
+      // Every sellable module, flagged with whether this tenant has bought it.
+      modules: MODULES.filter((m) => SELLABLE_MODULES.includes(m.key)).map((m) => ({
+        key: m.key, label: m.label, group: m.group, note: m.note || null,
+        sensitive: !!m.sensitive, enabled: enabled.has(m.key),
+      })),
+    });
+  } catch (e) { next(e); }
+}
+
+// PUT /admin/organisations/:id/subscription
+// { plan?, status?, expiresAt?, note?, modules?: [KEY] }
+// Passing `modules` hand-picks the set and flips the plan to CUSTOM unless the
+// caller also names a plan explicitly.
+export async function setSubscription(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const b = req.body || {};
+    const org = (await query(`SELECT id, name, plan FROM organisations WHERE id = $1`, [id])).rows[0];
+    if (!org) return res.status(404).json({ error: 'Organisation not found' });
+
+    if (b.status !== undefined && !SUBSCRIPTION_STATUSES.includes(b.status)) {
+      return res.status(400).json({ error: `status must be one of ${SUBSCRIPTION_STATUSES.join(', ')}` });
+    }
+    if (b.plan !== undefined && !isPlan(b.plan)) {
+      return res.status(400).json({ error: 'Unknown plan' });
+    }
+    if (b.modules !== undefined && !Array.isArray(b.modules)) {
+      return res.status(400).json({ error: 'modules must be an array of module keys' });
+    }
+
+    let plan = b.plan ?? org.plan;
+    let applied = null;
+    if (Array.isArray(b.modules)) {
+      applied = await setOrgModules(id, b.modules);
+      if (b.plan === undefined) plan = 'CUSTOM';
+    } else if (b.plan !== undefined && b.plan !== 'CUSTOM') {
+      applied = await setOrgModules(id, planModules(b.plan) || []);
+    }
+
+    await query(
+      `UPDATE organisations
+          SET plan = $2,
+              subscription_status = COALESCE($3, subscription_status),
+              subscription_expires_at = CASE WHEN $4::text IS NULL THEN subscription_expires_at
+                                             WHEN $4 = '' THEN NULL ELSE $4::date END,
+              subscription_note = COALESCE($5, subscription_note)
+        WHERE id = $1`,
+      [id, plan, b.status ?? null, b.expiresAt === undefined ? null : String(b.expiresAt), b.note ?? null]);
+
+    // Access is cached per account — every user in this tenant must be re-read.
+    invalidateAllContexts();
+    await audit(req.user.id, 'SET_ORGANISATION_SUBSCRIPTION', 'organisation', id,
+      { plan, status: b.status, expiresAt: b.expiresAt, modules: applied ? applied.length : undefined });
+
+    res.json({ ok: true, plan, modules: applied });
   } catch (e) { next(e); }
 }

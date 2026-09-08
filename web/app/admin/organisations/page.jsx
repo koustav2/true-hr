@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Button, Card, Field, Input, Modal, Spinner, Empty, ConfirmClick, Avatar, Badge, StatTile } from '@/components/ui.jsx';
+import { Button, Card, Field, Input, Select, Modal, Spinner, Empty, ConfirmClick, Avatar, Badge, StatTile } from '@/components/ui.jsx';
 import { IconBriefcase, IconPlus, IconCheck, IconUsers } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -25,6 +25,36 @@ export default function OrganisationsPage() {
     name: '', code: '', legalName: '', contactEmail: '', contactPhone: '',
     withAdmin: true, adminEmail: '', adminPassword: '',
   });
+
+  // ── Subscription (module entitlements sold per organisation) ──────────
+  const [subOrg, setSubOrg] = useState(null);   // the org being edited
+  const [sub, setSub] = useState(null);         // its subscription payload
+  const [subSaving, setSubSaving] = useState(false);
+
+  async function openSubscription(o) {
+    setSubOrg(o); setSub(null); setError('');
+    try { setSub(await api.get(`/admin/organisations/${o.id}/subscription`)); }
+    catch (e) { setError(e.message); setSubOrg(null); }
+  }
+  function toggleModule(key) {
+    setSub((p) => ({ ...p, plan: 'CUSTOM', modules: p.modules.map((m) => (m.key === key ? { ...m, enabled: !m.enabled } : m)) }));
+  }
+  function applyPlan(planKey) {
+    setSub((p) => ({ ...p, plan: planKey, _planPicked: planKey }));
+  }
+  async function saveSubscription() {
+    setSubSaving(true); setError('');
+    try {
+      const body = { status: sub.status, expiresAt: sub.expiresAt || '', note: sub.note || null };
+      // A named plan replaces the set server-side; CUSTOM sends the ticked list.
+      if (sub._planPicked && sub._planPicked !== 'CUSTOM') body.plan = sub._planPicked;
+      else body.modules = sub.modules.filter((m) => m.enabled).map((m) => m.key);
+      const r = await api.put(`/admin/organisations/${subOrg.id}/subscription`, body);
+      setNotice(`Subscription updated for ${subOrg.name} — plan ${r.plan}${r.modules ? `, ${r.modules.length} modules` : ''}.`);
+      setSubOrg(null); setSub(null); await load();
+    } catch (e) { setError(e.message); }
+    finally { setSubSaving(false); }
+  }
 
   async function load() {
     try { setData(await api.get('/admin/organisations')); setError(''); }
@@ -125,6 +155,7 @@ export default function OrganisationsPage() {
                   <th className="text-left px-4">Organisation</th>
                   <th className="text-left px-4">Code</th>
                   <th className="text-left px-4">Status</th>
+                  <th className="text-left px-4">Plan</th>
                   <th className="text-right px-4">Employees</th>
                   <th className="text-right px-4">Logins</th>
                   <th className="text-left px-4">Contact</th>
@@ -150,6 +181,16 @@ export default function OrganisationsPage() {
                       <td className="px-4">{o.code ? <Badge tone="info">{o.code}</Badge> : <span className="text-ink-faint">—</span>}</td>
                       <td className="px-4">
                         <Badge tone={suspended ? 'danger' : 'ok'} dot>{suspended ? 'Suspended' : 'Active'}</Badge>
+                      </td>
+                      <td className="px-4">
+                        <button onClick={() => openSubscription(o)} className="text-left group">
+                          <Badge tone={o.subscriptionStatus === 'EXPIRED' ? 'danger' : o.subscriptionStatus === 'TRIAL' ? 'warn' : 'brand'}>
+                            {o.plan || 'ENTERPRISE'}
+                          </Badge>
+                          <span className="block text-[10.5px] text-ink-faint mt-0.5 group-hover:text-brand-600">
+                            {o.moduleCount ?? '—'} modules · manage
+                          </span>
+                        </button>
                       </td>
                       <td className="px-4 text-right tabular-nums font-semibold text-ink">{o.employees ?? 0}</td>
                       <td className="px-4 text-right tabular-nums font-semibold text-ink">{o.users ?? 0}</td>
@@ -180,6 +221,107 @@ export default function OrganisationsPage() {
           </div>
         )}
       </Card>
+
+      {/* ── Subscription: which modules this tenant has bought ───────────── */}
+      <Modal
+        open={!!subOrg}
+        onClose={() => { setSubOrg(null); setSub(null); }}
+        size="xl"
+        title={subOrg ? `${subOrg.name} — subscription & modules` : ''}
+        actions={(
+          <>
+            <Button variant="ghost" onClick={() => { setSubOrg(null); setSub(null); }}>Cancel</Button>
+            <Button onClick={saveSubscription} disabled={!sub || subSaving}>
+              {subSaving ? <Spinner className="h-4 w-4" /> : 'Save subscription'}
+            </Button>
+          </>
+        )}
+      >
+        {!sub ? (
+          <div className="grid place-items-center py-12"><Spinner className="h-5 w-5 text-brand-600" /></div>
+        ) : (
+          <div className="space-y-5">
+            <p className="text-[12.5px] text-ink-faint -mt-1">
+              This is the outer gate: a Super Admin&rsquo;s Roles &amp; Permissions can only grant what the
+              organisation is entitled to here. Revoking a module removes that section for everyone in this tenant.
+            </p>
+
+            {/* Plan presets */}
+            <section className="space-y-2.5">
+              <div className="text-[10.5px] font-bold uppercase tracking-[.1em] text-ink-faint">Plan</div>
+              <div className="grid sm:grid-cols-2 lg:grid-cols-4 gap-2">
+                {(sub.plans || []).map((pl) => {
+                  const on = (sub._planPicked || sub.plan) === pl.key;
+                  return (
+                    <button key={pl.key} type="button" onClick={() => applyPlan(pl.key)}
+                      className={`text-left rounded border p-3 transition-colors ${on ? 'border-brand-600 bg-brand-50' : 'border-line bg-white hover:border-slate-400'}`}>
+                      <div className={`text-[13px] font-semibold ${on ? 'text-brand-700' : 'text-ink'}`}>{pl.label}</div>
+                      <div className="text-[11px] text-ink-faint mt-0.5 leading-snug">{pl.description}</div>
+                    </button>
+                  );
+                })}
+              </div>
+              <p className="text-[11.5px] text-ink-faint">
+                Picking a plan replaces the module set. Ticking modules by hand switches the plan to <b>Custom</b>.
+              </p>
+            </section>
+
+            {/* Billing state */}
+            <section className="grid sm:grid-cols-3 gap-4">
+              <Field label="Status">
+                <Select value={sub.status || 'ACTIVE'} onChange={(e) => setSub({ ...sub, status: e.target.value })}>
+                  {(sub.statuses || []).map((st) => <option key={st} value={st}>{st}</option>)}
+                </Select>
+              </Field>
+              <Field label="Expires on" hint="Blank = no end date">
+                <Input type="date" value={(sub.expiresAt || '').slice(0, 10)}
+                  onChange={(e) => setSub({ ...sub, expiresAt: e.target.value })} />
+              </Field>
+              <Field label="Note" hint="Internal, e.g. PO or contract ref">
+                <Input value={sub.note || ''} onChange={(e) => setSub({ ...sub, note: e.target.value })} />
+              </Field>
+            </section>
+            {sub.status === 'EXPIRED' && (
+              <div className="rounded bg-crit-bg text-crit border border-crit/20 px-3.5 py-2.5 text-[12.5px]">
+                While expired, this tenant keeps only the Dashboard — its people can sign in and see why, but every
+                other section is closed.
+              </div>
+            )}
+
+            {/* Module entitlements, grouped */}
+            <section className="space-y-3">
+              <div className="flex items-center gap-2">
+                <div className="text-[10.5px] font-bold uppercase tracking-[.1em] text-ink-faint">Modules included</div>
+                <span className="text-[11.5px] text-ink-faint">
+                  {sub.modules.filter((m) => m.enabled).length} of {sub.modules.length}
+                </span>
+              </div>
+              {Object.entries((sub.modules || []).reduce((acc, m) => {
+                (acc[m.group] = acc[m.group] || []).push(m); return acc;
+              }, {})).map(([group, items]) => (
+                <div key={group}>
+                  <div className="text-[10.5px] font-bold uppercase tracking-[.1em] text-ink-faint mb-1.5">{group}</div>
+                  <div className="rounded border border-line divide-y divide-line overflow-hidden">
+                    {items.map((m) => (
+                      <label key={m.key} className="flex items-center gap-3 px-3.5 py-2 bg-white cursor-pointer hover:bg-canvas">
+                        <input type="checkbox" checked={!!m.enabled} onChange={() => toggleModule(m.key)}
+                          className="h-4 w-4 accent-brand-600 cursor-pointer shrink-0" />
+                        <span className="min-w-0 flex-1">
+                          <span className="block text-[13px] font-medium text-ink">
+                            {m.label}
+                            {m.sensitive && <span className="ml-2 text-[10px] font-bold text-crit">SENSITIVE</span>}
+                          </span>
+                          {m.note && <span className="block text-[11px] text-ink-faint">{m.note}</span>}
+                        </span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </section>
+          </div>
+        )}
+      </Modal>
 
       {/* ── Create ────────────────────────────────────────────────────────── */}
       <Modal

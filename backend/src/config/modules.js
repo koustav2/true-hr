@@ -176,3 +176,44 @@ export function expandRoleModules(def) {
   for (const k of manage) if (isModule(k)) rows.set(k, { canView: true, canManage: true });
   return [...rows.entries()].map(([moduleKey, v]) => ({ moduleKey, ...v }));
 }
+
+// ── Subscription plans (Master-controlled, per organisation) ────────────────
+// The Master sells an organisation a plan; the plan seeds `organisation_modules`.
+// From then on the Master may hand-pick modules (which flips the plan to CUSTOM).
+// A role can never grant a module the organisation is not entitled to.
+
+export const SUBSCRIPTION_STATUSES = ['TRIAL', 'ACTIVE', 'PAST_DUE', 'EXPIRED'];
+
+// While a subscription is EXPIRED the tenant keeps only this, so its people can
+// still sign in and see why they are locked out rather than hitting dead pages.
+export const GRACE_MODULES = ['DASHBOARD'];
+
+const STARTER = [
+  'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'STRUCTURE',
+  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT',
+];
+const GROWTH = [
+  ...STARTER, 'COMPANIES', 'PAYROLL', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
+  'RESIGNATION', 'TERMINATION', 'ASSETS', 'BANNERS',
+];
+
+export const PLANS = [
+  { key: 'STARTER', label: 'Starter', description: 'Core people records, onboarding and leave.', modules: STARTER },
+  { key: 'GROWTH', label: 'Growth', description: 'Adds payroll, statutory, letters and the exit lifecycle.', modules: GROWTH },
+  { key: 'ENTERPRISE', label: 'Enterprise', description: 'Everything, including NFA finance and performance.', modules: 'all' },
+  { key: 'CUSTOM', label: 'Custom', description: 'Hand-picked modules.', modules: null },
+];
+
+export const isPlan = (k) => PLANS.some((p) => p.key === k);
+
+/** Modules a plan includes. CUSTOM returns null — the caller keeps its own set. */
+export function planModules(planKey) {
+  const p = PLANS.find((x) => x.key === planKey);
+  if (!p) return null;
+  if (p.modules === 'all') return ALL_ORG_MODULES.slice();
+  if (!p.modules) return null;
+  return p.modules.filter((k) => ALL_ORG_MODULES.includes(k));
+}
+
+/** Every module an organisation could ever be sold (platform-only excluded). */
+export const SELLABLE_MODULES = ALL_ORG_MODULES;

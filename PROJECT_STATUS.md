@@ -58,9 +58,26 @@ Presentation only; **no functional or logic changes**. Supersedes the short-live
 - **Seeded `@truehr.example` passwords are committed in `seed.js`** (`Super@12345`, `Admin@12345`, `Hr@12345`, `It@12345`). Rotate or disable the demo accounts now that real tenants exist.
 - **TRUE HR contains real people** — 13 of 24 employees have live `@tkf.co.in`, `@breatheagain.life` and personal Gmail addresses. Never run write tests against it: letters, onboarding, wishes and the scheduler all send real email.
 
-### 6. Open items
+### 6. Subscription — per-organisation module entitlements (`7d22296`)
 
-- **Deploy** — backend *and* web changed, so `--build` both.
+A **second, outer gate above the role matrix**. The Master sells modules per tenant; a Super Admin's Roles & Permissions can only grant from within that set. Effective access is now:
+
+```
+organisation entitlement  ∩  role grant
+```
+
+- **Schema**: `organisation_modules (organisation_id, module_key, enabled)` plus `plan`, `subscription_status`, `subscription_expires_at`, `subscription_note` on `organisations`.
+- **Plans**: `STARTER` (11 modules — people, onboarding, leave, policies, support, users/roles/audit) · `GROWTH` (+ payroll, statutory, investment declarations, F&F, letters, exits, assets, banners, companies) · `ENTERPRISE` (all 28) · `CUSTOM` (hand-picked). Picking a plan replaces the set; ticking modules by hand flips the plan to CUSTOM.
+- **Enforcement**: `loadContext` loads the tenant's entitlement set, and `hasModule()` checks it *before* the role perms — so revoking a module closes that section for everyone in the tenant, at the API as well as the nav. **Fails OPEN on zero rows** so a pre-migration database can never lock itself out; `migrate.js` backfills every existing organisation with the full set as a known-good baseline.
+- **Expiry**: an explicit `EXPIRED` status, or a past `subscription_expires_at`, collapses the tenant to **Dashboard only** — its people can still sign in and see why, instead of hitting dead pages.
+- **API** (platform owner only): `GET`/`PUT /admin/organisations/:id/subscription`. New organisations seed entitlements from the chosen plan. `/me/permissions` now reports the subscription so the portal can explain a missing section as "not in your plan".
+- **Master console**: a **Plan** column (plan chip + module count) opening a subscription editor — plan presets, status, expiry, internal note, and the full module list as grouped checkboxes with SENSITIVE flags.
+
+**Not yet done for this feature:** no billing/invoicing (status and expiry are recorded, not charged), no self-serve upgrade, and the Super Admin's Roles screen does not yet grey out modules the tenant hasn't bought — it just can't grant them (the server refuses).
+
+### 7. Open items
+
+- **Deploy** — backend *and* web changed, so `--build` both. The subscription migration runs automatically on backend boot and backfills all tenants with every module, so nothing changes for existing orgs until the Master revokes something.
 - **Purge `ZZ ESS SANDBOX` (`ZZESS`, org 7)** — leftover test tenant (1 employee, 2 logins). Use the guarded purge script pattern in this doc's history.
 - **Breathe Again (`NIRA`) is SUSPENDED but is still the Master's "working here" org** — switch to TRUE HR, then decide purge vs restore.
 - **Decide whether IT Admin keeps user-creation** — it currently can (accounts are its remit); only HR was restricted.

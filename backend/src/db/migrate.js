@@ -43,6 +43,12 @@ async function main() {
     AND role_id IN (SELECT id FROM org_roles WHERE key IN ('HR_ADMIN','IT_ADMIN'))`);
   console.log('[migrate] companies restricted to super admin / platform owner');
 
+  // Creating logins is a Super Admin / IT Admin concern. Revoke any prior USERS
+  // grant on the system HR role (adoptNewModules only adds, so this removes).
+  await pool.query(`DELETE FROM org_role_modules WHERE module_key='USERS'
+    AND role_id IN (SELECT id FROM org_roles WHERE key = 'HR_ADMIN')`);
+  console.log('[migrate] user creation restricted away from HR admin');
+
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_employees_official_email ON employees (lower(official_email))`);

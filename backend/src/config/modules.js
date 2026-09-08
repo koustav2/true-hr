@@ -98,12 +98,15 @@ export const SYSTEM_ROLES = [
     rank: 10,
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
-      'TERMINATION', 'PAYROLL', 'POLICIES', 'SUPPORT', 'BANNERS', 'USERS',
+      'TERMINATION', 'PAYROLL', 'POLICIES', 'SUPPORT', 'BANNERS',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
     // Companies & organisations are a Super Admin / platform-owner concern only —
     // HR hires into a company via the /meta/companies lookup, not the admin screen.
+    // Creating logins is not HR's job either: only a Super Admin (and IT Admin,
+    // whose whole remit is accounts) may mint HR/IT accounts. A Super Admin can
+    // still grant USERS to HR explicitly from Roles & Permissions.
   },
   {
     key: 'IT_ADMIN',

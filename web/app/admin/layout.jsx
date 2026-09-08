@@ -56,7 +56,7 @@ const ADMINISTRATION = [
 ];
 const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
 // The platform owner (Master) manages only organisations — nothing else shows.
-const MASTER = [{ href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' }];
+const MASTER = [{ href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' }];
 
 const ROLE_BADGE = {
   SUPER_ADMIN: 'bg-grape-50 text-grape-700',
@@ -236,7 +236,7 @@ function AdminShell({ children }) {
     <>
       <div className={`pt-3 flex-1 overflow-y-auto ${collapsed ? 'px-1.5' : 'px-2'}`}>
         {isPlatformAdmin ? (
-          <NavGroup title="Master" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+          <NavGroup title="Platform" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         ) : (
           <>
             <NavGroup title="Workspace" items={WORKSPACE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />

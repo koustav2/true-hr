@@ -2,7 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Button, Card, Field, Input, Modal, Spinner, Empty, ConfirmClick } from '@/components/ui.jsx';
+import { Button, Card, Field, Input, Modal, Spinner, Empty, ConfirmClick, Avatar, Badge, StatTile } from '@/components/ui.jsx';
 import { IconBriefcase, IconPlus, IconCheck, IconUsers } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -69,83 +69,117 @@ export default function OrganisationsPage() {
 
   const activeId = String(data.activeOrganisationId ?? switcher?.activeOrganisationId ?? '');
 
+  const list = data.organisations || [];
+  const nActive = list.filter((o) => o.status === 'ACTIVE').length;
+  const nSuspended = list.length - nActive;
+  const totalEmployees = list.reduce((a, o) => a + (Number(o.employees) || 0), 0);
+
   return (
-    <div className="space-y-6">
+    <div className="space-y-5">
+      {/* ── Page header ─────────────────────────────────────────────── */}
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h2 className="text-xl font-bold text-ink">Organisations</h2>
-          <p className="text-sm text-ink-soft mt-1 max-w-2xl">
-            Each organisation keeps its own people, payroll and roles. You work inside one at a time —
-            switch using the selector at the top of the screen.
+          <div className="text-[12px] text-ink-faint">Platform › Organisations</div>
+          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Organisation Management</h1>
+          <p className="text-[13px] text-ink-faint mt-1 max-w-2xl">
+            Each organisation is an isolated tenant with its own people, payroll and roles. You work inside one at a time.
           </p>
         </div>
-        <Button onClick={() => setCreating(true)} className="shrink-0"><IconPlus /> New organisation</Button>
+        <Button onClick={() => setCreating(true)} className="shrink-0"><IconPlus width={15} height={15} /> New organisation</Button>
       </div>
 
-      {error && <div className="rounded-lg bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 px-4 py-3 text-sm">{error}</div>}
+      {error && <div className="rounded bg-neg-bg text-neg border border-neg/20 px-3.5 py-2.5 text-[13px]">{error}</div>}
       {notice && (
-        <div className="rounded-lg bg-emerald-50 text-emerald-800 ring-1 ring-inset ring-emerald-200 px-4 py-3 text-sm flex items-start gap-2">
+        <div className="rounded bg-pos-bg text-pos border border-pos/20 px-3.5 py-2.5 text-[13px] flex items-start gap-2">
           <IconCheck className="mt-0.5 shrink-0" /><span>{notice}</span>
         </div>
       )}
 
-      <div className="grid gap-4 sm:grid-cols-2 xl:grid-cols-3">
-        {(data.organisations || []).map((o) => {
-          const isActive = String(o.id) === activeId;
-          const suspended = o.status !== 'ACTIVE';
-          return (
-            <Card key={o.id} className={`p-5 ${isActive ? 'ring-2 ring-brand-200' : ''}`}>
-              <div className="flex items-start justify-between gap-3">
-                <div className="min-w-0">
-                  <div className="font-bold text-ink truncate">{o.name}</div>
-                  <div className="text-[11px] text-ink-faint mt-0.5">
-                    {o.code ? `${o.code} · ` : ''}{o.legalName || '—'}
-                  </div>
-                </div>
-                <div className="flex flex-col items-end gap-1 shrink-0">
-                  {isActive && <span className="rounded-full bg-brand-50 text-brand-700 ring-1 ring-inset ring-brand-200 px-2 py-0.5 text-[10px] font-semibold">Working here</span>}
-                  {suspended && <span className="rounded-full bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 px-2 py-0.5 text-[10px] font-semibold">Suspended</span>}
-                </div>
-              </div>
-
-              <div className="mt-4 flex items-center gap-5 text-sm">
-                <div className="flex items-center gap-1.5 text-ink-soft">
-                  <IconUsers className="text-ink-faint" />
-                  <span className="tabular-nums font-semibold text-ink">{o.employees ?? 0}</span> employees
-                </div>
-                <div className="text-ink-soft">
-                  <span className="tabular-nums font-semibold text-ink">{o.users ?? 0}</span> logins
-                </div>
-              </div>
-
-              {(o.contactEmail || o.contactPhone) && (
-                <div className="mt-3 text-[11px] text-ink-faint truncate">
-                  {[o.contactEmail, o.contactPhone].filter(Boolean).join(' · ')}
-                </div>
-              )}
-
-              <div className="mt-4 flex items-center gap-2 border-t border-line pt-3">
-                {!isActive && !suspended && (
-                  <Button size="sm" variant="ghost" onClick={() => switchOrg(o.id)}>Switch to this</Button>
-                )}
-                {suspended ? (
-                  <Button size="sm" variant="ghost" onClick={() => setStatus(o, 'ACTIVE')}>Restore</Button>
-                ) : (
-                  <ConfirmClick onConfirm={() => setStatus(o, 'SUSPENDED')}
-                    confirmLabel="Suspend? Everyone here is signed out." className="text-sm">
-                    Suspend
-                  </ConfirmClick>
-                )}
-              </div>
-            </Card>
-          );
-        })}
-        {(data.organisations || []).length === 0 && (
-          <Card className="p-10 sm:col-span-2 xl:col-span-3">
-            <Empty title="No organisations yet" subtitle="Create the first one to get started." icon={<IconBriefcase />} />
+      {/* ── Launchpad tiles ─────────────────────────────────────────── */}
+      <div className="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-3">
+        <StatTile Icon={IconBriefcase} label="Organisations" caption="Total provisioned" value={list.length} tone="brand" />
+        <StatTile label="Active" caption="Serving users" value={nActive} tone="ok" foot={nActive ? 'Operational' : 'None active'} footTone={nActive ? 'ok' : 'warn'} />
+        <StatTile label="Suspended" caption="Access disabled" value={nSuspended} tone={nSuspended ? 'warn' : 'neutral'} />
+        <StatTile Icon={IconUsers} label="Employees" caption="Across all tenants" value={totalEmployees} tone="brand" />
+        <button onClick={() => setCreating(true)} className="text-left">
+          <Card hover className="p-3.5 min-h-[104px] flex flex-col">
+            <span className="grid place-items-center h-7 w-7 rounded bg-brand-50 text-brand-600"><IconPlus width={15} height={15} /></span>
+            <div className="mt-auto text-[12.5px] font-semibold text-ink-soft">New organisation</div>
           </Card>
-        )}
+        </button>
       </div>
+
+      {/* ── Organisations table ─────────────────────────────────────── */}
+      <Card className="overflow-hidden">
+        <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+          <span className="text-[13.5px] font-semibold text-ink">Organisations</span>
+          <span className="text-[11.5px] text-ink-faint">{list.length} record{list.length === 1 ? '' : 's'}</span>
+        </div>
+        {list.length === 0 ? (
+          <Empty title="No organisations yet" subtitle="Create the first one to get started." icon={<IconBriefcase width={19} height={19} />} />
+        ) : (
+          <div className="overflow-x-auto">
+            <table className="w-full">
+              <thead>
+                <tr>
+                  <th className="text-left px-4">Organisation</th>
+                  <th className="text-left px-4">Code</th>
+                  <th className="text-left px-4">Status</th>
+                  <th className="text-right px-4">Employees</th>
+                  <th className="text-right px-4">Logins</th>
+                  <th className="text-left px-4">Contact</th>
+                  <th className="text-right px-4">Actions</th>
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {list.map((o) => {
+                  const isActive = String(o.id) === activeId;
+                  const suspended = o.status !== 'ACTIVE';
+                  return (
+                    <tr key={o.id} className={isActive ? 'bg-brand-50/60' : ''}>
+                      <td className="px-4">
+                        <div className="flex items-center gap-2.5 min-w-0">
+                          <Avatar name={o.name} size={28} />
+                          <span className="min-w-0">
+                            <span className="block font-semibold text-ink text-[13px] truncate">{o.name}</span>
+                            <span className="block text-[11px] text-ink-faint truncate">{o.legalName || '—'}</span>
+                          </span>
+                          {isActive && <Badge tone="brand" className="ml-1 shrink-0">Working here</Badge>}
+                        </div>
+                      </td>
+                      <td className="px-4">{o.code ? <Badge tone="info">{o.code}</Badge> : <span className="text-ink-faint">—</span>}</td>
+                      <td className="px-4">
+                        <Badge tone={suspended ? 'danger' : 'ok'} dot>{suspended ? 'Suspended' : 'Active'}</Badge>
+                      </td>
+                      <td className="px-4 text-right tabular-nums font-semibold text-ink">{o.employees ?? 0}</td>
+                      <td className="px-4 text-right tabular-nums font-semibold text-ink">{o.users ?? 0}</td>
+                      <td className="px-4">
+                        <span className="text-[11.5px] text-ink-faint font-mono">
+                          {[o.contactEmail, o.contactPhone].filter(Boolean).join(' · ') || '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 text-right whitespace-nowrap">
+                        {!isActive && !suspended && (
+                          <button onClick={() => switchOrg(o.id)} className="text-[12.5px] font-semibold text-brand-600 hover:underline mr-3">Switch to</button>
+                        )}
+                        {suspended ? (
+                          <button onClick={() => setStatus(o, 'ACTIVE')} className="text-[12.5px] font-semibold text-brand-600 hover:underline">Restore</button>
+                        ) : (
+                          <ConfirmClick onConfirm={() => setStatus(o, 'SUSPENDED')}
+                            confirmLabel="Suspend? Everyone here is signed out."
+                            className="text-[12.5px] font-semibold text-ink-soft hover:text-neg">
+                            Suspend
+                          </ConfirmClick>
+                        )}
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </Card>
 
       {/* ── Create ────────────────────────────────────────────────────────── */}
       <Modal

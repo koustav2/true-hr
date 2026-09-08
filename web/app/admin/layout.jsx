@@ -59,6 +59,7 @@ const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
 const MASTER = [{ href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' }];
 
 const ROLE_BADGE = {
+  MASTER: 'bg-shell/10 text-shell',
   SUPER_ADMIN: 'bg-grape-50 text-grape-700',
   HR_ADMIN: 'bg-brand-50 text-brand-700',
   IT_ADMIN: 'bg-crit-bg text-crit',
@@ -194,8 +195,10 @@ function AdminShell({ children }) {
   const role = user?.role;
   // Prefer the custom role's label ("Chief Technology Officer") over the base
   // enum, so a CEO is not shown as "HR Admin".
-  const roleLabel = liveRole?.label || ROLE_LABEL[role] || 'Staff';
-  const badgeRole = liveRole?.baseRole || role;
+  // The platform owner sits above the per-organisation role matrix, so its
+  // org role ("Super Admin" of the seed org) is the wrong thing to show.
+  const roleLabel = isPlatformAdmin ? 'Master' : (liveRole?.label || ROLE_LABEL[role] || 'Staff');
+  const badgeRole = isPlatformAdmin ? 'MASTER' : (liveRole?.baseRole || role);
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);

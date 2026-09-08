@@ -2,9 +2,71 @@
 
 **Operated by:** L R Technology (proprietor: Debasish Panigrahi, GSTIN 21BYYPP0116P1ZY)
 **Product:** TrueHR — HRMS with a web admin console and a native Android employee app
-**Last updated:** 4 July 2026
+**Last updated:** 8 September 2026
 
 ---
+
+## CHECKPOINT — 8 September 2026 (multi-tenancy hardening, live E2E verification, enterprise UI)
+
+Commits `62f615e` → `737d954`. Everything below is committed and pushed; **the VPS rebuild is still outstanding** (see Deploy, bottom).
+
+### 1. Multi-tenancy & RBAC — the 3-tier hierarchy
+
+```
+Master (is_platform_admin)  →  creates organisations + each org's first Super Admin
+   Super Admin (per org)    →  creates HR / IT admins, owns the permission matrix
+      HR Admin · IT Admin · custom roles (CEO, Payroll Officer, …)
+      Employee              →  self-service only
+```
+
+- **Module matrix is the single source of truth.** `config/modules.js` lists every permissionable section; a Super Admin ticks View / Manage per role on **Roles & permissions** and it takes effect on the next page load — no deploy. Enforcement is three-layered: nav visibility → page gate → `requireModule()` on every endpoint.
+- **Page-level gate added** (`7bf83a8`). Nav previously only *hid* links, so a typed URL still rendered the page and 403'd on load. `AdminShell` now blocks any section the live `/me/permissions` payload disallows and shows a Restricted panel with a route back.
+- **Master is locked to Platform › Organisations** — every other admin route bounces back (`3913229`, broadened in `7bf83a8`). Labelled *Master*, not *Super Admin* (`78575c4`), since the platform owner sits above the per-org matrix.
+- **Per-company scope** for HR/IT admins (`57ff8e9`): `user_accounts.company_id` narrows employee lists / review queue to one legal entity; NULL = whole organisation.
+- **Companies** removed from HR/IT (`62f615e`) and **user creation removed from HR** (`53a4a93`) — both with migration steps that revoke the grant on existing databases, since `adoptNewModules` only ever adds. A Super Admin can still re-grant either deliberately.
+- **Roles & permissions is now reachable** from Users & accounts (`737d954`) — it was referenced as plain bold text, so the screen was only findable by scrolling the nav.
+
+### 2. Bugs found and fixed
+
+| Bug | Fix |
+|---|---|
+| **Tenant data leak** — dashboard "Recent employees" had no org filter, so an empty new org showed other tenants' people | `42f386d` — scoped by `organisation_id` |
+| **Offer letter permanently blocked** — CTC had two sources of truth: `salary_structures.monthly_ctc` (set from Payroll) vs `employees.ctc` (hire time only). `generateOfferLetter` read only the latter | `30a4678` — falls back to `monthly_ctc × 12` |
+| **Logged out on every org switch** — token-hydration race: `PermProvider` fired `/me/permissions` before `AuthProvider` restored the token → 401 → auto-logout | `f3e05c9` — `api.js` falls back to stored auth |
+| **Checkboxes rendered as grey browser defaults** app-wide (no Tailwind forms plugin) | `c21f21c` → `accent-*`, works natively |
+
+### 3. Enterprise (SAP-Fiori-style) UI — `2acf58f`, `bbe6e21`, `6a215f3`, `78575c4`
+
+Presentation only; **no functional or logic changes**. Supersedes the short-lived Plus Jakarta direction (`e25cd80`…`c99539f`).
+
+- **Tokens, same names / new values** — so all 58 pages inherited the change untouched. IBM Plex Sans + Plex Mono; one accent blue (`#0a5fd1`) with `pos`/`crit`/`neg` reserved strictly for state; **`rounded-xl2` 16px→6px, `xl3` 20px→8px** (this alone compacted every card, input and button); shallow crisp shadows; flat ground.
+- **Shell bar** — dark chrome across admin *and* ESS: logo, tenant context, search, org switcher, role chip, avatar menu. Compact left nav with left-accent active state.
+- **Launchpads** — Dashboard and Master Organisations rebuilt as KPI tiles above dense tables (uppercase micro-headers, semantic status dots, right-aligned tabular numerics).
+- **`components/ui.jsx`** restyled with an unchanged exported API (verified: zero missing imports across 57 consuming pages), plus new `Avatar`, `Badge`, `PageHeader`, `StatTile`, `ObjectHeader`.
+
+### 4. Live end-to-end verification (against production, real logins)
+
+- **~100 read/report checks** — 71 returned real data, 24 valid-but-empty (unused features), **0 defects**. Documents confirmed generating: employee sheet, offer letter, **Form 16**, payslip bank CSV, bulk-salary XLSX.
+- **100 permission checks** (25 module endpoints × 4 roles) — matrix behaves exactly as designed: HR 403 on Companies/Roles/Audit/Organisations; IT 403 on all payroll & PII; Super Admin 403 on Organisations; Master full.
+- **40 write flows** exercised in a throwaway sandbox org, then purged: structure, employee CRUD, leave, salary/payroll generation, statutory + nominees, PT/min-wage, letters (template + issue), assets (create/assign/return), NFA masters, approver matrix, vendors, roles + permission updates, users, notification schedules, F&F (preview → create → finalise → paid), termination.
+- **Full onboarding chain 7/7** — public offer view → accept (token rotation) → form → details (profile/bank/statutory/address) → e-sign → HR review queue → approve, which generated employee code `ZZES5001` and the credentials email.
+
+### 5. Operational findings (not code bugs)
+
+- **Payroll is blocked for most staff** — for September, 19 employees in scope but only **3 have a salary structure**; 0 payslips generated. Any run skips the other 16.
+- **`employee_code` is assigned at onboarding approval**, so `null` codes are people who never completed the flow — not a defect. Those staff can only sign in by email, not Employee ID.
+- **Seeded `@truehr.example` passwords are committed in `seed.js`** (`Super@12345`, `Admin@12345`, `Hr@12345`, `It@12345`). Rotate or disable the demo accounts now that real tenants exist.
+- **TRUE HR contains real people** — 13 of 24 employees have live `@tkf.co.in`, `@breatheagain.life` and personal Gmail addresses. Never run write tests against it: letters, onboarding, wishes and the scheduler all send real email.
+
+### 6. Open items
+
+- **Deploy** — backend *and* web changed, so `--build` both.
+- **Purge `ZZ ESS SANDBOX` (`ZZESS`, org 7)** — leftover test tenant (1 employee, 2 logins). Use the guarded purge script pattern in this doc's history.
+- **Breathe Again (`NIRA`) is SUSPENDED but is still the Master's "working here" org** — switch to TRUE HR, then decide purge vs restore.
+- **Decide whether IT Admin keeps user-creation** — it currently can (accounts are its remit); only HR was restricted.
+- **ESS employee-side flows untested** — leave apply, attendance punch, tasks, raise NFA, support, tax declaration, resignation. Needs an employee login, which only exists after the onboarding chain.
+- **UI verified structurally only** — esbuild-validated all 79 JSX/JS files, but the sandbox's egress proxy blocks Chromium, so nothing was visually confirmed. Check the **shell bar on mobile** and **dark-mode tokens** first after deploy.
+- **Android untouched by this pass** and still needs an Android Studio compile-verify (see the 4 July pending list).
 
 ## NEW — NFA / PMS build (from GreenHR reference demos, 27-06-2026)
 

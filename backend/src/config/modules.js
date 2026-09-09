@@ -39,6 +39,8 @@ export const MODULES = [
   { key: 'STRUCTURE',     label: 'Departments & Roles',  group: MODULE_GROUPS.PEOPLE,
     path: '/admin/hierarchy',
     note: 'Departments, designations and the organisation level ladder' },
+  { key: 'ORGMASTERS',    label: 'Master Data',          group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-masters',
+    note: 'Banks, branches, sub-departments, asset brands, policy types and grades' },
   { key: 'CHANGEREQ',     label: 'Change Requests',      group: MODULE_GROUPS.PEOPLE,      path: '/admin/change-requests',
     note: 'Employee-submitted profile, address and bank changes awaiting approval' },
   { key: 'ORGCHART',      label: 'Organisation Chart',   group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-chart',
@@ -132,7 +134,7 @@ export const SYSTEM_ROLES = [
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
       'TERMINATION', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
-      'BULK', 'HRMIS', 'DOCBRAND',
+      'BULK', 'HRMIS', 'DOCBRAND', 'ORGMASTERS',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
@@ -224,7 +226,7 @@ export const GRACE_MODULES = ['DASHBOARD'];
 
 const STARTER = [
   'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'STRUCTURE',
-  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART', 'DOCBRAND',
+  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART', 'DOCBRAND', 'ORGMASTERS',
 ];
 const GROWTH = [
   ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',

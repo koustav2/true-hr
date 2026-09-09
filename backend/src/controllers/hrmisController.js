@@ -40,7 +40,8 @@ export async function workbook(req, res, next) {
 
     const people = (await query(
       `SELECT e.*, dep.name AS department, dg.title AS designation, dg.grade AS designation_grade,
-              co.name AS company,
+              co.name AS company, sd.name AS sub_department, br.name AS branch,
+              lv.level_no, lv.name AS level_name,
               rm.first_name AS rm_first, rm.last_name AS rm_last, rm.employee_code AS rm_code,
               fm.first_name AS fm_first, fm.last_name AS fm_last,
               om.first_name AS om_first, om.last_name AS om_last,
@@ -49,6 +50,9 @@ export async function workbook(req, res, next) {
          LEFT JOIN departments dep ON dep.id = e.department_id
          LEFT JOIN designations dg ON dg.id = e.designation_id
          LEFT JOIN companies co ON co.id = e.company_id
+         LEFT JOIN org_masters sd ON sd.id = e.sub_department_id
+         LEFT JOIN org_masters br ON br.id = e.branch_id
+         LEFT JOIN org_levels lv ON lv.id = dg.level_id
          LEFT JOIN employees rm ON rm.id = e.reporting_manager_id
          LEFT JOIN employees fm ON fm.id = e.function_manager_id
          LEFT JOIN employees om ON om.id = e.operational_manager_id
@@ -65,8 +69,11 @@ export async function workbook(req, res, next) {
       { header: 'Name', key: 'name', width: 26 },
       { header: 'Company', key: 'company', width: 24 },
       { header: 'Department', key: 'dep', width: 22 },
+      { header: 'Sub-Department', key: 'subdep', width: 22 },
+      { header: 'Branch', key: 'branch', width: 20 },
       { header: 'Designation', key: 'desig', width: 26 },
       { header: 'Grade', key: 'grade', width: 10 },
+      { header: 'Level', key: 'level', width: 20 },
       { header: 'Employment Type', key: 'etype', width: 18 },
       { header: 'Status', key: 'status', width: 16 },
       { header: 'Date of Joining', key: 'doj', width: 15 },
@@ -84,7 +91,9 @@ export async function workbook(req, res, next) {
       { header: 'Last Login', key: 'llogin', width: 20 },
     ], people.map((r) => ({
       code: r.employee_code || '', name: nameOf(r), company: r.company || '',
-      dep: r.department || '', desig: r.designation || '', grade: r.designation_grade || '',
+      dep: r.department || '', subdep: r.sub_department || '', branch: r.branch || '',
+      desig: r.designation || '', grade: r.designation_grade || '',
+      level: r.level_no ? `L${r.level_no} ${r.level_name || ''}`.trim() : '',
       etype: r.employment_type || '', status: r.onboarding_status || '',
       doj: d10(r.date_of_joining), loc: r.location || '',
       omail: r.official_email || '', pmail: r.personal_email || '', phone: r.phone || '',

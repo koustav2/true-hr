@@ -174,12 +174,15 @@ export async function getEmployee(req, res, next) {
     const id = req.params.id;
     const emp = (await query(
       `SELECT e.*, d.title AS designation, dep.name AS department,
+              sd.name AS sub_department, br.name AS branch,
               rm.first_name AS rm_first, rm.last_name AS rm_last, rm.employee_code AS rm_code, rm.official_email AS rm_email,
               fm.first_name AS fm_first, fm.last_name AS fm_last, fm.employee_code AS fm_code,
               om.first_name AS om_first, om.last_name AS om_last, om.employee_code AS om_code
        FROM employees e
        LEFT JOIN designations d ON d.id=e.designation_id
        LEFT JOIN departments dep ON dep.id=e.department_id
+       LEFT JOIN org_masters sd ON sd.id=e.sub_department_id
+       LEFT JOIN org_masters br ON br.id=e.branch_id
        LEFT JOIN employees rm ON rm.id=e.reporting_manager_id
        LEFT JOIN employees fm ON fm.id=e.function_manager_id
        LEFT JOIN employees om ON om.id=e.operational_manager_id
@@ -411,6 +414,8 @@ export async function updateEmployee(req, res, next) {
       reportingManagerId: 'reporting_manager_id', functionManagerId: 'function_manager_id',
       employmentType: 'employment_type', dateOfJoining: 'date_of_joining',
       ctc: 'ctc', location: 'location', personalEmail: 'personal_email', officialEmail: 'official_email',
+      // From the organisation masters (see controllers/orgMasterController.js).
+      subDepartmentId: 'sub_department_id', branchId: 'branch_id',
     };
     const sets = [], vals = [];
     for (const [key, col] of Object.entries(FIELDS)) {
@@ -434,6 +439,19 @@ export async function updateEmployee(req, res, next) {
     }
     if (req.body.phone && !/^\d{10}$/.test(String(req.body.phone)))
       return res.status(400).json({ error: 'Mobile number must be exactly 10 digits' });
+
+    // The master FKs only prove the row exists, not that it is this tenant's —
+    // a crafted id would otherwise hang an employee off another organisation's
+    // branch. Check the organisation AND the kind, so a branch id cannot be
+    // passed as a sub-department.
+    for (const [key, kind, label] of [['subDepartmentId', 'SUB_DEPARTMENT', 'sub-department'], ['branchId', 'BRANCH', 'branch']]) {
+      const v = req.body[key];
+      if (v == null || v === '') continue;
+      const ok = (await query(
+        `SELECT 1 FROM org_masters WHERE id=$1 AND kind=$2 AND organisation_id=$3`,
+        [parseInt(v, 10), kind, req.orgId || null])).rowCount;
+      if (!ok) return res.status(400).json({ error: `That ${label} is not on your organisation's list.` });
+    }
     vals.push(id);
     const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id, official_email`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Employee not found' });
@@ -559,10 +577,13 @@ export async function orgChart(req, res, next) {
       `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.official_email,
               e.reporting_manager_id, e.function_manager_id, e.operational_manager_id,
               d.title AS designation, dep.name AS department, co.name AS company,
-              e.onboarding_status, lv.level_no, lv.name AS level_name
+              e.onboarding_status, lv.level_no, lv.name AS level_name,
+              sd.name AS sub_department, br.name AS branch
          FROM employees e
          LEFT JOIN designations d ON d.id = e.designation_id
          LEFT JOIN org_levels lv ON lv.id = d.level_id
+         LEFT JOIN org_masters sd ON sd.id = e.sub_department_id
+         LEFT JOIN org_masters br ON br.id = e.branch_id
          LEFT JOIN departments dep ON dep.id = e.department_id
          LEFT JOIN companies co ON co.id = e.company_id
         WHERE ($1::bigint IS NULL OR e.organisation_id = $1)
@@ -582,6 +603,8 @@ export async function orgChart(req, res, next) {
       status: r.onboarding_status,
       levelNo: r.level_no ?? null,
       level: r.level_name || null,
+      subDepartment: r.sub_department || null,
+      branch: r.branch || null,
       managerId: r.reporting_manager_id != null ? Number(r.reporting_manager_id) : null,
       functionManagerId: r.function_manager_id != null ? Number(r.function_manager_id) : null,
       operationalManagerId: r.operational_manager_id != null ? Number(r.operational_manager_id) : null,

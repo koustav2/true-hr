@@ -5,6 +5,7 @@ import { useParams, useSearchParams } from 'next/navigation';
 import { api, getStoredAuth } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
 import { Card, Button, Spinner, Textarea, Modal, Input, Select, Field, ConfirmClick } from '@/components/ui.jsx';
+import { MasterText, MasterSelect } from '@/components/MasterPicker.jsx';
 import StatusBadge from '@/components/StatusBadge.jsx';
 import { IconArrowLeft, IconCheck, IconFile, IconExit } from '@/components/icons.jsx';
 
@@ -170,6 +171,7 @@ export default function EmployeeDetailPage() {
     setEdit({
       firstName: e.first_name || '', lastName: e.last_name || '', phone: e.phone || '',
       departmentId: e.department_id || '', designationId: e.designation_id || '',
+      subDepartmentId: e.sub_department_id || '', branchId: e.branch_id || '',
       reportingManagerId: e.reporting_manager_id || '', functionManagerId: e.function_manager_id || '',
       ctc: e.ctc || '', dateOfJoining: (e.date_of_joining || '').slice(0, 10), location: e.location || '',
       personalEmail: e.personal_email || '', officialEmail: e.official_email || '',
@@ -410,7 +412,9 @@ export default function EmployeeDetailPage() {
             <Field label="Account number" hint={`Current: ${bank?.account_number_masked || '—'} — leave blank to keep`}>
               <Input inputMode="numeric" value={bs.accountNumber} onChange={(ev) => setBs({ ...bs, accountNumber: ev.target.value.replace(/\D/g, '') })} /></Field>
             <Field label="IFSC"><Input value={bs.ifsc} onChange={(ev) => setBs({ ...bs, ifsc: ev.target.value.toUpperCase() })} maxLength={11} /></Field>
-            <Field label="Bank name"><Input value={bs.bankName} onChange={(ev) => setBs({ ...bs, bankName: ev.target.value })} /></Field>
+            <Field label="Bank name" hint="Suggestions come from the Bank Master">
+              <MasterText kind="BANK" value={bs.bankName} onChange={(ev) => setBs({ ...bs, bankName: ev.target.value })} placeholder="Start typing…" />
+            </Field>
             <Field label="Branch"><Input value={bs.branch} onChange={(ev) => setBs({ ...bs, branch: ev.target.value })} /></Field>
             <Field label="PAN" hint={`Current: ${statutory?.pan_masked || '—'} — leave blank to keep`}>
               <Input value={bs.pan} onChange={(ev) => setBs({ ...bs, pan: ev.target.value.toUpperCase() })} maxLength={10} /></Field>
@@ -438,6 +442,14 @@ export default function EmployeeDetailPage() {
                 <option value="">—</option>
                 {(meta?.departments || []).map((d) => <option key={d.id} value={d.id}>{d.name}</option>)}
               </Select>
+            </Field>
+            <Field label="Sub-department" hint="From Master data; filtered by the department above">
+              <MasterSelect kind="SUB_DEPARTMENT" value={edit.subDepartmentId} parentRef={edit.departmentId}
+                onChange={(ev) => setEdit({ ...edit, subDepartmentId: ev.target.value })} emptyLabel="— none —" />
+            </Field>
+            <Field label="Branch" hint="From Master data">
+              <MasterSelect kind="BRANCH" value={edit.branchId}
+                onChange={(ev) => setEdit({ ...edit, branchId: ev.target.value })} emptyLabel="— none —" />
             </Field>
             <Field label="Designation">
               <Select value={edit.designationId} onChange={(ev) => setEdit({ ...edit, designationId: ev.target.value })}>

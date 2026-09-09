@@ -19,8 +19,11 @@ export const POLICY_CATALOG = [
 // title), followed by any extra non-catalogue uploads.
 async function buildCatalog() {
   const rows = (await query(
-    `SELECT DISTINCT ON (title) id, title, category, filename, mime, created_at
-       FROM policies ORDER BY title, created_at DESC`)).rows;
+    `SELECT DISTINCT ON (p.title) p.id, p.title, p.category, p.filename, p.mime, p.created_at,
+            p.policy_type_id, t.name AS policy_type
+       FROM policies p
+       LEFT JOIN org_masters t ON t.id = p.policy_type_id
+      ORDER BY p.title, p.created_at DESC`)).rows;
   const byTitle = new Map(rows.map((r) => [r.title, r]));
   const catalog = POLICY_CATALOG.map((title) => {
     const r = byTitle.get(title);
@@ -28,6 +31,8 @@ async function buildCatalog() {
       id: r?.id ?? null,
       title,
       category: r?.category ?? null,
+      policyTypeId: r?.policy_type_id != null ? Number(r.policy_type_id) : null,
+      policyType: r?.policy_type ?? null,
       filename: r?.filename ?? null,
       mime: r?.mime ?? null,
       uploadedAt: r?.created_at ?? null,
@@ -37,7 +42,10 @@ async function buildCatalog() {
   const extras = rows
     .filter((r) => !POLICY_CATALOG.includes(r.title))
     .map((r) => ({
-      id: r.id, title: r.title, category: r.category, filename: r.filename,
+      id: r.id, title: r.title, category: r.category,
+      policyTypeId: r.policy_type_id != null ? Number(r.policy_type_id) : null,
+      policyType: r.policy_type ?? null,
+      filename: r.filename,
       mime: r.mime, uploadedAt: r.created_at, available: true,
     }));
   return [...catalog, ...extras];
@@ -77,13 +85,24 @@ export async function adminList(req, res, next) {
 // Uploading a document for a title replaces any previous file for that same title.
 export async function create(req, res, next) {
   try {
-    const { title, category, file: fileB64, mime, filename } = req.body;
+    const { title, category, file: fileB64, mime, filename, policyTypeId } = req.body;
     if (!title || !fileB64) return res.status(400).json({ error: 'title and file are required' });
+    // A type, when given, must be one of this organisation's own — the FK alone
+    // would accept another tenant's row.
+    let typeId = null;
+    if (policyTypeId != null && policyTypeId !== '') {
+      typeId = parseInt(policyTypeId, 10);
+      const ok = (await query(
+        `SELECT 1 FROM org_masters WHERE id=$1 AND kind='POLICY_TYPE' AND organisation_id=$2`,
+        [typeId, req.orgId || null])).rowCount;
+      if (!ok) return res.status(400).json({ error: 'That policy type is not on your organisation\u2019s list.' });
+    }
     await query(`DELETE FROM policies WHERE title=$1`, [title]); // replace-on-upload
     const row = (await query(
-      `INSERT INTO policies (title, category, file, mime, filename, uploaded_by)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [title, category || null, fileB64, mime || null, filename || null, req.user.employeeId || null])).rows[0];
+      `INSERT INTO policies (title, category, file, mime, filename, uploaded_by, policy_type_id)
+       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+      [title, category || null, fileB64, mime || null, filename || null,
+       req.user.employeeId || null, typeId])).rows[0];
     await audit(req.user.id, 'POLICY_CREATE', 'policy', row.id, { title });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }

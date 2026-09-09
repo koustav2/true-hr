@@ -7,6 +7,7 @@ import * as incr from '../controllers/incrementController.js';
 import * as paycomp from '../controllers/payComponentController.js';
 import * as levels from '../controllers/levelController.js';
 import * as branding from '../controllers/docProfileController.js';
+import * as orgMasters from '../controllers/orgMasterController.js';
 import * as meta from '../controllers/metaController.js';
 import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
@@ -303,6 +304,15 @@ r.get('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND'), br
 r.put('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND', 'manage'), branding.put);
 r.delete('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND', 'manage'), branding.remove);
 r.get('/admin/branding/sample/:kind', authenticate, requireOrg, requireModule('DOCBRAND'), branding.sample);
+
+// --- Organisation master data (GreenHR: Master Dashboard) ---
+r.get('/admin/org-masters', authenticate, requireOrg, requireModule('ORGMASTERS'), orgMasters.hub);
+r.post('/admin/org-masters/:kind', authenticate, requireOrg, requireModule('ORGMASTERS', 'manage'), orgMasters.create);
+r.put('/admin/org-masters/:kind/:id', authenticate, requireOrg, requireModule('ORGMASTERS', 'manage'), orgMasters.update);
+r.delete('/admin/org-masters/:kind/:id', authenticate, requireOrg, requireModule('ORGMASTERS', 'manage'), orgMasters.remove);
+// The pickers: requireStaff, not the module — HR filling in an employee's bank
+// needs the bank list even without permission to edit the list itself.
+r.get('/meta/org-masters', authenticate, requireStaff, orgMasters.options);
 r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
 r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 

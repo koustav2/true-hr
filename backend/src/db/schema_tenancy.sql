@@ -372,3 +372,48 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_doc_profile_org_default
 -- a score later can tell which of the two it was.
 ALTER TABLE pms_kra_scores ADD COLUMN IF NOT EXISTS achievement_pct NUMERIC(8,2);
 ALTER TABLE pms_kra_scores ADD COLUMN IF NOT EXISTS rating_source   TEXT;
+
+-- ── 15. Organisation master data ───────────────────────────────────────────
+-- GreenHR parity: its Master Dashboard, a hub of ~24 masters. True HR had nine
+-- of them (the NFA set: business operations, cost zones, projects, locations,
+-- clients/vendors, expense hierarchy) in their own tables, a handful more
+-- living inside other screens, and seven missing entirely — bank, branch,
+-- sub-department, asset brand, policy type and the grade ladder were all free
+-- text typed afresh every time.
+--
+-- One table for those simple lists rather than six near-identical ones: they
+-- are all "a named thing, per organisation, sometimes hanging off a parent".
+-- `kind` says which list, and per kind `parent_ref` points at the row this one
+-- belongs under (SUB_DEPARTMENT -> departments.id, BRANCH -> companies.id);
+-- for the flat kinds it is NULL. The existing NFA masters keep their own
+-- tables — they carry real relationships and are wired into the approval
+-- engine, so folding them in here would be churn for its own sake.
+--
+-- Nothing in here is decorative: every kind is read by a form or a report.
+CREATE TABLE IF NOT EXISTS org_masters (
+  id              BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT      NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  kind            TEXT        NOT NULL,   -- BANK | BRANCH | SUB_DEPARTMENT | ASSET_BRAND | POLICY_TYPE | GRADE
+  name            TEXT        NOT NULL,
+  code            TEXT,                   -- e.g. an IFSC prefix on a bank
+  parent_ref      BIGINT,                 -- meaning depends on kind (see above)
+  note            TEXT,
+  sort_order      INT         NOT NULL DEFAULT 100,
+  active          BOOLEAN     NOT NULL DEFAULT true,
+  created_by      BIGINT      REFERENCES user_accounts(id),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- One name per list per organisation, case-insensitively, and unique within the
+-- parent for the nested kinds — two "Finance" sub-departments under the same
+-- department is a data-entry slip, not a valid state.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_org_master_flat
+  ON org_masters (organisation_id, kind, lower(name)) WHERE parent_ref IS NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_org_master_nested
+  ON org_masters (organisation_id, kind, parent_ref, lower(name)) WHERE parent_ref IS NOT NULL;
+CREATE INDEX IF NOT EXISTS idx_org_masters_kind ON org_masters (organisation_id, kind, sort_order);
+
+-- The consumers. Without these the masters above would be lists nobody reads —
+-- which is exactly the mistake the KPI measurement bands made.
+ALTER TABLE employees  ADD COLUMN IF NOT EXISTS sub_department_id BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;
+ALTER TABLE employees  ADD COLUMN IF NOT EXISTS branch_id         BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;
+ALTER TABLE policies   ADD COLUMN IF NOT EXISTS policy_type_id    BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;

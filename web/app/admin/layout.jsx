@@ -40,6 +40,7 @@ const SECTIONS = [
       { href: '/admin/change-requests', label: 'Change requests', Icon: IconCheck, module: 'CHANGEREQ' },
       { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
       { href: '/admin/hierarchy', label: 'Hierarchy & levels', Icon: IconBriefcase, module: 'STRUCTURE' },
+      { href: '/admin/org-masters', label: 'Master data', Icon: IconBriefcase, module: 'ORGMASTERS' },
       { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
       { href: '/admin/wishes', label: 'Wishes', Icon: IconSparkle, module: 'EMPLOYEES' },
     ],

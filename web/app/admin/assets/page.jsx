@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { Card, Button, Field, Input, Select, Modal, Spinner, Empty, SearchPicker, ConfirmClick } from '@/components/ui.jsx';
+import { MasterText } from '@/components/MasterPicker.jsx';
 
 const STATUS_STYLES = {
   in_stock: 'bg-slate-100 text-ink-soft', assigned: 'bg-brand-50 text-brand-700',
@@ -98,7 +99,9 @@ export default function AssetsPage() {
           <Field label="Asset tag" required><Input value={form.assetTag} onChange={(e) => setForm({ ...form, assetTag: e.target.value })} placeholder="LT-0007" /></Field>
           <Field label="Category"><Input value={form.category} onChange={(e) => setForm({ ...form, category: e.target.value })} placeholder="Laptop" /></Field>
           <Field label="Type"><Select value={form.isIt ? '1' : '0'} onChange={(e) => setForm({ ...form, isIt: e.target.value === '1' })}><option value="1">IT asset</option><option value="0">Non-IT asset</option></Select></Field>
-          <Field label="Brand"><Input value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} /></Field>
+          <Field label="Brand" hint="From the Brand Master">
+            <MasterText kind="ASSET_BRAND" value={form.brand} onChange={(e) => setForm({ ...form, brand: e.target.value })} />
+          </Field>
           <Field label="Model"><Input value={form.model} onChange={(e) => setForm({ ...form, model: e.target.value })} /></Field>
           <Field label="Serial no."><Input value={form.serialNo} onChange={(e) => setForm({ ...form, serialNo: e.target.value })} /></Field>
           <Field label="Vendor"><Input value={form.vendor} onChange={(e) => setForm({ ...form, vendor: e.target.value })} /></Field>

@@ -3,6 +3,7 @@ import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
 import { Button, Card, Field, Input, Modal, Select, Spinner, Empty, ConfirmClick } from '@/components/ui.jsx';
+import { MasterText } from '@/components/MasterPicker.jsx';
 import { IconBriefcase, IconPlus, IconCheck, IconUsers, IconX } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -382,8 +383,10 @@ export default function CompaniesPage() {
                   <Input value={newDes.title} placeholder="Add a designation"
                     onChange={(e) => setNewDes({ ...newDes, title: e.target.value })}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDes(); } }} />
-                  <Input value={newDes.grade} placeholder="Grade" className="!w-24"
-                    onChange={(e) => setNewDes({ ...newDes, grade: e.target.value })} />
+                  <div className="w-28 shrink-0">
+                    <MasterText kind="GRADE" value={newDes.grade} placeholder="Grade"
+                      onChange={(e) => setNewDes({ ...newDes, grade: e.target.value })} />
+                  </div>
                   <Button size="sm" onClick={addDes} disabled={!newDes.title.trim()}>Add</Button>
                 </div>
               )}

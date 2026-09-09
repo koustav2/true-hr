@@ -118,7 +118,10 @@ function CreateKpiModal({ onClose, onDone }) {
               <Button size="sm" variant="outline" onClick={() => setKras((ks) => [...ks, { description: '', weightage: '' }])}>+ Add KRA</Button>
               <span className={`text-sm font-semibold ${sum === 100 ? 'text-emerald-700' : 'text-amber-700'}`}>Total weightage: {sum}%</span>
             </div>
-            <p className="text-xs text-ink-faint">Rating bands: 90–104% → 3 · 105–119% → 4 · 120%+ → 5</p>
+            <p className="text-xs text-ink-faint">
+              Each KRA scores on the standard bands — 0–59% → 1 · 60–89% → 2 · 90–104% → 3 · 105–119% → 4 · 120%+ → 5.
+              Your rating is worked out from MTD achieved against MTD target when you submit the PMS.
+            </p>
           </div>
         )}
         {msg && <p className="text-sm text-red-600">{msg}</p>}
@@ -127,6 +130,32 @@ function CreateKpiModal({ onClose, onDone }) {
     </Modal>
   );
 }
+
+// Live preview of what the measurement band will score. The SERVER is
+// authoritative on submit (services/kpiBands.js) — this only shows the employee
+// the number their entry produces before they send it, so the band on screen is
+// no longer a decoration.
+const numeric = (v) => {
+  if (v == null) return null;
+  const c = String(v).replace(/[,\s%\u20b9]/g, '');
+  return c !== '' && /^-?\d*\.?\d+$/.test(c) ? Number(c) : null;
+};
+const pctOf = (target, achieved) => {
+  const t = numeric(target), a = numeric(achieved);
+  return t == null || a == null || t === 0 ? null : Math.round((a / t) * 10000) / 100;
+};
+const bandRating = (bands, pct) => {
+  if (pct == null || !Array.isArray(bands)) return null;
+  for (const b of bands) {
+    const min = numeric(b?.min), max = b?.max == null ? null : numeric(b.max);
+    if (min == null || b?.rating == null) continue;
+    if (pct >= min && (max == null || pct <= max)) return Number(b.rating);
+  }
+  return null;
+};
+const bandText = (bands) => (Array.isArray(bands) && bands.length
+  ? bands.map((b) => `${b.min}\u2013${b.max == null ? '\u221e' : b.max}% \u2192 ${b.rating}`).join(' \u00b7 ')
+  : '\u2014');
 
 function KpiDetailModal({ id, onClose, onChanged }) {
   const [d, setD] = useState(null);
@@ -144,7 +173,14 @@ function KpiDetailModal({ id, onClose, onChanged }) {
       await api.post(`/kpi/${id}/pms`, {
         scores: d.kras.map((k) => {
           const s = scores[k.id] || {};
-          return { kraId: k.id, mtdTarget: s.mtdTarget, mtdAchieved: s.mtdAchieved, selfRating: Number(s.selfRating ?? 3), selfRemarks: s.selfRemarks };
+          const pct = pctOf(s.mtdTarget, s.mtdAchieved);
+          const banded = bandRating(k.measurementBands, pct);
+          return {
+            kraId: k.id, mtdTarget: s.mtdTarget, mtdAchieved: s.mtdAchieved,
+            // Sent only for a KRA the band cannot score; the server ignores it otherwise.
+            selfRating: banded != null ? undefined : (s.selfRating ?? ''),
+            selfRemarks: s.selfRemarks,
+          };
         }),
       });
       onChanged(); load();
@@ -166,22 +202,55 @@ function KpiDetailModal({ id, onClose, onChanged }) {
               <Card key={k.id} className="p-3 space-y-2">
                 <div className="text-sm font-semibold">KRA {k.seq} — {k.weightage}%</div>
                 <p className="text-sm text-ink-soft">{k.description}</p>
+                <p className="text-[11px] text-ink-faint">Bands: {bandText(k.measurementBands)}</p>
                 {existing ? (
                   <div className="text-xs space-y-0.5">
-                    <div><span className="text-ink-faint">Target:</span> {existing.mtdTarget || '—'} · <span className="text-ink-faint">Achieved:</span> {existing.mtdAchieved || '—'}</div>
-                    <div><span className="text-ink-faint">Self:</span> {existing.selfRating} {existing.selfRemarks && `— “${existing.selfRemarks}”`}</div>
+                    <div><span className="text-ink-faint">Target:</span> {existing.mtdTarget || '—'} · <span className="text-ink-faint">Achieved:</span> {existing.mtdAchieved || '—'}
+                      {existing.achievementPct != null && <span className="text-ink-faint"> · {existing.achievementPct}% of target</span>}
+                    </div>
+                    <div>
+                      <span className="text-ink-faint">Self:</span> {existing.selfRating}
+                      {existing.ratingSource === 'BAND'
+                        ? <span className="text-ink-faint"> (from the band)</span>
+                        : existing.ratingSource === 'ENTERED'
+                          ? <span className="text-ink-faint"> (entered — not measurable)</span> : null}
+                      {existing.selfRemarks && ` — “${existing.selfRemarks}”`}
+                    </div>
                     {existing.mgrRating != null && <div><span className="text-ink-faint">Manager:</span> {existing.mgrRating} {existing.mgrRemarks && `— “${existing.mgrRemarks}”`}</div>}
                   </div>
-                ) : canSubmitPms && (
-                  <div className="grid sm:grid-cols-2 gap-2">
-                    <Input placeholder="MTD Target" value={s.mtdTarget || ''} onChange={setS('mtdTarget')} />
-                    <Input placeholder="MTD Achieved" value={s.mtdAchieved || ''} onChange={setS('mtdAchieved')} />
-                    <Select value={s.selfRating ?? '3'} onChange={setS('selfRating')}>
-                      {[['5', '5 — OAT'], ['4', '4 — SAT'], ['3', '3 — AT'], ['2', '2 — BT'], ['1', '1 — SBT']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
-                    </Select>
-                    <Input placeholder="Self remarks" value={s.selfRemarks || ''} onChange={setS('selfRemarks')} />
-                  </div>
-                )}
+                ) : canSubmitPms && (() => {
+                  const pct = pctOf(s.mtdTarget, s.mtdAchieved);
+                  const banded = bandRating(k.measurementBands, pct);
+                  return (
+                    <div className="space-y-2">
+                      <div className="grid sm:grid-cols-2 gap-2">
+                        <Input placeholder="MTD Target" value={s.mtdTarget || ''} onChange={setS('mtdTarget')} />
+                        <Input placeholder="MTD Achieved" value={s.mtdAchieved || ''} onChange={setS('mtdAchieved')} />
+                      </div>
+                      {banded != null ? (
+                        <div className="rounded border border-line bg-canvas px-2.5 py-2 text-xs">
+                          <b className="text-ink">{pct}% of target</b>
+                          <span className="text-ink-faint"> → rating </span>
+                          <b className="text-ink">{banded}</b>
+                          <span className="text-ink-faint"> from this KRA&rsquo;s band</span>
+                        </div>
+                      ) : (
+                        <div className="space-y-1.5">
+                          <p className="text-[11px] text-ink-faint">
+                            {pct == null
+                              ? 'Enter a numeric target and achievement and the band will score it. If this KRA is not measurable that way, rate it yourself.'
+                              : `${pct}% of target falls outside this KRA’s bands — rate it yourself.`}
+                          </p>
+                          <Select value={s.selfRating ?? ''} onChange={setS('selfRating')}>
+                            <option value="">— rating —</option>
+                            {[['5', '5 — OAT'], ['4', '4 — SAT'], ['3', '3 — AT'], ['2', '2 — BT'], ['1', '1 — SBT']].map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                          </Select>
+                        </div>
+                      )}
+                      <Input placeholder="Self remarks" value={s.selfRemarks || ''} onChange={setS('selfRemarks')} />
+                    </div>
+                  );
+                })()}
               </Card>
             );
           })}

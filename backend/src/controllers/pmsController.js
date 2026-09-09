@@ -3,6 +3,9 @@
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
+import {
+  resolveScore, validateBands, normaliseBands, achievementPct, ratingFromBands, DEFAULT_BANDS,
+} from '../services/kpiBands.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 const isStaff = (u) => STAFF.includes(u.role);
@@ -33,7 +36,11 @@ async function kpiDetail(id) {
       approval: sub.approval_instance_id ? await engine.getInstance(sub.approval_instance_id) : null,
       scores: scores.map((s) => ({
         kraId: s.kra_id, mtdTarget: s.mtd_target, mtdAchieved: s.mtd_achieved,
-        selfRating: s.self_rating, selfRemarks: s.self_remarks, mgrRating: s.mgr_rating, mgrRemarks: s.mgr_remarks,
+        selfRating: s.self_rating, selfRemarks: s.self_remarks,
+        mgrRating: s.mgr_rating, mgrRemarks: s.mgr_remarks,
+        // So a reviewer can see 3 came from "96% of target" and not from a dropdown.
+        achievementPct: s.achievement_pct == null ? null : Number(s.achievement_pct),
+        ratingSource: s.rating_source || null,
       })),
       levelRatings: levels.map((l) => ({
         roleKey: l.role_key, pliRating: l.pli_rating, pliPct: l.pli_pct, remarks: l.remarks,
@@ -56,6 +63,12 @@ function validateKras(kras) {
   const sum = kras.reduce((a, k) => a + Number(k.weightage || 0), 0);
   if (Math.round(sum * 100) / 100 !== 100) return `KRA weightages must sum to 100 (got ${sum})`;
   if (kras.some((k) => !k.description || !String(k.description).trim())) return 'Every KRA needs a description';
+  // The bands decide the rating, so a gap or an overlap in them mis-rates
+  // someone quietly. Refuse the shape rather than store it.
+  for (const [i, k] of kras.entries()) {
+    const bad = validateBands(k.measurementBands, `KRA ${i + 1}`);
+    if (bad) return bad;
+  }
   return null;
 }
 
@@ -86,8 +99,8 @@ export async function createKpi(req, res, next) {
       for (const [i, x] of kras.entries()) {
         await c.query(
           `INSERT INTO kpi_kras (kpi_id, seq, description, weightage, measurement_bands) VALUES ($1,$2,$3,$4,$5)`,
-          [k.id, i + 1, String(x.description).trim(), Number(x.weightage), JSON.stringify(x.measurementBands || [
-            { min: 90, max: 104, rating: 3 }, { min: 105, max: 119, rating: 4 }, { min: 120, max: null, rating: 5 }])]);
+          [k.id, i + 1, String(x.description).trim(), Number(x.weightage),
+           JSON.stringify(normaliseBands(x.measurementBands))]);
       }
       return k;
     });
@@ -115,8 +128,8 @@ export async function updateKpi(req, res, next) {
       for (const [i, x] of kras.entries()) {
         await c.query(
           `INSERT INTO kpi_kras (kpi_id, seq, description, weightage, measurement_bands) VALUES ($1,$2,$3,$4,$5)`,
-          [id, i + 1, String(x.description).trim(), Number(x.weightage), JSON.stringify(x.measurementBands || [
-            { min: 90, max: 104, rating: 3 }, { min: 105, max: 119, rating: 4 }, { min: 120, max: null, rating: 5 }])]);
+          [id, i + 1, String(x.description).trim(), Number(x.weightage),
+           JSON.stringify(normaliseBands(x.measurementBands))]);
       }
       await c.query(`UPDATE kpis SET status='RM_PENDING', submitted_at=now() WHERE id=$1`, [id]);
     });
@@ -204,28 +217,51 @@ export async function submitPms(req, res, next) {
     if (k.status !== 'LOCKED') return res.status(409).json({ error: 'KPI must be approved (LOCKED) before PMS submission' });
 
     const scores = (req.body || {}).scores;
-    const kras = (await query(`SELECT id, weightage FROM kpi_kras WHERE kpi_id=$1`, [id])).rows;
+    const kras = (await query(
+      `SELECT id, seq, weightage, measurement_bands FROM kpi_kras WHERE kpi_id=$1`, [id])).rows;
     if (!Array.isArray(scores) || scores.length !== kras.length)
       return res.status(400).json({ error: `scores for all ${kras.length} KRAs required` });
 
-    // Weighted self rating.
-    const wByKra = Object.fromEntries(kras.map((x) => [x.id, Number(x.weightage)]));
-    let selfRating = 0;
+    const byKra = Object.fromEntries(kras.map((x) => [String(x.id), x]));
+
+    // The rating comes from the KRA's measurement bands wherever MTD Target and
+    // MTD Achieved are both numeric — that is what the bands are for, and it is
+    // how GreenHR scores a KRA. A rating typed in the form is only used where
+    // there is nothing to divide (a KRA like "Launch 3 campaigns"), which is why
+    // each row also records the achievement % and where its rating came from.
+    const resolved = [];
     for (const s of scores) {
-      if (!wByKra[s.kraId]) return res.status(400).json({ error: `Unknown kraId ${s.kraId}` });
-      if (num(s.selfRating) == null) return res.status(400).json({ error: 'selfRating required per KRA' });
-      selfRating += Number(s.selfRating) * wByKra[s.kraId] / 100;
+      const kra = byKra[String(s.kraId)];
+      if (!kra) return res.status(400).json({ error: `Unknown kraId ${s.kraId}` });
+      const r = resolveScore({
+        bands: kra.measurement_bands,
+        mtdTarget: s.mtdTarget,
+        mtdAchieved: s.mtdAchieved,
+        enteredRating: s.selfRating,
+      });
+      if (r.rating == null) {
+        return res.status(400).json({
+          error: `KRA ${kra.seq}: give a numeric MTD target and achievement so the band can score it, or enter a rating yourself.`,
+        });
+      }
+      resolved.push({ ...s, ...r, weightage: Number(kra.weightage) });
     }
+
+    // Weighted overall, using the resolved ratings rather than what was typed.
+    let selfRating = resolved.reduce((a, r) => a + r.rating * r.weightage / 100, 0);
     selfRating = Math.round(selfRating * 100) / 100;
 
     const sub = await tx(async (c) => {
       const s = (await c.query(
         `INSERT INTO pms_submissions (kpi_id, self_rating) VALUES ($1,$2) RETURNING *`, [id, selfRating])).rows[0];
-      for (const x of scores) {
+      for (const x of resolved) {
         await c.query(
-          `INSERT INTO pms_kra_scores (submission_id, kra_id, mtd_target, mtd_achieved, self_rating, self_remarks)
-           VALUES ($1,$2,$3,$4,$5,$6)`,
-          [s.id, x.kraId, x.mtdTarget || null, x.mtdAchieved || null, num(x.selfRating), x.selfRemarks || null]);
+          `INSERT INTO pms_kra_scores
+             (submission_id, kra_id, mtd_target, mtd_achieved, self_rating, self_remarks,
+              achievement_pct, rating_source)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+          [s.id, x.kraId, x.mtdTarget || null, x.mtdAchieved || null, x.rating, x.selfRemarks || null,
+           x.pct, x.source]);
       }
       return s;
     });
@@ -274,6 +310,15 @@ export async function rate(req, res, next) {
     const b = req.body || {};
     if (num(b.pliPct) == null || num(b.pliRating) == null)
       return res.status(400).json({ error: 'pliRating and pliPct are required' });
+    // Never validated before: a PLI rating of 9 or a negative % would land in
+    // the ledger and then map to no grade at all.
+    const pliRating = num(b.pliRating), pliPct = num(b.pliPct);
+    if (pliRating < 1 || pliRating > 5) return res.status(400).json({ error: 'PLI rating runs 1 to 5.' });
+    if (pliPct < 0 || pliPct > 500) return res.status(400).json({ error: 'PLI % looks wrong — it should be between 0 and 500.' });
+    for (const x of (Array.isArray(b.kraScores) ? b.kraScores : [])) {
+      const r = num(x.mgrRating);
+      if (r != null && (r < 1 || r > 5)) return res.status(400).json({ error: 'A manager rating runs 1 to 5.' });
+    }
 
     const before = await engine.getInstance(s.approval_instance_id);
     const stage = before.chain.find((x) => x.seq === before.currentStageSeq);

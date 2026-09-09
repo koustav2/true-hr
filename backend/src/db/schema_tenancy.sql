@@ -358,3 +358,17 @@ CREATE UNIQUE INDEX IF NOT EXISTS uniq_doc_profile_company
   ON document_profiles (company_id) WHERE company_id IS NOT NULL;
 CREATE UNIQUE INDEX IF NOT EXISTS uniq_doc_profile_org_default
   ON document_profiles (organisation_id) WHERE company_id IS NULL;
+
+-- ── 14. KPI score provenance ───────────────────────────────────────────────
+-- A KRA's measurement bands (90-104% -> 3, 105-119% -> 4, 120%+ -> 5, varying
+-- per role) are the rule that turns MTD Achieved against MTD Target into a
+-- rating. They were stored and displayed but never applied: the employee simply
+-- picked a rating, so 60% of target could still be scored 5.
+--
+-- Now the rating is derived wherever the target and achievement are numeric.
+-- These two columns record the achievement % used and whether the rating came
+-- from the band or was entered by hand (a KRA like "Launch 3 campaigns" has
+-- nothing to divide, so an entered rating stands) — otherwise nobody reviewing
+-- a score later can tell which of the two it was.
+ALTER TABLE pms_kra_scores ADD COLUMN IF NOT EXISTS achievement_pct NUMERIC(8,2);
+ALTER TABLE pms_kra_scores ADD COLUMN IF NOT EXISTS rating_source   TEXT;

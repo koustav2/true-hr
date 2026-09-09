@@ -60,21 +60,92 @@ function RatingQueue() {
   );
 }
 
+/**
+ * The rating step, with the per-KRA grid GreenHR shows beside the self rating.
+ *
+ * The point of the grid here is provenance: a self rating derived from the
+ * KRA's measurement band shows the achievement % it came from, so a rater can
+ * see "3 because 96% of target" rather than a bare number somebody chose.
+ */
 function RateModal({ item, onClose, onDone }) {
+  const [d, setD] = useState(null);
   const [pliRating, setPliRating] = useState('3');
   const [pliPct, setPliPct] = useState('');
   const [remarks, setRemarks] = useState('');
+  const [kra, setKra] = useState({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+
+  useEffect(() => {
+    if (!item.kpiId) return;
+    api.get(`/kpi/${item.kpiId}`).then(setD).catch(() => setD(false));
+  }, [item.kpiId]);
+
   async function submit() {
     if (!pliPct) { setMsg('PLI % is required.'); return; }
     setBusy(true); setMsg('');
-    try { await api.post(`/pms/${item.submissionId}/rate`, { pliRating: Number(pliRating), pliPct: Number(pliPct), remarks }); onDone(); }
-    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+    try {
+      await api.post(`/pms/${item.submissionId}/rate`, {
+        pliRating: Number(pliRating), pliPct: Number(pliPct), remarks,
+        kraScores: Object.entries(kra)
+          .filter(([, v]) => v.mgrRating !== undefined && v.mgrRating !== '')
+          .map(([kraId, v]) => ({ kraId: Number(kraId), mgrRating: Number(v.mgrRating), mgrRemarks: v.mgrRemarks || null })),
+      });
+      onDone();
+    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
+
+  const scoreFor = (kraId) => d?.pms?.scores?.find((x) => x.kraId === kraId);
+
   return (
-    <Modal open onClose={onClose} title={`Rate — ${item.employee?.name} (${item.month}/${item.year})`}>
-      <div className="space-y-3">
+    <Modal open onClose={onClose} title={`Rate — ${item.employee?.name} (${item.month}/${item.year})`} size="lg">
+      <div className="space-y-3.5 max-h-[70vh] overflow-y-auto pr-1">
+        <p className="text-[12.5px] text-ink-soft">
+          Overall self rating <b className="text-ink">{item.selfRating ?? '—'}</b> — the weighted average of the
+          per-KRA ratings below.
+        </p>
+
+        {d === null ? <div className="p-6 flex justify-center"><Spinner /></div>
+          : d === false ? <p className="text-[12.5px] text-ink-faint">Could not load the KRA detail.</p>
+          : (
+          <div className="space-y-2">
+            {(d.kras || []).map((k) => {
+              const sc = scoreFor(k.id);
+              const mine = kra[k.id] || {};
+              const setK = (key) => (e) => setKra((x) => ({ ...x, [k.id]: { ...x[k.id], [key]: e.target.value } }));
+              return (
+                <Card key={k.id} className="p-3 space-y-2">
+                  <div className="flex items-start justify-between gap-3">
+                    <div className="min-w-0">
+                      <div className="text-[12.5px] font-semibold text-ink">KRA {k.seq} — {k.weightage}%</div>
+                      <p className="text-[12.5px] text-ink-soft">{k.description}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <div className="text-[11px] text-ink-faint">Self</div>
+                      <div className="text-[18px] font-semibold leading-none text-ink tabular-nums">{sc?.selfRating ?? '—'}</div>
+                    </div>
+                  </div>
+                  <div className="text-[11.5px] text-ink-faint">
+                    Target {sc?.mtdTarget || '—'} · Achieved {sc?.mtdAchieved || '—'}
+                    {sc?.achievementPct != null && <> · <b className="text-ink-soft">{sc.achievementPct}% of target</b></>}
+                    {sc?.ratingSource === 'BAND' && ' · scored from the band'}
+                    {sc?.ratingSource === 'ENTERED' && ' · entered by the employee (not measurable)'}
+                  </div>
+                  {sc?.selfRemarks && <p className="text-[11.5px] text-ink-soft">&ldquo;{sc.selfRemarks}&rdquo;</p>}
+                  <div className="grid sm:grid-cols-2 gap-2">
+                    <Select value={mine.mgrRating ?? (sc?.mgrRating ?? '')} onChange={setK('mgrRating')}>
+                      <option value="">Manager rating — leave to agree with self</option>
+                      {[['5', '5 — OAT'], ['4', '4 — SAT'], ['3', '3 — AT'], ['2', '2 — BT'], ['1', '1 — SBT']]
+                        .map(([v, l]) => <option key={v} value={v}>{l}</option>)}
+                    </Select>
+                    <Input placeholder="Manager remarks" value={mine.mgrRemarks ?? (sc?.mgrRemarks || '')} onChange={setK('mgrRemarks')} />
+                  </div>
+                </Card>
+              );
+            })}
+          </div>
+        )}
+
         <div className="grid grid-cols-2 gap-3">
           <div>
             <label className="text-xs text-ink-faint">PLI rating (1–5)</label>
@@ -87,6 +158,9 @@ function RateModal({ item, onClose, onDone }) {
             <Input type="number" value={pliPct} onChange={(e) => setPliPct(e.target.value)} placeholder="e.g. 95" />
           </div>
         </div>
+        <p className="text-[11.5px] text-ink-faint">
+          If yours is the last stage in the chain, this PLI % sets the final grade on the published ladder.
+        </p>
         <Textarea rows={2} placeholder="Remarks…" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
         {msg && <p className="text-sm text-red-600">{msg}</p>}
         <Button onClick={submit} disabled={busy}>{busy ? 'Saving…' : 'Submit rating'}</Button>

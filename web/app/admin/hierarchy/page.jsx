@@ -3,6 +3,7 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, StatTile } from '@/components/ui.jsx';
 import { downloadCsv } from '@/lib/csv.js';
+import StructureEditor from '@/components/StructureEditor.jsx';
 
 const PRESETS = [
   { label: 'Four rungs', names: ['Board', 'Leadership', 'Management', 'Executive'] },
@@ -40,6 +41,15 @@ export default function HierarchyPage() {
       .catch((e) => { setErr(e.message); setData({ levels: [], designations: [] }); });
   };
   useEffect(() => { if (companyId) load(companyId); /* eslint-disable-next-line */ }, [companyId]);
+
+  // Refresh in place after a structure change — no spinner, because blanking the
+  // whole page for a one-row edit reads as a crash.
+  const refresh = () => {
+    if (!companyId) return;
+    api.get(`/admin/companies/${companyId}/levels`)
+      .then((d) => setData(d))
+      .catch((e) => setErr(e.message));
+  };
 
   const dirty = useMemo(() => {
     if (!data) return false;
@@ -116,6 +126,7 @@ export default function HierarchyPage() {
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Levels" value={data.levels.length} tone="neutral" />
             <StatTile label="Designations" value={(data.designations || []).length} tone="neutral" />
+            <StatTile label="Departments" value={(data.departments || []).length} tone="neutral" />
             <StatTile label="Without a level" value={unassigned} tone={unassigned ? 'warn' : 'ok'}
               caption={unassigned ? 'They will not appear by level in reports' : 'Every title is placed'} />
             <StatTile label="People placed" value={data.levels.reduce((a, l) => a + l.employees, 0)} tone="ok" />
@@ -220,7 +231,7 @@ export default function HierarchyPage() {
                 </Button>
               </div>
               {(data.designations || []).length === 0 ? (
-                <Empty title="No designations yet" subtitle="Add designations on the Companies screen first." />
+                <Empty title="No designations yet" subtitle="Add them in Structure below, then place each on a rung." />
               ) : (
                 <div className="overflow-x-auto">
                   <table className="w-full">
@@ -249,6 +260,28 @@ export default function HierarchyPage() {
                 </div>
               )}
             </Card>
+          </section>
+
+          <section>
+            <h2 className="mb-2.5">Structure</h2>
+            <p className="mb-2.5 text-[12.5px] text-ink-faint">
+              Departments and designations belong to this company, so each entity in the group keeps its own.
+              Anything somebody currently holds cannot be deleted — move those people first.
+            </p>
+            <div className="grid gap-3.5 lg:grid-cols-2">
+              <StructureEditor
+                companyId={companyId}
+                kind="departments"
+                rows={data.departments || []}
+                onChanged={refresh}
+              />
+              <StructureEditor
+                companyId={companyId}
+                kind="designations"
+                rows={data.designations || []}
+                onChanged={refresh}
+              />
+            </div>
           </section>
         </>
       )}

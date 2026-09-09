@@ -417,3 +417,60 @@ CREATE INDEX IF NOT EXISTS idx_org_masters_kind ON org_masters (organisation_id,
 ALTER TABLE employees  ADD COLUMN IF NOT EXISTS sub_department_id BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;
 ALTER TABLE employees  ADD COLUMN IF NOT EXISTS branch_id         BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;
 ALTER TABLE policies   ADD COLUMN IF NOT EXISTS policy_type_id    BIGINT REFERENCES org_masters(id) ON DELETE SET NULL;
+
+-- ── 16. Leave types become per-organisation and dynamic ────────────────────
+-- leave_types was a GLOBAL table with a nine-row fixed list and `code` unique
+-- across the whole deployment. Two consequences, both wrong for a product sold
+-- per organisation:
+--   * renaming a leave type, or changing its annual quota, changed it for every
+--     tenant at once;
+--   * a tenant could not add a leave type it needs (Paternity, Bereavement,
+--     Comp Off) or remove one it does not use — the screen only let you edit
+--     the nine that shipped.
+--
+-- The nine original rows stay, with organisation_id NULL, and become templates:
+-- they are what a NEW organisation is seeded from and nothing points at them
+-- any more. migrate.js clones them per organisation and repoints that
+-- organisation's balances and requests onto its own copies, so figures do not
+-- move — only ownership does.
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS active          BOOLEAN NOT NULL DEFAULT true;
+ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS created_at      TIMESTAMPTZ NOT NULL DEFAULT now();
+
+-- `code` was unique deployment-wide, which blocks two organisations both having
+-- a "CL". It is now unique per organisation, and once per template set.
+ALTER TABLE leave_types DROP CONSTRAINT IF EXISTS leave_types_code_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_leave_type_org
+  ON leave_types (organisation_id, code) WHERE organisation_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_leave_type_template
+  ON leave_types (code) WHERE organisation_id IS NULL;
+CREATE INDEX IF NOT EXISTS idx_leave_types_org ON leave_types (organisation_id, sort_order);
+
+-- The nine standard types, as TEMPLATES (organisation_id NULL). Moved here from
+-- schema.sql because this is the first point where organisation_id exists, so
+-- the seed can be scoped: the anti-join adds only what is missing from the
+-- template set and never touches a row an organisation owns.
+INSERT INTO leave_types (organisation_id, code, name, annual_quota, requires_balance, sort_order)
+SELECT NULL, v.code, v.name, v.quota, v.needs_balance, v.ord
+  FROM (VALUES
+    ('EL',  'Earned Leave',        18::numeric, true,  1),
+    ('CL',  'Casual Leave',         9::numeric, true,  2),
+    ('SL',  'Sick Leave',          12::numeric, true,  3),
+    ('RH',  'Restricted Holiday',   2::numeric, true,  4),
+    ('MH',  'Monthly Holiday',     12::numeric, true,  5),
+    ('ML',  'Maternity Leave',    182::numeric, true,  6),
+    ('MSL', 'Menstrual Leave',     12::numeric, true,  7),
+    ('LWP', 'Leave Without Pay',    0::numeric, false, 8),
+    ('WFH', 'Work From Home',       0::numeric, false, 9)
+  ) AS v(code, name, quota, needs_balance, ord)
+ WHERE NOT EXISTS (
+   SELECT 1 FROM leave_types t WHERE t.organisation_id IS NULL AND t.code = v.code);
+
+-- Behaviour flags on the TEMPLATES only. Unscoped, these ran on every boot and
+-- would have re-enabled a flag a tenant had deliberately turned off.
+UPDATE leave_types SET allow_half_day    = true
+  WHERE organisation_id IS NULL AND code IN ('CL','SL','MSL') AND allow_half_day IS NOT true;
+UPDATE leave_types SET allow_certificate = true
+  WHERE organisation_id IS NULL AND code = 'SL' AND allow_certificate IS NOT true;
+UPDATE leave_types SET single_date       = true
+  WHERE organisation_id IS NULL AND code = 'MH' AND single_date IS NOT true;

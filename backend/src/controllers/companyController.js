@@ -276,3 +276,182 @@ export async function removeDesignation(req, res, next) {
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
+
+// ── Adding and removing many at once ───────────────────────────────────────
+//
+// Setting up a tenant means typing thirty departments, and restructuring means
+// clearing out a dozen. One-at-a-time was the only way, which is why these
+// exist. Everything is validated first and written in a single transaction, so
+// a bad entry on line 20 cannot leave nineteen half-created rows behind.
+
+const MAX_BULK = 200;
+
+/** The company, only if it belongs to the caller's organisation. */
+async function scopedCompany(req) {
+  const id = parseInt(req.params.id, 10);
+  if (!Number.isFinite(id)) return null;
+  return (await query(
+    `SELECT id FROM companies WHERE id = $1 AND ($2::bigint IS NULL OR organisation_id = $2)`,
+    [id, req.orgId || null])).rows[0] || null;
+}
+
+/**
+ * Read a list of names off the request. Accepts an array or one blob of text
+ * (newline-, comma- or semicolon-separated) because pasting a column out of a
+ * spreadsheet is how this actually gets used.
+ */
+function nameList(body, key) {
+  const raw = body?.[key];
+  const parts = Array.isArray(raw)
+    ? raw
+    : String(raw || '').split(/[\n,;]+/);
+  const out = [];
+  const seen = new Set();
+  for (const p of parts) {
+    const name = String(typeof p === 'string' ? p : (p?.name ?? p?.title ?? '')).trim().replace(/\s+/g, ' ');
+    if (!name) continue;
+    if (name.length > 120) return { error: `"${name.slice(0, 40)}…" is too long — keep it under 120 characters.` };
+    const k = name.toLowerCase();
+    if (seen.has(k)) continue;   // a duplicate inside the paste is a typo, not an error
+    seen.add(k);
+    out.push({ name, grade: typeof p === 'object' && p?.grade ? String(p.grade).trim() : null });
+  }
+  return { names: out };
+}
+
+const idList = (body) => (Array.isArray(body?.ids) ? body.ids : [])
+  .map((n) => parseInt(n, 10)).filter(Number.isFinite);
+
+// POST /admin/companies/:id/departments/bulk  { names: [] | "a\nb\nc" }
+export async function addDepartmentsBulk(req, res, next) {
+  try {
+    const co = await scopedCompany(req);
+    if (!co) return res.status(404).json({ error: 'Company not found' });
+    const { names, error } = nameList(req.body, 'names');
+    if (error) return res.status(400).json({ error });
+    if (!names.length) return res.status(400).json({ error: 'Type at least one department name.' });
+    if (names.length > MAX_BULK) return res.status(400).json({ error: `Add at most ${MAX_BULK} at a time.` });
+
+    const have = new Set((await query(
+      `SELECT lower(name) AS n FROM departments WHERE company_id = $1`, [co.id])).rows.map((r) => r.n));
+
+    const added = [];
+    const skipped = [];
+    await tx(async (c) => {
+      for (const { name } of names) {
+        if (have.has(name.toLowerCase())) { skipped.push(name); continue; }
+        const row = (await c.query(
+          `INSERT INTO departments (company_id, name) VALUES ($1,$2) RETURNING id, name`,
+          [co.id, name])).rows[0];
+        added.push({ id: Number(row.id), name: row.name });
+      }
+    });
+    if (added.length) {
+      await audit(req.user.id, 'CREATE_DEPARTMENT_BULK', 'department', null,
+        { companyId: co.id, names: added.map((a) => a.name) });
+    }
+    res.status(added.length ? 201 : 200).json({
+      ok: true, added, skipped,
+      message: `${added.length} added${skipped.length ? `, ${skipped.length} already existed` : ''}.`,
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/companies/:id/designations/bulk  { titles: [] | "a\nb\nc" }
+export async function addDesignationsBulk(req, res, next) {
+  try {
+    const co = await scopedCompany(req);
+    if (!co) return res.status(404).json({ error: 'Company not found' });
+    const { names, error } = nameList(req.body, 'titles');
+    if (error) return res.status(400).json({ error });
+    if (!names.length) return res.status(400).json({ error: 'Type at least one designation.' });
+    if (names.length > MAX_BULK) return res.status(400).json({ error: `Add at most ${MAX_BULK} at a time.` });
+
+    const have = new Set((await query(
+      `SELECT lower(title) AS t FROM designations WHERE company_id = $1`, [co.id])).rows.map((r) => r.t));
+
+    const added = [];
+    const skipped = [];
+    await tx(async (c) => {
+      for (const { name, grade } of names) {
+        if (have.has(name.toLowerCase())) { skipped.push(name); continue; }
+        const row = (await c.query(
+          `INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3) RETURNING id, title, grade`,
+          [co.id, name, grade])).rows[0];
+        added.push({ id: Number(row.id), title: row.title, grade: row.grade });
+      }
+    });
+    if (added.length) {
+      await audit(req.user.id, 'CREATE_DESIGNATION_BULK', 'designation', null,
+        { companyId: co.id, titles: added.map((a) => a.title) });
+    }
+    res.status(added.length ? 201 : 200).json({
+      ok: true, added, skipped,
+      message: `${added.length} added${skipped.length ? `, ${skipped.length} already existed` : ''}.`,
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/companies/:id/departments/delete  { ids: [] }
+//
+// A department somebody is in is refused by name rather than silently skipped —
+// HR needs to know who to move first. The rest still go, so one occupied
+// department does not block the whole cleanup.
+export async function removeDepartmentsBulk(req, res, next) {
+  try {
+    const co = await scopedCompany(req);
+    if (!co) return res.status(404).json({ error: 'Company not found' });
+    const ids = idList(req.body);
+    if (!ids.length) return res.status(400).json({ error: 'Nothing selected.' });
+
+    const rows = (await query(
+      `SELECT d.id, d.name,
+              (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id) AS used
+         FROM departments d WHERE d.company_id = $1 AND d.id = ANY($2::bigint[])`,
+      [co.id, ids])).rows;
+
+    const blocked = rows.filter((r) => r.used > 0)
+      .map((r) => ({ id: Number(r.id), name: r.name, employees: r.used }));
+    const free = rows.filter((r) => r.used === 0).map((r) => Number(r.id));
+    if (free.length) {
+      await query(`DELETE FROM departments WHERE company_id = $1 AND id = ANY($2::bigint[])`, [co.id, free]);
+      await audit(req.user.id, 'DELETE_DEPARTMENT_BULK', 'department', null, { companyId: co.id, ids: free });
+    }
+    res.json({
+      ok: true, deleted: free.length, blocked,
+      message: blocked.length
+        ? `${free.length} deleted. Kept ${blocked.map((b) => `${b.name} (${b.employees} employee${b.employees === 1 ? '' : 's'})`).join(', ')} — move those people first.`
+        : `${free.length} deleted.`,
+    });
+  } catch (e) { next(e); }
+}
+
+// POST /admin/companies/:id/designations/delete  { ids: [] }
+export async function removeDesignationsBulk(req, res, next) {
+  try {
+    const co = await scopedCompany(req);
+    if (!co) return res.status(404).json({ error: 'Company not found' });
+    const ids = idList(req.body);
+    if (!ids.length) return res.status(400).json({ error: 'Nothing selected.' });
+
+    const rows = (await query(
+      `SELECT g.id, g.title,
+              (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id) AS used
+         FROM designations g WHERE g.company_id = $1 AND g.id = ANY($2::bigint[])`,
+      [co.id, ids])).rows;
+
+    const blocked = rows.filter((r) => r.used > 0)
+      .map((r) => ({ id: Number(r.id), title: r.title, employees: r.used }));
+    const free = rows.filter((r) => r.used === 0).map((r) => Number(r.id));
+    if (free.length) {
+      await query(`DELETE FROM designations WHERE company_id = $1 AND id = ANY($2::bigint[])`, [co.id, free]);
+      await audit(req.user.id, 'DELETE_DESIGNATION_BULK', 'designation', null, { companyId: co.id, ids: free });
+    }
+    res.json({
+      ok: true, deleted: free.length, blocked,
+      message: blocked.length
+        ? `${free.length} deleted. Kept ${blocked.map((b) => `${b.title} (${b.employees} holder${b.employees === 1 ? '' : 's'})`).join(', ')} — retitle those people first.`
+        : `${free.length} deleted.`,
+    });
+  } catch (e) { next(e); }
+}

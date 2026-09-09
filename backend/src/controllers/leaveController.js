@@ -1,6 +1,7 @@
 import { joiningDate, beforeJoining } from '../utils/joining.js';
 import { query, pool } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import * as leaveTypes from '../services/leaveTypes.js';
 import { notifyEmployee, notifyManagersOf, employeeName } from '../services/notify.js';
 
 // Resolve an employee's state (posting_state, else CURRENT address state).
@@ -49,10 +50,15 @@ export async function holidays(req, res, next) {
 // Make sure the employee has a balance row for every leave type, with EL/CL/SL
 // allocated per the statutory entitlement of the employee's place-of-posting state.
 async function ensureBalances(empId) {
-  // 1) Base rows from the generic leave-type quotas (RH/MH/ML/MSL/LWP/WFH).
+  // 1) Base rows from the generic leave-type quotas, taken from the leave types
+  //    the employee's OWN organisation has configured. Scoping by the employee
+  //    rather than by req.orgId keeps this correct for every caller.
   await query(
     `INSERT INTO leave_balances (employee_id, leave_type_id, allocated, used)
-     SELECT $1, lt.id, lt.annual_quota, 0 FROM leave_types lt
+     SELECT e.id, lt.id, lt.annual_quota, 0
+       FROM employees e
+       JOIN leave_types lt ON lt.organisation_id = e.organisation_id AND lt.active
+      WHERE e.id = $1
      ON CONFLICT (employee_id, leave_type_id) DO NOTHING`, [empId]);
 
   // 2) Resolve the employee's state: explicit posting_state, else CURRENT address state.
@@ -70,7 +76,9 @@ async function ensureBalances(empId) {
   for (const [code, val] of [['EL', ent.el], ['CL', ent.cl], ['SL', ent.sl]]) {
     await query(
       `UPDATE leave_balances b SET allocated=$1
-       FROM leave_types lt WHERE b.leave_type_id=lt.id AND lt.code=$2 AND b.employee_id=$3`,
+       FROM leave_types lt, employees e
+        WHERE b.leave_type_id=lt.id AND lt.code=$2 AND b.employee_id=$3
+          AND e.id = b.employee_id AND lt.organisation_id = e.organisation_id`,
       [val, code, empId]);
   }
 }
@@ -109,13 +117,9 @@ const LIST_COLS = `lr.id, lr.from_date, lr.to_date, lr.days, lr.half_day, lr.rea
 // GET /leave/types
 export async function types(req, res, next) {
   try {
-    const rows = (await query(
-      `SELECT code, name, annual_quota, requires_balance, allow_half_day, single_date, allow_certificate
-       FROM leave_types ORDER BY sort_order`)).rows;
-    res.json(rows.map((r) => ({
-      code: r.code, name: r.name, annualQuota: Number(r.annual_quota), requiresBalance: r.requires_balance,
-      allowHalfDay: r.allow_half_day, singleDate: r.single_date, allowCertificate: r.allow_certificate,
-    })));
+    // Only this organisation's own types, and only the live ones — a retired
+    // type must not appear in the apply-for-leave dropdown.
+    res.json(await leaveTypes.forOrg(req.orgId, { activeOnly: true }));
   } catch (e) { next(e); }
 }
 
@@ -148,7 +152,11 @@ export async function apply(req, res, next) {
     const doj = await joiningDate(empId);
     if (beforeJoining(fromDate, doj)) return res.status(400).json({ error: `Leave cannot start before your joining date (${doj})` });
 
-    const lt = (await query(`SELECT id, requires_balance, allow_half_day FROM leave_types WHERE code=$1`, [leaveCode])).rows[0];
+    const lt = (await query(
+      `SELECT lt.id, lt.requires_balance, lt.allow_half_day
+         FROM leave_types lt JOIN employees e ON e.organisation_id = lt.organisation_id
+        WHERE e.id = $1 AND lt.code = $2 AND lt.active`,
+      [empId, String(leaveCode).toUpperCase()])).rows[0];
     if (!lt) return res.status(400).json({ error: 'Unknown leave type' });
 
     const empSt = await employeeState(empId);

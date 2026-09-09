@@ -337,7 +337,10 @@ r.delete('/admin/holidays/:id', authenticate, requireModule('LEAVE', 'manage'), 
 r.get('/admin/entitlements', authenticate, requireModule('LEAVE'), leaveAdmin.listEntitlements);
 r.put('/admin/entitlements', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.upsertEntitlement);
 r.get('/admin/leave-types', authenticate, requireModule('LEAVE'), leaveAdmin.listLeaveTypes);
+r.post('/admin/leave-types', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.createLeaveType);
+r.post('/admin/leave-types/bulk', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.createLeaveTypesBulk);
 r.put('/admin/leave-types/:code', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.updateLeaveType);
+r.delete('/admin/leave-types/:code', authenticate, requireModule('LEAVE', 'manage'), leaveAdmin.deleteLeaveType);
 
 // --- Support Desk portal (HR/IT/Admin agents) ---
 r.get('/admin/support', authenticate, requireModule('SUPPORT'), support.adminList);
@@ -417,6 +420,12 @@ r.post('/admin/companies/:id/departments', authenticate, requireOrg, requireModu
 r.delete('/admin/companies/:id/departments/:depId', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDepartment);
 r.post('/admin/companies/:id/designations', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignation);
 r.delete('/admin/companies/:id/designations/:desId', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDesignation);
+// Add-many / delete-many: a new tenant types its whole structure in one go, and
+// a restructure clears out a dozen titles at once.
+r.post('/admin/companies/:id/departments/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDepartmentsBulk);
+r.post('/admin/companies/:id/designations/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignationsBulk);
+r.post('/admin/companies/:id/departments/delete', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDepartmentsBulk);
+r.post('/admin/companies/:id/designations/delete', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDesignationsBulk);
 
 // --- Termination (employer-initiated exit; separate from resignation) ---
 r.get('/admin/termination-types', authenticate, requireModule('TERMINATION'), termination.types);

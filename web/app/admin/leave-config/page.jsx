@@ -1,7 +1,7 @@
 'use client';
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
-import { Card, Button, Input, Select, Spinner } from '@/components/ui.jsx';
+import { Card, Button, Input, Select, Spinner, Badge, Modal, Field, ConfirmClick, Empty } from '@/components/ui.jsx';
 
 const TABS = ['Holidays', 'State Entitlements', 'Leave Types'];
 
@@ -11,7 +11,7 @@ export default function LeaveConfigPage() {
     <div className="space-y-5">
       <div>
         <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Leave Configuration</h1>
-        <p className="text-ink-faint text-sm mt-0.5">Manage state-based holidays, statutory entitlements, and leave types.</p>
+        <p className="text-ink-faint text-sm mt-0.5">Holidays and statutory entitlements, plus your organisation's own leave types.</p>
       </div>
       <div className="flex gap-1.5 border-b border-line">
         {TABS.map((t, i) => (
@@ -154,40 +154,226 @@ function Entitlements() {
 }
 
 /* ---------------- Leave Types ---------------- */
+//
+// These belong to the organisation, not the deployment. Every tenant starts
+// from the same nine and then goes its own way: some have Paternity, some call
+// Casual Leave something else, some have none of it. So this screen adds,
+// retires and reactivates as well as edits.
+//
+// "Retire" rather than "delete" whenever a type has been allocated or applied
+// for — deleting it would orphan balances and rewrite people's leave history.
+// The server decides which of the two happened and says so.
+
+const BLANK = { code: '', name: '', annualQuota: 0, requiresBalance: true, allowHalfDay: false, singleDate: false, allowCertificate: false };
+const FLAGS = [
+  ['requiresBalance', 'Balance'],
+  ['allowHalfDay', 'Half-day'],
+  ['singleDate', 'Single date'],
+  ['allowCertificate', 'Certificate'],
+];
+
 function LeaveTypes() {
   const [rows, setRows] = useState(null);
   const [saving, setSaving] = useState(null);
-  const load = () => api.get('/admin/leave-types').then(setRows).catch(() => setRows([]));
+  const [adding, setAdding] = useState(false);
+  const [draft, setDraft] = useState([{ ...BLANK }]);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+
+  const load = () => api.get('/admin/leave-types').then(setRows).catch((e) => { setErr(e.message); setRows([]); });
   useEffect(() => { load(); }, []);
 
-  const setField = (idx, k, v) => setRows((rs) => rs.map((r, i) => i === idx ? { ...r, [k]: v } : r));
+  const setField = (idx, k, v) => setRows((rs) => rs.map((r, i) => (i === idx ? { ...r, [k]: v } : r)));
+  const setDraftField = (idx, k, v) => setDraft((ds) => ds.map((d, i) => (i === idx ? { ...d, [k]: v } : d)));
+
   async function save(r) {
-    setSaving(r.code);
-    try { await api.put(`/admin/leave-types/${r.code}`, { name: r.name, annualQuota: Number(r.annualQuota), requiresBalance: r.requiresBalance, allowHalfDay: r.allowHalfDay, singleDate: r.singleDate, allowCertificate: r.allowCertificate }); await load(); }
+    setSaving(r.code); setErr(''); setMsg('');
+    try {
+      await api.put(`/admin/leave-types/${r.code}`, {
+        name: r.name, annualQuota: Number(r.annualQuota), requiresBalance: r.requiresBalance,
+        allowHalfDay: r.allowHalfDay, singleDate: r.singleDate, allowCertificate: r.allowCertificate,
+      });
+      setMsg(`${r.code} saved.`);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(null); }
+  }
+
+  async function setActive(r, active) {
+    setSaving(r.code); setErr(''); setMsg('');
+    try {
+      await api.put(`/admin/leave-types/${r.code}`, { active });
+      setMsg(active ? `${r.name} is available again.` : `${r.name} retired.`);
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(null); }
+  }
+
+  async function remove(r) {
+    setSaving(r.code); setErr(''); setMsg('');
+    try {
+      const res = await api.del(`/admin/leave-types/${r.code}`);
+      setMsg(res.message || 'Done.');
+      await load();
+    } catch (e) { setErr(e.message); }
+    finally { setSaving(null); }
+  }
+
+  async function addAll() {
+    const filled = draft.filter((d) => d.code.trim() || d.name.trim());
+    if (!filled.length) return;
+    setSaving('__add'); setErr(''); setMsg('');
+    try {
+      const res = await api.post('/admin/leave-types/bulk', { types: filled });
+      setMsg(`${res.added} leave ${res.added === 1 ? 'type' : 'types'} added.`);
+      setDraft([{ ...BLANK }]);
+      setAdding(false);
+      await load();
+    } catch (e) { setErr(e.message); }
     finally { setSaving(null); }
   }
 
   if (rows === null) return <div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
+
   return (
-    <Card className="overflow-x-auto">
-      <table className="w-full text-sm">
-        <thead className="bg-slate-50/60 text-ink-faint border-b border-line">
-          <tr>{['Code', 'Name', 'Annual', 'Balance', 'Half-day', 'Single date', 'Certificate', ''].map((h) => <th key={h} className="text-left px-4 py-3 font-medium">{h}</th>)}</tr>
-        </thead>
-        <tbody className="divide-y divide-line">
-          {rows.map((r, i) => (
-            <tr key={r.code} className="hover:bg-slate-50/40">
-              <td className="px-4 py-2.5 font-semibold text-ink">{r.code}</td>
-              <td className="px-2 py-2"><Input value={r.name} onChange={(e) => setField(i, 'name', e.target.value)} className="w-40" /></td>
-              <td className="px-2 py-2"><Input type="number" step="0.5" value={r.annualQuota} onChange={(e) => setField(i, 'annualQuota', Number(e.target.value))} className="w-20" /></td>
-              {['requiresBalance', 'allowHalfDay', 'singleDate', 'allowCertificate'].map((k) => (
-                <td key={k} className="px-4 py-2.5"><input type="checkbox" checked={!!r[k]} onChange={(e) => setField(i, k, e.target.checked)} className="h-4 w-4 accent-brand-600" /></td>
+    <div className="space-y-3">
+      <div className="flex items-start justify-between gap-3">
+        <p className="text-[12.5px] text-ink-faint max-w-2xl">
+          Your organisation&rsquo;s own list — editing or retiring one here affects nobody else.
+          A type that has balances or requests against it is retired rather than deleted, so past leave stays intact.
+        </p>
+        <Button size="sm" onClick={() => setAdding(true)}>Add leave types</Button>
+      </div>
+
+      {msg && <p className="text-[13px] text-pos">{msg}</p>}
+      {err && <p className="text-[13px] text-neg">{err}</p>}
+
+      {rows.length === 0 ? (
+        <Card><Empty title="No leave types yet" subtitle="Add the ones your organisation grants — EL, CL, SL and anything else." /></Card>
+      ) : (
+        <Card className="overflow-x-auto">
+          <table className="w-full text-sm">
+            <thead className="bg-slate-50/60 text-ink-faint border-b border-line">
+              <tr>
+                {['Code', 'Name', 'Annual', ...FLAGS.map((f) => f[1]), 'In use', ''].map((h) => (
+                  <th key={h} className="text-left px-4 py-3 font-medium">{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody className="divide-y divide-line">
+              {rows.map((r, i) => (
+                <tr key={r.code} className={`hover:bg-slate-50/40 ${r.active === false ? 'opacity-60' : ''}`}>
+                  <td className="px-4 py-2.5 font-semibold text-ink whitespace-nowrap">
+                    {r.code}
+                    {r.active === false && <Badge tone="neutral" className="ml-1.5">retired</Badge>}
+                  </td>
+                  <td className="px-2 py-2"><Input value={r.name} onChange={(e) => setField(i, 'name', e.target.value)} className="w-40" /></td>
+                  <td className="px-2 py-2"><Input type="number" step="0.5" min="0" value={r.annualQuota} onChange={(e) => setField(i, 'annualQuota', Number(e.target.value))} className="w-20" /></td>
+                  {FLAGS.map(([k]) => (
+                    <td key={k} className="px-4 py-2.5">
+                      <input type="checkbox" checked={!!r[k]} onChange={(e) => setField(i, k, e.target.checked)} className="h-4 w-4 accent-brand-600" />
+                    </td>
+                  ))}
+                  <td className="px-4 py-2.5 text-[12px] text-ink-faint whitespace-nowrap">
+                    {r.inUse ? `${r.inUse} record${r.inUse === 1 ? '' : 's'}` : '—'}
+                  </td>
+                  <td className="px-4 py-2.5">
+                    <div className="flex items-center gap-2 whitespace-nowrap">
+                      <Button size="sm" variant="soft" onClick={() => save(r)} disabled={saving === r.code}>
+                        {saving === r.code ? <Spinner /> : 'Save'}
+                      </Button>
+                      {r.active === false ? (
+                        <button className="text-[12px] font-semibold text-brand-700 hover:underline"
+                          disabled={saving === r.code} onClick={() => setActive(r, true)}>
+                          Reactivate
+                        </button>
+                      ) : r.protectedReason ? (
+                        // Payroll and the statutory entitlement table read these
+                        // four by code, so removing one would break something
+                        // quietly. Say so where the button would have been.
+                        <span className="text-[11.5px] text-ink-faint" title={r.protectedReason}>required</span>
+                      ) : (
+                        <ConfirmClick onConfirm={() => remove(r)} className="text-neg text-[12px] font-semibold">
+                          {r.inUse ? 'Retire' : 'Delete'}
+                        </ConfirmClick>
+                      )}
+                    </div>
+                  </td>
+                </tr>
               ))}
-              <td className="px-4 py-2.5"><Button size="sm" variant="soft" onClick={() => save(r)} disabled={saving === r.code}>{saving === r.code ? <Spinner /> : 'Save'}</Button></td>
-            </tr>
-          ))}
-        </tbody>
-      </table>
-    </Card>
+            </tbody>
+          </table>
+        </Card>
+      )}
+
+      <Modal
+        open={adding}
+        onClose={() => setAdding(false)}
+        title="Add leave types"
+        size="xl"
+        actions={
+          <>
+            <Button variant="outline" onClick={() => setAdding(false)}>Cancel</Button>
+            <Button onClick={addAll} disabled={saving === '__add'}>
+              {saving === '__add' ? <Spinner /> : 'Add all'}
+            </Button>
+          </>
+        }
+      >
+        <div className="space-y-3">
+          <p className="text-[12.5px] text-ink-faint">
+            The code is what payroll and the mobile app match on, so keep it short and permanent —
+            up to 10 characters, letters, digits and underscores, e.g. <span className="font-mono">BL</span>,{' '}
+            <span className="font-mono">PAT_L</span>. The name is what employees see and can be changed later.
+          </p>
+          <div className="overflow-x-auto">
+            <table className="w-full text-sm">
+              <thead className="text-ink-faint border-b border-line">
+                <tr>
+                  {['Code', 'Name', 'Annual', ...FLAGS.map((f) => f[1]), ''].map((h) => (
+                    <th key={h} className="text-left px-2 py-2 font-medium">{h}</th>
+                  ))}
+                </tr>
+              </thead>
+              <tbody className="divide-y divide-line">
+                {draft.map((d, i) => (
+                  <tr key={i}>
+                    <td className="px-2 py-2">
+                      <Input value={d.code} maxLength={10} placeholder="BL"
+                        onChange={(e) => setDraftField(i, 'code', e.target.value.toUpperCase())} className="w-24 font-mono" />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Input value={d.name} placeholder="Bereavement Leave"
+                        onChange={(e) => setDraftField(i, 'name', e.target.value)} className="w-52" />
+                    </td>
+                    <td className="px-2 py-2">
+                      <Input type="number" step="0.5" min="0" value={d.annualQuota}
+                        onChange={(e) => setDraftField(i, 'annualQuota', Number(e.target.value))} className="w-20" />
+                    </td>
+                    {FLAGS.map(([k]) => (
+                      <td key={k} className="px-3 py-2">
+                        <input type="checkbox" checked={!!d[k]}
+                          onChange={(e) => setDraftField(i, k, e.target.checked)} className="h-4 w-4 accent-brand-600" />
+                      </td>
+                    ))}
+                    <td className="px-2 py-2">
+                      {draft.length > 1 && (
+                        <button className="text-neg text-[12px] font-semibold hover:underline"
+                          onClick={() => setDraft((ds) => ds.filter((_, j) => j !== i))}>
+                          Remove
+                        </button>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
+          <Button variant="outline" size="sm" onClick={() => setDraft((ds) => [...ds, { ...BLANK }])}>
+            Add another row
+          </Button>
+        </div>
+      </Modal>
+    </div>
   );
 }

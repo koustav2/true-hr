@@ -121,6 +121,18 @@ export async function create(req, res, next) {
         `INSERT INTO org_payroll_settings (organisation_id) VALUES ($1)
          ON CONFLICT (organisation_id) DO NOTHING`, [org.id]);
 
+      // Leave types belong to the organisation. Copy the template set in the
+      // same transaction so the tenant is never briefly without any, then let
+      // them rename, add and retire freely without touching anyone else.
+      await c.query(
+        `INSERT INTO leave_types
+           (organisation_id, code, name, annual_quota, requires_balance, sort_order,
+            allow_half_day, single_date, allow_certificate)
+         SELECT $1, t.code, t.name, t.annual_quota, t.requires_balance, t.sort_order,
+                t.allow_half_day, t.single_date, t.allow_certificate
+           FROM leave_types t WHERE t.organisation_id IS NULL
+         ON CONFLICT DO NOTHING`, [org.id]);
+
       return org;
     });
 

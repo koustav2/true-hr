@@ -140,9 +140,11 @@ KINDS['leave-balance'] = {
   label: 'Leave balances',
   sheet: 'Bulk Leave Balance',
   async prepare(req) {
-    // leave_types is a global catalogue (no organisation_id column).
+    // Leave types belong to the organisation, so the columns differ per tenant.
     const types = (await query(
-      `SELECT id, code, name FROM leave_types WHERE requires_balance ORDER BY sort_order, code`)).rows;
+      `SELECT id, code, name FROM leave_types
+        WHERE organisation_id = $1 AND requires_balance AND active
+        ORDER BY sort_order, code`, [req.orgId || null])).rows;
     const emps = await activeEmployees(req.orgId, req.companyScope);
     const bal = (await query(
       `SELECT lb.employee_id, lt.code, lb.allocated, lb.used
@@ -237,7 +239,12 @@ export async function upload(req, res) {
   if (!codeCol) return res.status(400).json({ error: 'That sheet has no "Employee Code" column — download a fresh template.' });
 
   const ctx = kind === 'leave-balance'
-    ? { types: (await query(`SELECT id, code FROM leave_types WHERE requires_balance ORDER BY code`)).rows }
+    ? {
+        types: (await query(
+          `SELECT id, code FROM leave_types
+            WHERE organisation_id = $1 AND requires_balance AND active ORDER BY code`,
+          [req.orgId || null])).rows,
+      }
     : {};
 
   const results = [];

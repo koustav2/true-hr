@@ -307,26 +307,19 @@ CREATE TABLE IF NOT EXISTS leave_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_leave_emp ON leave_requests(employee_id, status);
 
--- Seed the standard leave types (quotas are placeholders until HR confirms via PDF)
-INSERT INTO leave_types (code, name, annual_quota, requires_balance, sort_order) VALUES
-  ('EL',  'Earned Leave',        18, true, 1),
-  ('CL',  'Casual Leave',         9, true, 2),
-  ('SL',  'Sick Leave',          12, true, 3),
-  ('RH',  'Restricted Holiday',   2, true, 4),
-  ('MH',  'Monthly Holiday',     12, true, 5),
-  ('ML',  'Maternity Leave',    182, true, 6),
-  ('MSL', 'Menstrual Leave',     12, true, 7),
-  ('LWP', 'Leave Without Pay',    0, false, 8),
-  ('WFH', 'Work From Home',       0, false, 9)
-ON CONFLICT (code) DO NOTHING;
-
 -- Per-type UI/behaviour flags (mirrors the Apply Leave screen rules)
 ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS allow_half_day    BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS single_date       BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE leave_types ADD COLUMN IF NOT EXISTS allow_certificate BOOLEAN NOT NULL DEFAULT false;
-UPDATE leave_types SET allow_half_day=true    WHERE code IN ('CL','SL','MSL');
-UPDATE leave_types SET allow_certificate=true WHERE code='SL';
-UPDATE leave_types SET single_date=true       WHERE code='MH';
+
+-- The nine standard types are seeded in schema_tenancy.sql section 16, not here.
+--
+-- This file runs on every boot and cannot mention organisation_id, which does
+-- not exist until schema_tenancy.sql adds it. Seeding here would mean an
+-- `ON CONFLICT (code)` the per-organisation unique index no longer satisfies
+-- (a hard startup failure), and flag defaults written `WHERE code IN (...)`
+-- with no organisation filter — which would reset every tenant's own leave-type
+-- settings on every deploy. Section 16 does both, scoped to the templates.
 
 ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS half_day    BOOLEAN NOT NULL DEFAULT false;
 ALTER TABLE leave_requests ADD COLUMN IF NOT EXISTS certificate TEXT;

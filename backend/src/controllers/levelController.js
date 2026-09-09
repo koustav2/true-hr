@@ -42,10 +42,23 @@ async function payload(co) {
                  JOIN designations d ON d.id = e.designation_id
                 WHERE d.level_id = l.id AND e.onboarding_status = 'ACTIVE') AS employee_count
          FROM org_levels l WHERE l.company_id=$1 ORDER BY l.level_no`, [co.id]);
+  // The holder count comes back with each designation so the screen can grey
+  // out the ones it would refuse to delete instead of failing after the click.
   const designations = (await query(
-    `SELECT id, title, grade, level_id FROM designations WHERE company_id=$1 ORDER BY title`, [co.id])).rows
-    .map((d) => ({ id: Number(d.id), title: d.title, grade: d.grade, levelId: d.level_id != null ? Number(d.level_id) : null }));
-  return { companyId: co.id, company: co.name, maxLevels: MAX_LEVELS, levels: rows.map(shape), designations };
+    `SELECT g.id, g.title, g.grade, g.level_id,
+            (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id) AS employees
+       FROM designations g WHERE g.company_id=$1 ORDER BY g.title`, [co.id])).rows
+    .map((d) => ({
+      id: Number(d.id), title: d.title, grade: d.grade,
+      levelId: d.level_id != null ? Number(d.level_id) : null,
+      employees: Number(d.employees || 0),
+    }));
+  const departments = (await query(
+    `SELECT d.id, d.name,
+            (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id) AS employees
+       FROM departments d WHERE d.company_id=$1 ORDER BY d.name`, [co.id])).rows
+    .map((d) => ({ id: Number(d.id), name: d.name, employees: Number(d.employees || 0) }));
+  return { companyId: co.id, company: co.name, maxLevels: MAX_LEVELS, levels: rows.map(shape), designations, departments };
 }
 
 // GET /admin/companies/:companyId/levels

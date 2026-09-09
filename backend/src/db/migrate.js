@@ -149,6 +149,75 @@ async function main() {
     }
   }
 
+  // ── Leave types per organisation ─────────────────────────────────────────
+  // leave_types used to be one global list shared by every tenant, so renaming
+  // a type or changing its quota changed it for all of them, and nobody could
+  // add or remove one. The original nine rows become templates
+  // (organisation_id IS NULL) and each organisation gets its own copies, with
+  // its balances and requests repointed onto them.
+  //
+  // Figures must not move: the clone carries the same code, name, quota and
+  // flags, and every balance/request row is matched to its clone BY CODE. Runs
+  // once per organisation and is skipped afterwards, so it is safe on reboot.
+  {
+    const orgs = (await pool.query(
+      `SELECT o.id FROM organisations o
+        WHERE NOT EXISTS (SELECT 1 FROM leave_types lt WHERE lt.organisation_id = o.id)`)).rows;
+    let cloned = 0, repointedBal = 0, repointedReq = 0;
+    for (const o of orgs) {
+      // Clone the templates for this organisation.
+      const ins = await pool.query(
+        `INSERT INTO leave_types
+           (organisation_id, code, name, annual_quota, requires_balance, sort_order,
+            allow_half_day, single_date, allow_certificate)
+         SELECT $1, t.code, t.name, t.annual_quota, t.requires_balance, t.sort_order,
+                t.allow_half_day, t.single_date, t.allow_certificate
+           FROM leave_types t WHERE t.organisation_id IS NULL
+         ON CONFLICT DO NOTHING`, [o.id]);
+      cloned += ins.rowCount;
+
+      // Repoint this organisation's balances onto its own copies, matched by code.
+      const b = await pool.query(
+        `UPDATE leave_balances lb SET leave_type_id = mine.id
+           FROM leave_types old, leave_types mine, employees e
+          WHERE lb.leave_type_id = old.id
+            AND old.organisation_id IS NULL
+            AND mine.organisation_id = $1
+            AND mine.code = old.code
+            AND e.id = lb.employee_id
+            AND e.organisation_id = $1`, [o.id]);
+      repointedBal += b.rowCount;
+
+      const r = await pool.query(
+        `UPDATE leave_requests lr SET leave_type_id = mine.id
+           FROM leave_types old, leave_types mine, employees e
+          WHERE lr.leave_type_id = old.id
+            AND old.organisation_id IS NULL
+            AND mine.organisation_id = $1
+            AND mine.code = old.code
+            AND e.id = lr.employee_id
+            AND e.organisation_id = $1`, [o.id]);
+      repointedReq += r.rowCount;
+    }
+    if (orgs.length) {
+      console.log(`[migrate] leave types cloned for ${orgs.length} organisations `
+        + `(${cloned} types, ${repointedBal} balances and ${repointedReq} requests repointed)`);
+    } else {
+      console.log('[migrate] leave types already per-organisation');
+    }
+    // Anything still pointing at a template means a row whose employee has no
+    // organisation — worth saying out loud rather than leaving to be discovered.
+    const orphans = (await pool.query(
+      `SELECT (SELECT COUNT(*) FROM leave_balances lb JOIN leave_types t ON t.id=lb.leave_type_id
+                WHERE t.organisation_id IS NULL) AS bal,
+              (SELECT COUNT(*) FROM leave_requests lr JOIN leave_types t ON t.id=lr.leave_type_id
+                WHERE t.organisation_id IS NULL) AS req`)).rows[0];
+    if (Number(orphans.bal) || Number(orphans.req)) {
+      console.warn(`[migrate] WARNING: ${orphans.bal} leave balances and ${orphans.req} leave requests `
+        + 'still point at a template leave type — their employees have no organisation set.');
+    }
+  }
+
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {
     await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_employees_official_email ON employees (lower(official_email))`);

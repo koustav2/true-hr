@@ -5,6 +5,7 @@ import { audit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { estimateTax, computeRegimeTax } from '../services/incomeTax.js';
 import { buildForm16Pdf } from '../services/docPdf.js';
+import { brandForEmployee } from '../services/docProfile.js';
 
 export async function getProfile(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
@@ -128,7 +129,8 @@ export async function form16(req, res) {
   buildForm16Pdf({ financialYear: fy || '', regime, grossAnnual, deductions: est.deductions,
     taxable: chosen.taxable, taxBeforeCess: chosen.taxBeforeCess, cess: chosen.cess,
     totalTax: chosen.totalTax, monthlyTds: chosen.monthlyTds,
-    meta: { name: `${e.first_name || ''} ${e.last_name || ''}`.trim(), pan } }, res);
+    meta: { name: `${e.first_name || ''} ${e.last_name || ''}`.trim(), pan } },
+    res, await brandForEmployee(employeeId));
 }
 
 function sendCsv(res, filename, cols, rows) {

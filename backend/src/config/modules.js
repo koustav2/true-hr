@@ -64,6 +64,9 @@ export const MODULES = [
   { key: 'LETTERS',       label: 'Letters',              group: MODULE_GROUPS.COMMS,      path: '/admin/letters',
     note: 'Confirmation, transfer, experience, relieving and more' },
   { key: 'POLICIES',      label: 'Policies',             group: MODULE_GROUPS.COMMS,       path: '/admin/policies' },
+  { key: 'DOCBRAND',      label: 'Document Branding',    group: MODULE_GROUPS.COMMS,       path: '/admin/branding',
+    sensitive: true,
+    note: 'Letterhead, logo, signatory and PDF templates per organisation or company' },
   { key: 'BANNERS',       label: 'App Banners',          group: MODULE_GROUPS.COMMS,       path: '/admin/banners' },
   // ── FINANCE ───────────────────────────────────────────────────
   { key: 'NFA',           label: 'NFA',                  group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa' },
@@ -129,7 +132,7 @@ export const SYSTEM_ROLES = [
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
       'TERMINATION', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
-      'BULK', 'HRMIS',
+      'BULK', 'HRMIS', 'DOCBRAND',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
@@ -221,7 +224,7 @@ export const GRACE_MODULES = ['DASHBOARD'];
 
 const STARTER = [
   'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'STRUCTURE',
-  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART',
+  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART', 'DOCBRAND',
 ];
 const GROWTH = [
   ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',

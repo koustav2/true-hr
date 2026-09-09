@@ -4,6 +4,7 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import { LETTER_TYPES, buildLetter, placeholders } from '../services/letters.js';
 import { buildLetterPdf } from '../services/docPdf.js';
+import { brandForEmployee } from '../services/docProfile.js';
 
 // GET /letters/types — built-in catalogue + org custom templates.
 export async function types(req, res) {
@@ -97,7 +98,7 @@ export async function pdf(req, res) {
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="letter-${row.ref_no || row.id}.pdf"`);
   buildLetterPdf({ title: row.title, text: row.body_rendered, refNo: row.ref_no,
-    date: String(row.issued_at).slice(0, 10) }, res);
+    date: String(row.issued_at).slice(0, 10) }, res, await brandForEmployee(row.employee_id));
 }
 
 // ESS: download one of my own letters as PDF.
@@ -107,7 +108,7 @@ export async function myPdf(req, res) {
   if (!row) return res.status(404).json({ error: 'Letter not found.' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="letter-${row.ref_no || row.id}.pdf"`);
-  buildLetterPdf({ title: row.title, text: row.body_rendered, refNo: row.ref_no, date: String(row.issued_at).slice(0, 10) }, res);
+  buildLetterPdf({ title: row.title, text: row.body_rendered, refNo: row.ref_no, date: String(row.issued_at).slice(0, 10) }, res, await brandForEmployee(row.employee_id));
 }
 
 // ESS: my letters.

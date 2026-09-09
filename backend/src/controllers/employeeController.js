@@ -10,6 +10,8 @@ import { invalidateAccountStatus } from '../middleware/auth.js';
 import { decrypt, encrypt, mask } from '../utils/crypto.js';
 import { audit } from '../utils/audit.js';
 import { buildPersonalInfoSheet } from '../services/personalInfoSheet.js';
+import { brandForEmployee } from '../services/docProfile.js';
+import { annexureFromComponents } from '../services/payComponents.js';
 
 const dataUrlToBuffer = (s) => {
   if (!s) return null;
@@ -102,10 +104,14 @@ export async function createEmployee(req, res, next) {
         const chunks = [];
         stream.on('data', (c) => chunks.push(c));
         const done = new Promise((resolve, reject) => { stream.on('end', resolve); stream.on('error', reject); });
+        const brand = await brandForEmployee(result.emp.id);
         buildOfferLetterPdf({
           name: `${result.emp.first_name} ${result.emp.last_name}`.trim(), designation, department: dep,
           joiningDate: result.emp.date_of_joining, ctc: b.ctc, location: result.emp.location || null,
-        }, stream);
+          // Annexure A from the company's real payslip components, so the offer
+          // promises the structure the first payslip will actually pay.
+          breakup: await annexureFromComponents(result.emp.company_id, result.emp.id, b.ctc),
+        }, stream, brand);
         await done;
         const pdf = Buffer.concat(chunks).toString('base64');
         await query(
@@ -256,7 +262,7 @@ export async function generateSheet(req, res, next) {
 
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="PIS-${e.employee_code || e.id}.pdf"`);
-    buildPersonalInfoSheet(data, res);
+    buildPersonalInfoSheet(data, res, await brandForEmployee(id));
     await audit(req.user.id, 'GENERATE_SHEET', 'employee', id);
   } catch (e) { next(e); }
 }
@@ -468,7 +474,8 @@ export async function generateOfferLetter(req, res, next) {
     buildOfferLetterPdf({
       name: `${e.first_name} ${e.last_name}`.trim(), designation: e.designation, department: e.department,
       joiningDate: e.date_of_joining, ctc: e.effective_ctc, location: null,
-    }, stream);
+      breakup: await annexureFromComponents(e.company_id, e.id, e.effective_ctc),
+    }, stream, await brandForEmployee(e.id));
     await done;
     const pdf = Buffer.concat(chunks).toString('base64');
     await query(

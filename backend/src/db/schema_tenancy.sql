@@ -295,3 +295,66 @@ CREATE TABLE IF NOT EXISTS employee_component_values (
   PRIMARY KEY (employee_id, component_id)
 );
 CREATE INDEX IF NOT EXISTS idx_emp_comp_emp ON employee_component_values (employee_id);
+
+-- ── 13. Document branding profiles ─────────────────────────────────────────
+-- Every PDF the product issues — offer letter, payslip, HR letters, F&F
+-- statement, Form 16 estimate, personal information sheet — used to take its
+-- letterhead from environment variables. One deployment, one letterhead: every
+-- tenant's offer letter went out branded "True HR Pvt Ltd". For a product sold
+-- per organisation that is a defect, not a nicety.
+--
+-- A profile belongs to a COMPANY, because a company is the legal entity that
+-- signs a letter and pays a salary. company_id NULL is the organisation-wide
+-- default, so a tenant sets its identity once and only overrides per company
+-- where the legal entities genuinely differ. Resolution order is
+-- company → organisation default → the built-in fallback.
+--
+-- `options` holds the per-document switches (which blocks a payslip shows, the
+-- offer letter's editable paragraphs, the bank-sheet column list) as JSONB, so
+-- adding a switch does not need a migration.
+CREATE TABLE IF NOT EXISTS document_profiles (
+  id                    BIGSERIAL PRIMARY KEY,
+  organisation_id       BIGINT      NOT NULL REFERENCES organisations(id) ON DELETE CASCADE,
+  company_id            BIGINT      REFERENCES companies(id) ON DELETE CASCADE,  -- NULL = org default
+
+  -- Identity as it must appear on a legal document
+  legal_name            TEXT,
+  brand_name            TEXT,
+  address_line1         TEXT,
+  address_line2         TEXT,
+  city                  TEXT,
+  state                 TEXT,
+  pincode               TEXT,
+  country               TEXT DEFAULT 'India',
+  phone                 TEXT,
+  email                 TEXT,
+  website               TEXT,
+  gstin                 TEXT,
+  cin                   TEXT,
+  pan                   TEXT,
+
+  -- Marks. Base64 data URLs: a logo is a few KB and this keeps a tenant's
+  -- letterhead inside its own row rather than depending on object storage.
+  logo                  TEXT,
+  signature_image       TEXT,
+  signatory_name        TEXT,
+  signatory_designation TEXT,
+
+  -- Appearance
+  accent_color          TEXT NOT NULL DEFAULT '#16a34a',
+  head_bg               TEXT NOT NULL DEFAULT '#ecfdf5',
+  head_text             TEXT NOT NULL DEFAULT '#065f46',
+  paper_size            TEXT NOT NULL DEFAULT 'A4',
+  footer_note           TEXT,
+  watermark_text        TEXT,
+
+  options               JSONB NOT NULL DEFAULT '{}'::jsonb,
+  updated_by            BIGINT REFERENCES user_accounts(id),
+  updated_at            TIMESTAMPTZ NOT NULL DEFAULT now(),
+  created_at            TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+-- One profile per company, and one org-wide default per organisation.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_doc_profile_company
+  ON document_profiles (company_id) WHERE company_id IS NOT NULL;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_doc_profile_org_default
+  ON document_profiles (organisation_id) WHERE company_id IS NULL;

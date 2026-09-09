@@ -69,6 +69,7 @@ const SECTIONS = [
     title: 'Documents & Comms',
     items: [
       { href: '/admin/letters', label: 'Letters', Icon: IconFile, module: 'LETTERS' },
+      { href: '/admin/branding', label: 'Document branding', Icon: IconSparkle, module: 'DOCBRAND' },
       { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
       { href: '/admin/banners', label: 'App Banners', Icon: IconSparkle, module: 'BANNERS' },
       { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },

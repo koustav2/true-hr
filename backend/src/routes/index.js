@@ -6,6 +6,7 @@ import * as chg from '../controllers/changeRequestController.js';
 import * as incr from '../controllers/incrementController.js';
 import * as paycomp from '../controllers/payComponentController.js';
 import * as levels from '../controllers/levelController.js';
+import * as branding from '../controllers/docProfileController.js';
 import * as meta from '../controllers/metaController.js';
 import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
@@ -294,6 +295,14 @@ r.get('/admin/levels', authenticate, requireOrg, requireModule('STRUCTURE'), lev
 r.get('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE'), levels.list);
 r.put('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.replace);
 r.put('/admin/designations/:id/level', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.setDesignationLevel);
+
+// --- Document branding (letterhead, logo, signatory, PDF templates) ---
+// Per organisation, overridable per company. Everything the product issues as
+// a PDF reads this, so it is gated and audited like any other legal setting.
+r.get('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND'), branding.get);
+r.put('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND', 'manage'), branding.put);
+r.delete('/admin/branding', authenticate, requireOrg, requireModule('DOCBRAND', 'manage'), branding.remove);
+r.get('/admin/branding/sample/:kind', authenticate, requireOrg, requireModule('DOCBRAND'), branding.sample);
 r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
 r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 

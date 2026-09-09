@@ -5,6 +5,7 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import { computeFnf } from '../services/fnf.js';
 import { buildFnfPdf } from '../services/docPdf.js';
+import { brandForEmployee } from '../services/docProfile.js';
 
 // Assemble engine inputs from the employee's structure + resignation, allowing body overrides.
 async function gatherInputs(employeeId, body = {}) {
@@ -119,5 +120,5 @@ export async function pdf(req, res) {
     ...computed,
     meta: { name: `${row.first_name || ''} ${row.last_name || ''}`.trim(), employeeCode: row.employee_code,
       designation: row.designation, lastWorkingDate: row.last_working_date },
-  }, res);
+  }, res, await brandForEmployee(row.employee_id));
 }

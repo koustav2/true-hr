@@ -165,3 +165,29 @@ export function computeFromComponents(components, {
 export const statutoryAmount = (payslipData, key) =>
   (payslipData?.deductions || []).filter((d) => d.statutory === key)
     .reduce((a, d) => a + (Number(d.amount) || 0), 0);
+
+/**
+ * Annexure A rows — [[label, annualAmount], …] — from the company's real
+ * component set, so an offer letter promises the same structure the first
+ * payslip pays. Previously the annexure used its own hardcoded 50/40/PF split,
+ * which meant an offer could say 50% basic while payroll paid 40%.
+ *
+ * Returns null when the company has no components; the caller then falls back
+ * to the indicative split rather than issuing an offer with an empty annexure.
+ */
+export async function annexureFromComponents(companyId, employeeId, annualCtc) {
+  const annual = Number(annualCtc) || 0;
+  if (!companyId || annual <= 0) return null;
+  try {
+    const components = await loadForEmployee(companyId, employeeId);
+    if (!components.length) return null;
+    // A full month at the employee's monthly CTC, then annualised. Rounding on
+    // the monthly figure and multiplying by 12 is what the year actually pays.
+    const monthly = annual / 12;
+    const { earnings } = computeFromComponents(components, {
+      monthlyCtc: monthly, daysInMonth: 30, daysPaid: 30,
+    });
+    const rows = earnings.filter((e) => e.code !== 'BONUS').map((e) => [e.label, e.amount * 12]);
+    return rows.length ? rows : null;
+  } catch { return null; }
+}

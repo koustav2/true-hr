@@ -1,13 +1,16 @@
 import PDFDocument from 'pdfkit';
+import { theme, logoBuffer, watermark, footer } from './docPdf.js';
 
-const INK = '#111827', SUB = '#6b7280', LINE = '#cbd5e1', HEAD = '#ecfdf5', HEADTX = '#065f46', RULE = '#065f46';
+const INK = '#111827', SUB = '#6b7280', LINE = '#cbd5e1';
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB') : '');
 const v = (x) => (x != null && x !== '' ? String(x) : '');
 
 const X = 36, W = 523, TOP = 72, BOTTOM = 788; // content band
 
-export function buildPersonalInfoSheet(data, stream) {
-  const doc = new PDFDocument({ size: 'A4', margins: { top: TOP, bottom: 54, left: X, right: X }, bufferPages: true });
+export function buildPersonalInfoSheet(data, stream, brand) {
+  const t = theme(brand);
+  const opt = brand?.options?.sheet || {};
+  const doc = new PDFDocument({ size: brand?.paperSize || 'A4', margins: { top: TOP, bottom: 54, left: X, right: X }, bufferPages: true });
   doc.pipe(stream);
 
   const p = data.profile || {};
@@ -16,13 +19,22 @@ export function buildPersonalInfoSheet(data, stream) {
   let sectionNo = 0;
 
   // ---- repeating page header ----
+  const logo = logoBuffer(t.logo);
   const header = () => {
     doc.save();
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text('PERSONAL INFORMATION SHEET', X, 26, { lineBreak: false });
-    doc.font('Helvetica-Bold').fontSize(11).fillColor(HEADTX).text((data.company || 'TRUE HR').toUpperCase(), X, 26, { width: W, align: 'right', lineBreak: false });
+    watermark(doc, t);
+    let tx = X;
+    if (logo) { try { doc.image(logo, X, 22, { height: 18 }); tx = X + 26; } catch { /* skip */ } }
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text('PERSONAL INFORMATION SHEET', tx, 26, { lineBreak: false });
+    doc.font('Helvetica-Bold').fontSize(11).fillColor(t.headTx)
+      .text(String(data.company || t.name || '').toUpperCase(), X, 26, { width: W, align: 'right', lineBreak: false });
     doc.font('Helvetica').fontSize(7.5).fillColor(SUB)
       .text(`Employee: ${fullName}${data.employeeCode ? '  ·  ' + data.employeeCode : ''}`, X, 42, { width: W, align: 'right', lineBreak: false });
-    doc.moveTo(X, 56).lineTo(X + W, 56).lineWidth(1).strokeColor(RULE).stroke();
+    if (opt.showAddress !== false && brand?.addressLine) {
+      doc.font('Helvetica').fontSize(7).fillColor(SUB).text(brand.addressLine, tx, 42, { width: W * 0.55, lineBreak: false });
+    }
+    doc.moveTo(X, 56).lineTo(X + W, 56).lineWidth(1).strokeColor(t.headTx).stroke();
+    footer(doc, t);
     doc.restore();
   };
   doc.on('pageAdded', () => { header(); y = TOP; });
@@ -32,8 +44,8 @@ export function buildPersonalInfoSheet(data, stream) {
   const need = (h) => { if (y + h > BOTTOM) { doc.addPage(); } };
   const section = (title) => {
     need(40); sectionNo += 1;
-    doc.rect(X, y, W, 18).fill(HEAD);
-    doc.fillColor(HEADTX).font('Helvetica-Bold').fontSize(9).text(`${sectionNo}.  ${title}`, X + 6, y + 5, { lineBreak: false });
+    doc.rect(X, y, W, 18).fill(t.head);
+    doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(9).text(`${sectionNo}.  ${title}`, X + 6, y + 5, { lineBreak: false });
     y += 18;
   };
   const subhead = (t) => { need(14); doc.font('Helvetica-Bold').fontSize(7).fillColor(SUB).text(t.toUpperCase(), X + 2, y + 3, { lineBreak: false }); y += 13; };
@@ -128,8 +140,8 @@ export function buildPersonalInfoSheet(data, stream) {
   const e1 = emps[0] || {}, e2 = emps[1] || {};
   section('Previous Employer Details');
   row([{ w: W * 0.5, fill: '#f8fafc', header: true, label: 'Total Years of Experience' }, { w: W * 0.5, value: p.experienceYears }], 18);
-  row([{ w: W * 0.5, fill: HEAD, headColor: HEADTX, header: true, center: true, label: 'Contact Details of Employer-1' },
-       { w: W * 0.5, fill: HEAD, headColor: HEADTX, header: true, center: true, label: 'Contact Details of Employer-2' }], 16);
+  row([{ w: W * 0.5, fill: t.head, headColor: t.headTx, header: true, center: true, label: 'Contact Details of Employer-1' },
+       { w: W * 0.5, fill: t.head, headColor: t.headTx, header: true, center: true, label: 'Contact Details of Employer-2' }], 16);
   const peRow = (label, a, b) => row([
     { w: W * 0.2, fill: '#f8fafc', header: true, label }, { w: W * 0.3, value: a },
     { w: W * 0.2, fill: '#f8fafc', header: true, label }, { w: W * 0.3, value: b }], 17);

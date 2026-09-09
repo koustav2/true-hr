@@ -1,5 +1,6 @@
 import { query } from '../db/pool.js';
 import { legacyComponents, loadForEmployee, computeFromComponents } from '../services/payComponents.js';
+import { brandForEmployee, resolveBrand, BANK_SHEET_COLUMNS, DEFAULT_OPTIONS } from '../services/docProfile.js';
 import { audit } from '../utils/audit.js';
 import { decrypt, mask } from '../utils/crypto.js';
 import { buildPayslipPdf } from '../services/paySlipPdf.js';
@@ -190,7 +191,7 @@ export async function pdf(req, res, next) {
     if (!row || row.employee_id !== empId || row.status !== 'PUBLISHED') return res.status(404).json({ error: 'Payslip not available' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="payslip-${row.year}-${String(row.month).padStart(2, '0')}.pdf"`);
-    buildPayslipPdf(shapePayslip(row), res);
+    buildPayslipPdf(shapePayslip(row), res, await brandForEmployee(row.employee_id));
   } catch (e) { next(e); }
 }
 
@@ -584,26 +585,33 @@ export async function exportBankSheet(req, res, next) {
     // company, because each legal entity pays from its own bank account.
     const rows = (await query(
       `SELECT e.employee_code, e.first_name, e.last_name,
+              d.title AS designation, dep.name AS department, st.uan,
               b.bank_name, b.ifsc, b.account_number_enc, b.account_holder,
-              p.net_pay, p.status, p.days_paid, p.days_in_month, p.lop_days
+              p.net_pay, p.status, p.days_paid, p.days_in_month, p.lop_days,
+              p.gross_earnings, p.total_deductions
          FROM payslips p
          JOIN employees e ON e.id=p.employee_id
+         LEFT JOIN designations d ON d.id=e.designation_id
+         LEFT JOIN departments dep ON dep.id=e.department_id
+         LEFT JOIN employee_statutory st ON st.employee_id=e.id
          LEFT JOIN employee_bank b ON b.employee_id=e.id
         WHERE p.year=$1 AND p.month=$2 AND p.status='PUBLISHED'
           AND ($3::bigint IS NULL OR e.organisation_id=$3)
           AND ($4::bigint IS NULL OR e.company_id=$4)
         ORDER BY e.first_name, e.last_name`, [year, month, req.orgId || null, cf.companyId])).rows;
+
+    // Which columns, and in what order, is per company: a bank's advice format
+    // is the bank's, not ours. An unknown key in a saved profile is skipped
+    // rather than emitting an empty column with no header.
+    const brand = await resolveBrand({ companyId: cf.companyId, organisationId: req.orgId || null });
+    const wanted = (brand.options?.bankSheet?.columns || DEFAULT_OPTIONS.bankSheet.columns)
+      .filter((k) => BANK_SHEET_COLUMNS[k]);
+    const cols = (wanted.length ? wanted : DEFAULT_OPTIONS.bankSheet.columns).map((k) => BANK_SHEET_COLUMNS[k]);
+    const ctx = { decrypt };
     const esc = (v) => { const s = v == null ? '' : String(v); return /[",\n]/.test(s) ? `"${s.replace(/"/g, '""')}"` : s; };
     const lines = [
-      ['Employee Code', 'Name', 'Account Holder', 'Bank', 'IFSC', 'Account Number',
-       'Days Paid', 'Days in Month', 'LOP Days', 'Net Pay (INR)'].join(','),
-      ...rows.map((r) => [
-        r.employee_code, `${r.first_name || ''} ${r.last_name || ''}`.trim(), r.account_holder || '',
-        r.bank_name || '', r.ifsc || '', r.account_number_enc ? decrypt(r.account_number_enc) : '',
-        r.days_paid != null ? Number(r.days_paid) : '', r.days_in_month ?? '',
-        r.lop_days != null ? Number(r.lop_days) : '',
-        Number(r.net_pay).toFixed(2),
-      ].map(esc).join(',')),
+      cols.map((c) => c.header).join(','),
+      ...rows.map((r) => cols.map((c) => esc(c.get(r, ctx))).join(',')),
     ];
     await audit(req.user.id, 'PAYROLL_BANK_SHEET_EXPORT', 'payslip', null, { year, month, rows: rows.length });
     res.setHeader('Content-Type', 'text/csv; charset=utf-8');
@@ -657,6 +665,6 @@ export async function adminPdf(req, res, next) {
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="payslip-${row.year}-${String(row.month).padStart(2, '0')}.pdf"`);
-    buildPayslipPdf(shapePayslip(row), res);
+    buildPayslipPdf(shapePayslip(row), res, await brandForEmployee(row.employee_id));
   } catch (e) { next(e); }
 }

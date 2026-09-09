@@ -10,55 +10,109 @@ import { Spinner, Button, Card } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
   IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
-  IconBriefcase, IconTicket, IconCheck,
+  IconBriefcase, IconTicket, IconCheck, IconSparkle, IconUpload, IconUser, IconChevronRight,
 } from '@/components/icons.jsx';
 
 // Navigation is driven by module permissions, not by hardcoded role checks: a
 // Super Admin ticking a box on the Roles screen moves this sidebar for everyone
 // holding that role. `module` is the permission key the server reports via
 // /me/permissions; `nfa` marks entries still gated by the release flag.
-const WORKSPACE = [
-  { href: '/admin', label: 'Dashboard', Icon: IconDashboard, module: 'DASHBOARD' },
-  { href: '/admin/employees', label: 'Employees', Icon: IconUsers, module: 'EMPLOYEES' },
-  { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
-  { href: '/admin/change-requests', label: 'Change requests', Icon: IconReview, module: 'CHANGEREQ' },
-  { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
-  { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
-  { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, module: 'SUPPORT' },
-  { href: '/admin/wishes', label: 'Wishes', Icon: IconUsers, module: 'EMPLOYEES' },
-  { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
-  { href: '/admin/banners', label: 'App Banners', Icon: IconFile, module: 'BANNERS' },
-  { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },
-  { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
-  { href: '/admin/increments', label: 'Increments', Icon: IconMoney, module: 'INCREMENT' },
-  { href: '/admin/statutory', label: 'Statutory', Icon: IconMoney, module: 'STATUTORY' },
-  { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
-  { href: '/admin/fnf', label: 'Full & Final', Icon: IconExit, module: 'FNF' },
-  { href: '/admin/letters', label: 'Letters', Icon: IconFile, module: 'LETTERS' },
-  { href: '/admin/bulk', label: 'Bulk utilities', Icon: IconMoney, module: 'BULK' },
-  { href: '/admin/hrmis', label: 'HRMIS reports', Icon: IconFile, module: 'HRMIS' },
-  { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, module: 'RESIGNATION' },
-  { href: '/admin/terminations', label: 'Terminations', Icon: IconExit, module: 'TERMINATION' },
+//
+// Grouped by the job being done, not by which table the data sits in — an HR
+// user thinks "someone is leaving" (Separation), not "resignations table". One
+// flat Workspace list of twenty-odd entries is unscannable, so each section
+// stays small enough to take in at a glance and collapses if it isn't yours.
+const SECTIONS = [
+  {
+    key: 'workspace',
+    title: 'Workspace',
+    items: [
+      { href: '/admin', label: 'Dashboard', Icon: IconDashboard, module: 'DASHBOARD' },
+      { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, module: 'SUPPORT' },
+    ],
+  },
+  {
+    key: 'people',
+    title: 'People',
+    items: [
+      { href: '/admin/employees', label: 'Employees', Icon: IconUsers, module: 'EMPLOYEES' },
+      { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
+      { href: '/admin/change-requests', label: 'Change requests', Icon: IconCheck, module: 'CHANGEREQ' },
+      { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
+      { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
+      { href: '/admin/wishes', label: 'Wishes', Icon: IconSparkle, module: 'EMPLOYEES' },
+    ],
+  },
+  {
+    key: 'pay',
+    title: 'Pay & Compliance',
+    items: [
+      { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
+      { href: '/admin/increments', label: 'Increments', Icon: IconActivity, module: 'INCREMENT' },
+      { href: '/admin/statutory', label: 'Statutory', Icon: IconShield, module: 'STATUTORY' },
+      { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
+    ],
+  },
+  {
+    key: 'separation',
+    title: 'Separation',
+    items: [
+      { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, module: 'RESIGNATION' },
+      { href: '/admin/terminations', label: 'Terminations', Icon: IconExit, module: 'TERMINATION' },
+      { href: '/admin/fnf', label: 'Full & Final', Icon: IconMoney, module: 'FNF' },
+    ],
+  },
+  {
+    key: 'comms',
+    title: 'Documents & Comms',
+    items: [
+      { href: '/admin/letters', label: 'Letters', Icon: IconFile, module: 'LETTERS' },
+      { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
+      { href: '/admin/banners', label: 'App Banners', Icon: IconSparkle, module: 'BANNERS' },
+      { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },
+    ],
+  },
+  {
+    key: 'finance',
+    title: 'NFA & Finance',
+    items: [
+      { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, module: 'NFA', nfa: true },
+      { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, module: 'NFA_REPORTS', nfa: true },
+      { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, module: 'MASTERS', nfa: true },
+      { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, module: 'APPROVERS', nfa: true },
+      { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, module: 'VENDORS', nfa: true },
+    ],
+  },
+  {
+    key: 'performance',
+    title: 'Performance',
+    items: [
+      { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, module: 'PMS', nfa: true },
+    ],
+  },
+  {
+    key: 'data',
+    title: 'Data & Reports',
+    items: [
+      { href: '/admin/bulk', label: 'Bulk utilities', Icon: IconUpload, module: 'BULK' },
+      { href: '/admin/hrmis', label: 'HRMIS reports', Icon: IconFile, module: 'HRMIS' },
+    ],
+  },
+  {
+    key: 'admin',
+    title: 'Administration',
+    items: [
+      { href: '/admin/companies', label: 'Companies', Icon: IconBriefcase, module: 'COMPANIES' },
+      { href: '/admin/users', label: 'Users & accounts', Icon: IconUser, module: 'USERS' },
+      { href: '/admin/roles', label: 'Roles & permissions', Icon: IconShield, module: 'ROLES' },
+      { href: '/admin/assets', label: 'Asset management', Icon: IconBriefcase, module: 'ASSETS' },
+      { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, module: 'AUDIT' },
+      { href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' },
+    ],
+  },
 ];
-const FINANCE = [
-  { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, module: 'NFA', nfa: true },
-  { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, module: 'NFA_REPORTS', nfa: true },
-  { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, module: 'MASTERS', nfa: true },
-  { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, module: 'APPROVERS', nfa: true },
-  { href: '/admin/vendors', label: 'Vendors & agreements', Icon: IconTicket, module: 'VENDORS', nfa: true },
-];
-const PERFORMANCE = [
-  { href: '/admin/pms', label: 'PMS / KPI', Icon: IconActivity, module: 'PMS', nfa: true },
-];
-const ADMINISTRATION = [
-  { href: '/admin/companies', label: 'Companies', Icon: IconBriefcase, module: 'COMPANIES' },
-  { href: '/admin/users', label: 'Users & accounts', Icon: IconShield, module: 'USERS' },
-  { href: '/admin/roles', label: 'Roles & permissions', Icon: IconShield, module: 'ROLES' },
-  { href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' },
-  { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, module: 'AUDIT' },
-  { href: '/admin/assets', label: 'Asset management', Icon: IconBriefcase, module: 'ASSETS' },
-];
-const ALL = [...WORKSPACE, ...FINANCE, ...PERFORMANCE, ...ADMINISTRATION];
+
+const ALL = SECTIONS.flatMap((s) => s.items);
 // The platform owner (Master) manages only organisations — nothing else shows.
 const MASTER = [{ href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' }];
 
@@ -82,18 +136,60 @@ function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate })
   );
 }
 
-function NavGroup({ title, items, canView, isActive, collapsed, onNavigate }) {
+/**
+ * One sidebar section. Sections start expanded — nothing should be hidden from
+ * someone who has never opened this screen — but a section can be folded away,
+ * and that choice is remembered per browser. A section containing the current
+ * page is always shown open, so a remembered collapse can never hide where you
+ * actually are.
+ */
+function NavGroup({ title, items, canView, isActive, collapsed, onNavigate, open = true, onToggle, hasActive }) {
   const visible = items.filter((i) => (i.nfa ? FEATURES.nfaSuite : true) && canView(i.module));
   if (visible.length === 0) return null;
+  const shown = open || hasActive;
   return (
-    <div className="mt-4 first:mt-0">
-      {!collapsed && <div className="px-2.5 text-[10px] font-bold uppercase tracking-[.1em] text-ink-faint mb-1.5">{title}</div>}
-      {collapsed && <div className="mx-2.5 mb-1.5 border-t border-line" />}
-      <nav className="space-y-px">
-        {visible.map((item) => <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} onNavigate={onNavigate} />)}
-      </nav>
+    <div className="mt-3.5 first:mt-0">
+      {collapsed ? (
+        <div className="mx-2.5 mb-1.5 border-t border-line" />
+      ) : (
+        <button
+          type="button"
+          onClick={onToggle}
+          aria-expanded={shown}
+          className="group flex w-full items-center gap-1.5 rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-ink-faint hover:text-ink-soft">
+          <IconChevronRight
+            width={11} height={11}
+            className={`shrink-0 transition-transform duration-100 ${shown ? 'rotate-90' : ''} text-ink-faint/70`} />
+          <span className="truncate">{title}</span>
+          {!shown && <span className="ml-auto tabular-nums text-ink-faint/70">{visible.length}</span>}
+        </button>
+      )}
+      {(shown || collapsed) && (
+        <nav className="space-y-px mt-0.5">
+          {visible.map((item) => <NavItem key={item.href} item={item} active={isActive(item.href)} collapsed={collapsed} onNavigate={onNavigate} />)}
+        </nav>
+      )}
     </div>
   );
+}
+
+/** Remembered per browser; a bad or absent value just means "all expanded". */
+const NAV_KEY = 'truehr.nav.collapsed';
+function useCollapsedSections() {
+  const [set, setSet] = useState(() => new Set());
+  useEffect(() => {
+    try {
+      const raw = window.localStorage.getItem(NAV_KEY);
+      if (raw) setSet(new Set(JSON.parse(raw)));
+    } catch { /* private mode, cleared storage — expanded is the safe default */ }
+  }, []);
+  const toggle = (key) => setSet((prev) => {
+    const next = new Set(prev);
+    next.has(key) ? next.delete(key) : next.add(key);
+    try { window.localStorage.setItem(NAV_KEY, JSON.stringify([...next])); } catch { /* ignore */ }
+    return next;
+  });
+  return [set, toggle];
 }
 
 export default function AdminLayout({ children }) {
@@ -207,6 +303,7 @@ function AdminShell({ children }) {
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
+  const [hidden, toggleSection] = useCollapsedSections();
 
   useEffect(() => { setCollapsed(localStorage.getItem('truehr_nav_collapsed') === '1'); }, []);
   useEffect(() => { setMobileOpen(false); setMenuOpen(false); }, [pathname]);
@@ -246,10 +343,20 @@ function AdminShell({ children }) {
           <NavGroup title="Platform" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         ) : (
           <>
-            <NavGroup title="Workspace" items={WORKSPACE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-            <NavGroup title="NFA & Finance" items={FINANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-            <NavGroup title="Performance" items={PERFORMANCE} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-            <NavGroup title="Administration" items={ADMINISTRATION} canView={canView} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
+            {SECTIONS.map((sec) => (
+              <NavGroup
+                key={sec.key}
+                title={sec.title}
+                items={sec.items}
+                canView={canView}
+                isActive={isActive}
+                collapsed={collapsed}
+                onNavigate={() => setMobileOpen(false)}
+                open={!hidden.has(sec.key)}
+                onToggle={() => toggleSection(sec.key)}
+                hasActive={sec.items.some((i) => isActive(i.href))}
+              />
+            ))}
           </>
         )}
       </div>

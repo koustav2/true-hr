@@ -9,18 +9,29 @@
 // in the right place automatically.
 // ============================================================================
 
+// These are the sidebar sections, in order, and the permissions matrix reads
+// the same way — one vocabulary, so "where do I grant Terminations?" has the
+// same answer on both screens. Grouped by the job being done rather than by the
+// table the data sits in: an HR user thinks "someone is leaving", not
+// "resignations".
 export const MODULE_GROUPS = {
   WORKSPACE: 'Workspace',
   PEOPLE: 'People',
-  PAYROLL: 'Payroll',
+  PAY: 'Pay & Compliance',
+  SEPARATION: 'Separation',
+  COMMS: 'Documents & Comms',
   FINANCE: 'NFA & Finance',
   PERFORMANCE: 'Performance',
+  DATA: 'Data & Reports',
   ADMIN: 'Administration',
 };
 
 // Order here is the order shown in the permissions matrix and the sidebar.
 export const MODULES = [
+  // ── WORKSPACE ─────────────────────────────────────────────────
   { key: 'DASHBOARD',     label: 'Dashboard',            group: MODULE_GROUPS.WORKSPACE,   path: '/admin' },
+  { key: 'SUPPORT',       label: 'Support Desk',         group: MODULE_GROUPS.WORKSPACE,       path: '/admin/support' },
+  // ── PEOPLE ────────────────────────────────────────────────────
   { key: 'EMPLOYEES',     label: 'Employees',            group: MODULE_GROUPS.PEOPLE,      path: '/admin/employees' },
   { key: 'ONBOARDING',    label: 'Onboarding & Review',  group: MODULE_GROUPS.PEOPLE,      path: '/admin/review' },
   { key: 'ATTENDANCE',    label: 'Attendance',           group: MODULE_GROUPS.PEOPLE },
@@ -31,43 +42,49 @@ export const MODULES = [
     note: 'Employee-submitted profile, address and bank changes awaiting approval' },
   { key: 'ORGCHART',      label: 'Organisation Chart',   group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-chart',
     note: 'Reporting hierarchy by manager level' },
-  { key: 'BULK',          label: 'Bulk Utilities',       group: MODULE_GROUPS.PEOPLE,      path: '/admin/bulk',
-    sensitive: true, note: 'Excel round-trip updates for pay, managers, transfers and leave balances' },
-  { key: 'HRMIS',         label: 'HRMIS Reports',        group: MODULE_GROUPS.PEOPLE,      path: '/admin/hrmis',
-    sensitive: true, note: 'One workbook of people, pay, statutory, leave, assets and exits' },
-  { key: 'RESIGNATION',   label: 'Resignations',         group: MODULE_GROUPS.PEOPLE,      path: '/admin/resignations' },
-  { key: 'LETTERS',       label: 'Letters',              group: MODULE_GROUPS.PEOPLE,      path: '/admin/letters',
-    note: 'Confirmation, transfer, experience, relieving and more' },
-  { key: 'TERMINATION',   label: 'Terminations',         group: MODULE_GROUPS.PEOPLE,      path: '/admin/terminations',
-    sensitive: true, note: 'Ending an employee’s service' },
-  { key: 'PAYROLL',       label: 'Payroll & Payslips',   group: MODULE_GROUPS.PAYROLL,     path: '/admin/payroll',
+  // ── PAY ───────────────────────────────────────────────────────
+  { key: 'PAYROLL',       label: 'Payroll & Payslips',   group: MODULE_GROUPS.PAY,     path: '/admin/payroll',
     sensitive: true, note: 'Salary structures, runs and bank sheets' },
-  { key: 'INCREMENT',     label: 'Increment Management', group: MODULE_GROUPS.PAYROLL,     path: '/admin/increments',
+  { key: 'INCREMENT',     label: 'Increment Management', group: MODULE_GROUPS.PAY,     path: '/admin/increments',
     sensitive: true, note: 'Salary revisions: propose, approve, apply and letter' },
-  { key: 'STATUTORY',     label: 'Statutory (PF/ESIC/Gratuity)', group: MODULE_GROUPS.PAYROLL, path: '/admin/statutory',
+  { key: 'STATUTORY',     label: 'Statutory (PF/ESIC/Gratuity)', group: MODULE_GROUPS.PAY, path: '/admin/statutory',
     sensitive: true, note: 'PF/ESIC/gratuity records, nominees, registers & Form 16' },
-  { key: 'INVDECL',       label: 'Investment Declarations', group: MODULE_GROUPS.PAYROLL,     path: '/admin/tax-declarations',
+  { key: 'INVDECL',       label: 'Investment Declarations', group: MODULE_GROUPS.PAY,     path: '/admin/tax-declarations',
     note: 'Employee income-tax declarations — verify and lock' },
-  { key: 'FNF',           label: 'Full & Final Settlement', group: MODULE_GROUPS.PAYROLL,     path: '/admin/fnf',
+  // ── SEPARATION ────────────────────────────────────────────────
+  { key: 'RESIGNATION',   label: 'Resignations',         group: MODULE_GROUPS.SEPARATION,      path: '/admin/resignations' },
+  { key: 'TERMINATION',   label: 'Terminations',         group: MODULE_GROUPS.SEPARATION,      path: '/admin/terminations',
+    sensitive: true, note: 'Ending an employee’s service' },
+  { key: 'FNF',           label: 'Full & Final Settlement', group: MODULE_GROUPS.SEPARATION,     path: '/admin/fnf',
     sensitive: true, note: 'Exit pay computation' },
+  // ── COMMS ─────────────────────────────────────────────────────
+  { key: 'LETTERS',       label: 'Letters',              group: MODULE_GROUPS.COMMS,      path: '/admin/letters',
+    note: 'Confirmation, transfer, experience, relieving and more' },
+  { key: 'POLICIES',      label: 'Policies',             group: MODULE_GROUPS.COMMS,       path: '/admin/policies' },
+  { key: 'BANNERS',       label: 'App Banners',          group: MODULE_GROUPS.COMMS,       path: '/admin/banners' },
+  // ── FINANCE ───────────────────────────────────────────────────
   { key: 'NFA',           label: 'NFA',                  group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa' },
   { key: 'SETTLEMENTS',   label: 'Settlements',          group: MODULE_GROUPS.FINANCE },
   { key: 'NFA_REPORTS',   label: 'NFA Reports',          group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa-reports' },
   { key: 'VENDORS',       label: 'Vendors & Agreements', group: MODULE_GROUPS.FINANCE,     path: '/admin/vendors' },
   { key: 'MASTERS',       label: 'Masters',              group: MODULE_GROUPS.FINANCE,     path: '/admin/masters' },
+  { key: 'APPROVERS',     label: 'Approver Matrix',      group: MODULE_GROUPS.FINANCE, path: '/admin/approvers' },
+  // ── PERFORMANCE ───────────────────────────────────────────────
   { key: 'PMS',           label: 'Performance (PMS)',    group: MODULE_GROUPS.PERFORMANCE, path: '/admin/pms' },
-  { key: 'APPROVERS',     label: 'Approver Matrix',      group: MODULE_GROUPS.PERFORMANCE, path: '/admin/approvers' },
-  { key: 'POLICIES',      label: 'Policies',             group: MODULE_GROUPS.ADMIN,       path: '/admin/policies' },
-  { key: 'SUPPORT',       label: 'Support Desk',         group: MODULE_GROUPS.ADMIN,       path: '/admin/support' },
-  { key: 'BANNERS',       label: 'App Banners',          group: MODULE_GROUPS.ADMIN,       path: '/admin/banners' },
-  { key: 'ASSETS',        label: 'Asset Management',     group: MODULE_GROUPS.ADMIN,       path: '/admin/assets',
-    note: 'IT & non-IT asset register and assignment' },
+  // ── DATA ──────────────────────────────────────────────────────
+  { key: 'BULK',          label: 'Bulk Utilities',       group: MODULE_GROUPS.DATA,      path: '/admin/bulk',
+    sensitive: true, note: 'Excel round-trip updates for pay, managers, transfers and leave balances' },
+  { key: 'HRMIS',         label: 'HRMIS Reports',        group: MODULE_GROUPS.DATA,      path: '/admin/hrmis',
+    sensitive: true, note: 'One workbook of people, pay, statutory, leave, assets and exits' },
+  // ── ADMIN ─────────────────────────────────────────────────────
   { key: 'COMPANIES',     label: 'Companies',            group: MODULE_GROUPS.ADMIN,       path: '/admin/companies',
     sensitive: true, note: 'Legal entities inside this organisation' },
   { key: 'USERS',         label: 'Users & Accounts',     group: MODULE_GROUPS.ADMIN,       path: '/admin/users',
     sensitive: true, note: 'Creating logins and assigning roles' },
   { key: 'ROLES',         label: 'Roles & Permissions',  group: MODULE_GROUPS.ADMIN,       path: '/admin/roles',
     sensitive: true, note: 'Who can open what — grant with care' },
+  { key: 'ASSETS',        label: 'Asset Management',     group: MODULE_GROUPS.ADMIN,       path: '/admin/assets',
+    note: 'IT & non-IT asset register and assignment' },
   { key: 'AUDIT',         label: 'Audit Log',            group: MODULE_GROUPS.ADMIN,       path: '/admin/audit' },
   { key: 'ORGANISATIONS', label: 'Organisations',        group: MODULE_GROUPS.ADMIN,       path: '/admin/organisations',
     platformOnly: true, note: 'Creating and switching organisations' },

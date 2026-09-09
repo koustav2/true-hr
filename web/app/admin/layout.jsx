@@ -39,6 +39,7 @@ const SECTIONS = [
       { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
       { href: '/admin/change-requests', label: 'Change requests', Icon: IconCheck, module: 'CHANGEREQ' },
       { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
+      { href: '/admin/hierarchy', label: 'Hierarchy & levels', Icon: IconBriefcase, module: 'STRUCTURE' },
       { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
       { href: '/admin/wishes', label: 'Wishes', Icon: IconSparkle, module: 'EMPLOYEES' },
     ],
@@ -49,6 +50,7 @@ const SECTIONS = [
     items: [
       { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
       { href: '/admin/increments', label: 'Increments', Icon: IconActivity, module: 'INCREMENT' },
+      { href: '/admin/salary-components', label: 'Payslip components', Icon: IconMoney, module: 'PAYCOMP' },
       { href: '/admin/statutory', label: 'Statutory', Icon: IconShield, module: 'STATUTORY' },
       { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
     ],

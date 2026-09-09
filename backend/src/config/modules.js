@@ -37,7 +37,8 @@ export const MODULES = [
   { key: 'ATTENDANCE',    label: 'Attendance',           group: MODULE_GROUPS.PEOPLE },
   { key: 'LEAVE',         label: 'Leave Configuration',  group: MODULE_GROUPS.PEOPLE,      path: '/admin/leave-config' },
   { key: 'STRUCTURE',     label: 'Departments & Roles',  group: MODULE_GROUPS.PEOPLE,
-    note: 'Departments and designations inside a company' },
+    path: '/admin/hierarchy',
+    note: 'Departments, designations and the organisation level ladder' },
   { key: 'CHANGEREQ',     label: 'Change Requests',      group: MODULE_GROUPS.PEOPLE,      path: '/admin/change-requests',
     note: 'Employee-submitted profile, address and bank changes awaiting approval' },
   { key: 'ORGCHART',      label: 'Organisation Chart',   group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-chart',
@@ -47,6 +48,8 @@ export const MODULES = [
     sensitive: true, note: 'Salary structures, runs and bank sheets' },
   { key: 'INCREMENT',     label: 'Increment Management', group: MODULE_GROUPS.PAY,     path: '/admin/increments',
     sensitive: true, note: 'Salary revisions: propose, approve, apply and letter' },
+  { key: 'PAYCOMP',       label: 'Payslip Components',   group: MODULE_GROUPS.PAY,     path: '/admin/salary-components',
+    sensitive: true, note: 'What each company\u2019s payslip is made of \u2014 earnings and deductions' },
   { key: 'STATUTORY',     label: 'Statutory (PF/ESIC/Gratuity)', group: MODULE_GROUPS.PAY, path: '/admin/statutory',
     sensitive: true, note: 'PF/ESIC/gratuity records, nominees, registers & Form 16' },
   { key: 'INVDECL',       label: 'Investment Declarations', group: MODULE_GROUPS.PAY,     path: '/admin/tax-declarations',
@@ -125,7 +128,7 @@ export const SYSTEM_ROLES = [
     rank: 10,
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
-      'TERMINATION', 'PAYROLL', 'INCREMENT', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
+      'TERMINATION', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
       'BULK', 'HRMIS',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
@@ -221,7 +224,7 @@ const STARTER = [
   'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART',
 ];
 const GROWTH = [
-  ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
+  ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
   'BULK', 'HRMIS',
   'RESIGNATION', 'TERMINATION', 'ASSETS', 'BANNERS',
 ];

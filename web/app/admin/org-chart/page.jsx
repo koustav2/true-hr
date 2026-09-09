@@ -66,6 +66,7 @@ function Node({ node, open, toggle, q }) {
           </div>
         </div>
         <div className="ml-auto flex items-center gap-2 shrink-0">
+          {node.level && <span className="text-[11px] font-semibold text-ink-faint" title={`Level ${node.levelNo}: ${node.level}`}>L{node.levelNo}</span>}
           {has && <span className="text-[11px] text-ink-faint tabular-nums">{node.children.length} report{node.children.length === 1 ? '' : 's'}</span>}
           {node.status && node.status !== 'ACTIVE' && <Badge tone={STATUS_TONE[node.status] || 'neutral'}>{node.status}</Badge>}
         </div>
@@ -102,7 +103,8 @@ export default function OrgChartPage() {
     const managers = new Set();
     scoped.forEach((p) => { if (p[link] != null) managers.add(p[link]); });
     const orphans = scoped.filter((p) => p[link] == null).length;
-    return { total: scoped.length, managers: managers.size, orphans, depth: maxDepth(forest) };
+    const levelled = scoped.filter((p) => p.levelNo != null).length;
+    return { total: scoped.length, managers: managers.size, orphans, depth: maxDepth(forest), levelled };
   }, [scoped, link, forest]);
 
   const toggle = (id) => setOpen((s) => { const n = new Set(s); n.has(id) ? n.delete(id) : n.add(id); return n; });
@@ -141,6 +143,7 @@ export default function OrgChartPage() {
             return {
               'Employee ID': p.code || '', Name: p.name, Designation: p.designation || '',
               Department: p.department || '', Company: p.company || '', Status: p.status || '',
+              Level: p.level || '', 'Level no': p.levelNo ?? '',
               'Reporting manager': byId.get(p.managerId)?.name || '',
               'Functional manager': byId.get(p.functionManagerId)?.name || '',
               'Operational manager': byId.get(p.operationalManagerId)?.name || '',
@@ -151,12 +154,14 @@ export default function OrgChartPage() {
         }
       />
 
-      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile label="People in view" value={stats.total} />
         <StatTile label="People with reports" value={stats.managers} tone="neutral" />
         <StatTile label="Chart depth" value={stats.depth} unit="levels" tone="neutral" />
         <StatTile label="No manager set" value={stats.orphans} tone={stats.orphans ? 'warn' : 'ok'}
           caption={stats.orphans ? 'Shown as top-level nodes' : 'Every line is complete'} />
+        <StatTile label="Placed on a level" value={`${stats.levelled}/${stats.total}`} tone={stats.levelled === stats.total ? 'ok' : 'neutral'}
+          caption="Inherited from their designation" />
       </div>
 
       <Card className="p-3.5">

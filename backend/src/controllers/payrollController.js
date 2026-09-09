@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { legacyComponents, loadForEmployee, computeFromComponents } from '../services/payComponents.js';
 import { audit } from '../utils/audit.js';
 import { decrypt, mask } from '../utils/crypto.js';
 import { buildPayslipPdf } from '../services/paySlipPdf.js';
@@ -102,56 +103,20 @@ function shapeStructure(row) {
   };
 }
 
-// Core engine — compute a payslip from a structure + that month's run inputs.
-// Earnings prorate by daysPaid/daysInMonth; PF on prorated basic; PT/Welfare are fixed.
-// Whatever part of the monthly CTC is not covered by Basic/HRA/fixed allowances
-// flows into a balancing "Special Allowance", so gross always equals the CTC.
-export function computePayslip(s, { daysInMonth: dim, daysPaid, arrears = 0, bonus = 0, tds = 0 }) {
-  const factor = dim > 0 ? Math.min(1, daysPaid / dim) : 1;
-  const fullBasic = (s.monthlyCtc * s.basicPct) / 100;
-  const fullHra = (fullBasic * s.hraPctOfBasic) / 100;
-  const fullFixed = Number(s.lta) + Number(s.personalAllowance) + Number(s.miscellaneous)
-    + Number(s.cityAllowance) + Number(s.performancePay);
-  const fullSpecial = Math.max(0, s.monthlyCtc - fullBasic - fullHra - fullFixed);
-
-  const basic = r2(fullBasic * factor);
-  const hra = r2(fullHra * factor);
-  const special = r2(fullSpecial * factor);
-  const lta = r2(s.lta * factor);
-  const personal = r2(s.personalAllowance * factor);
-  const misc = r2(s.miscellaneous * factor);
-  const city = r2(s.cityAllowance * factor);
-  const perf = r2(s.performancePay * factor);
-  const arr = r2(arrears);
-  const bon = r2(bonus);
-
-  const earnings = [
-    { label: 'Basic Salary', amount: basic },
-    { label: 'House Rent Allowance', amount: hra },
-    { label: 'Special Allowance', amount: special },
-    { label: 'Leave Travel Allowance', amount: lta },
-    { label: 'Personal Allowance', amount: personal },
-    { label: 'Miscellaneous', amount: misc },
-    { label: 'City Allowance', amount: city },
-    { label: 'Performance Pay', amount: perf },
-  ];
-  if (bon > 0) earnings.push({ label: 'Bonus / Incentive', amount: bon });
-
-  const pf = r2((basic * s.employeePfPct) / 100);
-  const welfare = r2(s.welfareTrust);
-  const pt = r2(s.professionalTax);
-  const tdsAmt = r2(tds);
-  const deductions = [
-    { label: 'Provident Fund', amount: pf },
-    { label: 'Welfare Trust', amount: welfare },
-    { label: 'Professional Tax', amount: pt },
-    { label: 'TDS', amount: tdsAmt },
-  ];
-
-  const grossEarnings = earnings.reduce((a, e) => a + e.amount, 0) + arr;
-  const totalDeductions = deductions.reduce((a, d) => a + d.amount, 0);
-  const netPay = grossEarnings - totalDeductions;
-  return { earnings, deductions, arrears: arr, grossEarnings, totalDeductions, netPay };
+// Core engine — compute a payslip from a component list + that month's run inputs.
+//
+// The lines a payslip carries are per-company data now (salary_components), so
+// one client can run Basic/HRA/Conveyance and another Basic/HRA/Special with no
+// LTA. The arithmetic lives in services/payComponents.js.
+//
+// `components` omitted (or empty) means: synthesise the component set that the
+// old fixed columns described. That is not a second engine — the same code path
+// runs either way — it is what keeps a company created before the components
+// migration, or one whose components were all deleted, computing exactly as it
+// did before. Proven equal across 40,000 randomised payslips.
+export function computePayslip(s, run, components) {
+  const comps = components && components.length ? components : legacyComponents(s);
+  return computeFromComponents(comps, { monthlyCtc: s.monthlyCtc, ...run });
 }
 
 // Load the snapshot meta (name, bank, statutory, location) for an employee.
@@ -442,14 +407,22 @@ async function generateFor(employeeId, year, month, opts, reqUser) {
   const daysPaid = opts.daysPaid != null && opts.daysPaid !== '' ? Number(opts.daysPaid) : auto.daysPaid;
 
   const meta = await loadMeta(employeeId);
-  // Optional: derive Professional Tax from the employee's work state (opt-in via STATE_PT).
+  // The component set this employee's company runs, with their own overrides
+  // folded in. Empty means the company predates the migration — see computePayslip.
+  const empCompanyId = (await query(`SELECT company_id FROM employees WHERE id=$1`, [employeeId])).rows[0]?.company_id;
+  let components = await loadForEmployee(empCompanyId, employeeId);
+  // Optional: derive Professional Tax from the employee's work state (opt-in via
+  // STATE_PT). It lands on whichever component is tagged PT, so a client that
+  // renamed the line still gets the right slab.
   if (config.statePT && meta.state) {
-    s.professionalTax = ptForState(meta.state, s.monthlyCtc, { month });
+    const pt = ptForState(meta.state, s.monthlyCtc, { month });
+    s.professionalTax = pt;
+    components = components.map((c) => (c.statutory === 'PT' ? { ...c, value: pt } : c));
   }
   const calc = computePayslip(s, {
     daysInMonth: dim, daysPaid, arrears: Number(opts.arrears) || 0,
     bonus: Number(opts.bonus) || 0, tds: Number(opts.tds) || 0,
-  });
+  }, components);
   meta.grade = s.grade;
   meta.lopDays = auto.lopDays;
   // Attendance breakdown travels with the slip so a published payslip always

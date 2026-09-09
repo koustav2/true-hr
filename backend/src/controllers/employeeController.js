@@ -552,9 +552,10 @@ export async function orgChart(req, res, next) {
       `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.official_email,
               e.reporting_manager_id, e.function_manager_id, e.operational_manager_id,
               d.title AS designation, dep.name AS department, co.name AS company,
-              e.onboarding_status
+              e.onboarding_status, lv.level_no, lv.name AS level_name
          FROM employees e
          LEFT JOIN designations d ON d.id = e.designation_id
+         LEFT JOIN org_levels lv ON lv.id = d.level_id
          LEFT JOIN departments dep ON dep.id = e.department_id
          LEFT JOIN companies co ON co.id = e.company_id
         WHERE ($1::bigint IS NULL OR e.organisation_id = $1)
@@ -572,6 +573,8 @@ export async function orgChart(req, res, next) {
       department: r.department,
       company: r.company,
       status: r.onboarding_status,
+      levelNo: r.level_no ?? null,
+      level: r.level_name || null,
       managerId: r.reporting_manager_id != null ? Number(r.reporting_manager_id) : null,
       functionManagerId: r.function_manager_id != null ? Number(r.function_manager_id) : null,
       operationalManagerId: r.operational_manager_id != null ? Number(r.operational_manager_id) : null,

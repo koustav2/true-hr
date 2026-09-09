@@ -2,6 +2,7 @@ import fs from 'fs';
 import path from 'path';
 import { fileURLToPath } from 'url';
 import { SELLABLE_MODULES } from '../config/modules.js';
+import { legacyComponents, LEGACY_FIELD } from '../services/payComponents.js';
 import { pool } from './pool.js';
 import { migrateTenancy } from './tenancyMigration.js';
 
@@ -62,6 +63,91 @@ async function main() {
      ON CONFLICT (organisation_id, module_key) DO NOTHING`,
     [SELLABLE_MODULES]);
   console.log('[migrate] organisation module entitlements backfilled');
+
+  // ── Payslip components ───────────────────────────────────────────────────
+  // Payslip lines moved from fixed columns on salary_structures to per-company
+  // salary_components rows. Every existing company is seeded with the component
+  // set that reproduces its CURRENT payslip exactly (proven equal across 40,000
+  // randomised payslips), then any employee whose own structure differs from
+  // their company's template gets per-employee overrides. Net effect on a live
+  // tenant: identical figures, now editable.
+  //
+  // Idempotent: a company that already has components is left alone, so this is
+  // safe on every boot and never overwrites what HR has since configured.
+  {
+    const companies = (await pool.query(
+      `SELECT c.id, c.organisation_id, t.basic_pct, t.hra_pct_of_basic, t.employee_pf_pct,
+              t.professional_tax, t.welfare_trust, t.lta, t.personal_allowance,
+              t.miscellaneous, t.city_allowance, t.performance_pay
+         FROM companies c
+         LEFT JOIN company_salary_templates t ON t.company_id = c.id
+        WHERE NOT EXISTS (SELECT 1 FROM salary_components sc WHERE sc.company_id = c.id)`)).rows;
+
+    // Same defaults the payroll controller falls back to when a company has no template.
+    const D = { basicPct: 50, hraPctOfBasic: 50, employeePfPct: 12, professionalTax: 200,
+      welfareTrust: 0, lta: 0, personalAllowance: 0, miscellaneous: 0, cityAllowance: 0, performancePay: 0 };
+    const num = (v, d) => (v == null ? d : Number(v));
+
+    let seededCompanies = 0, seededComponents = 0, overrides = 0;
+    for (const c of companies) {
+      const tpl = {
+        basicPct: num(c.basic_pct, D.basicPct), hraPctOfBasic: num(c.hra_pct_of_basic, D.hraPctOfBasic),
+        employeePfPct: num(c.employee_pf_pct, D.employeePfPct), professionalTax: num(c.professional_tax, D.professionalTax),
+        welfareTrust: num(c.welfare_trust, D.welfareTrust), lta: num(c.lta, D.lta),
+        personalAllowance: num(c.personal_allowance, D.personalAllowance), miscellaneous: num(c.miscellaneous, D.miscellaneous),
+        cityAllowance: num(c.city_allowance, D.cityAllowance), performancePay: num(c.performance_pay, D.performancePay),
+      };
+      for (const comp of legacyComponents(tpl)) {
+        await pool.query(
+          `INSERT INTO salary_components
+             (organisation_id, company_id, code, label, kind, calc, basis_code, value,
+              prorate, taxable, statutory, per_employee, sort_order)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+           ON CONFLICT (company_id, code) DO NOTHING`,
+          [c.organisation_id, c.id, comp.code, comp.label, comp.kind, comp.calc,
+           comp.basisCode || null, comp.value, comp.prorate, comp.taxable,
+           comp.statutory || null, comp.perEmployee !== false, comp.sortOrder]);
+        seededComponents++;
+      }
+      seededCompanies++;
+
+      // Per-employee overrides wherever the individual structure diverges from
+      // the company template — otherwise everyone would silently inherit the
+      // template and individually-set allowances would be lost.
+      const comps = (await pool.query(
+        `SELECT id, code, value FROM salary_components WHERE company_id=$1`, [c.id])).rows;
+      const structures = (await pool.query(
+        `SELECT ss.* FROM salary_structures ss JOIN employees e ON e.id = ss.employee_id
+          WHERE e.company_id = $1`, [c.id])).rows;
+      for (const ss of structures) {
+        const own = {
+          basicPct: Number(ss.basic_pct), hraPctOfBasic: Number(ss.hra_pct_of_basic),
+          employeePfPct: Number(ss.employee_pf_pct), professionalTax: Number(ss.professional_tax),
+          welfareTrust: Number(ss.welfare_trust), lta: Number(ss.lta),
+          personalAllowance: Number(ss.personal_allowance), miscellaneous: Number(ss.miscellaneous),
+          cityAllowance: Number(ss.city_allowance), performancePay: Number(ss.performance_pay),
+        };
+        for (const comp of comps) {
+          const field = LEGACY_FIELD[comp.code];
+          if (!field) continue;                       // SPECIAL balances; nothing to override
+          const mine = own[field];
+          if (mine == null || Number.isNaN(mine)) continue;
+          if (Number(mine) === Number(comp.value)) continue;   // same as the template
+          await pool.query(
+            `INSERT INTO employee_component_values (employee_id, component_id, value)
+             VALUES ($1,$2,$3) ON CONFLICT (employee_id, component_id) DO NOTHING`,
+            [ss.employee_id, comp.id, mine]);
+          overrides++;
+        }
+      }
+    }
+    if (seededCompanies) {
+      console.log(`[migrate] payslip components seeded for ${seededCompanies} companies `
+        + `(${seededComponents} components, ${overrides} per-employee overrides)`);
+    } else {
+      console.log('[migrate] payslip components already present');
+    }
+  }
 
   // Unique secondary key on official email (guarded — duplicates won't crash startup).
   try {

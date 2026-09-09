@@ -4,6 +4,8 @@ import * as emp from '../controllers/employeeController.js';
 import * as ob from '../controllers/onboardingController.js';
 import * as chg from '../controllers/changeRequestController.js';
 import * as incr from '../controllers/incrementController.js';
+import * as paycomp from '../controllers/payComponentController.js';
+import * as levels from '../controllers/levelController.js';
 import * as meta from '../controllers/metaController.js';
 import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
@@ -276,6 +278,22 @@ r.post('/admin/increments/:id/approve', authenticate, requireOrg, requireModule(
 r.post('/admin/increments/:id/apply', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.apply);
 r.post('/admin/increments/:id/cancel', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.cancel);
 r.get('/me/increments', authenticate, incr.mine);
+
+// --- Payslip components (GreenHR: salary component / annexure setup) ---
+// The company set is payroll configuration; the per-employee overrides sit with
+// the employee's salary structure, so both are gated on PAYCOMP to manage.
+r.get('/admin/companies/:companyId/salary-components', authenticate, requireOrg, requireModule('PAYCOMP'), paycomp.list);
+r.put('/admin/companies/:companyId/salary-components', authenticate, requireOrg, requireModule('PAYCOMP', 'manage'), paycomp.replace);
+r.get('/admin/employees/:id/salary-components', authenticate, requireOrg, requireModule('PAYCOMP'), paycomp.forEmployee);
+r.put('/admin/employees/:id/salary-components', authenticate, requireOrg, requireModule('PAYCOMP', 'manage'), paycomp.setForEmployee);
+
+// --- Organisation hierarchy levels (GreenHR: Organization Hierarchy) ---
+// STRUCTURE is the departments-and-designations module, and a level is the rung
+// a designation sits on, so it belongs to the same permission.
+r.get('/admin/levels', authenticate, requireOrg, requireModule('STRUCTURE'), levels.all);
+r.get('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE'), levels.list);
+r.put('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.replace);
+r.put('/admin/designations/:id/level', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.setDesignationLevel);
 r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
 r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 

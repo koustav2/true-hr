@@ -220,3 +220,78 @@ CREATE TABLE IF NOT EXISTS salary_increments (
 );
 CREATE INDEX IF NOT EXISTS idx_incr_org ON salary_increments (organisation_id, status, effective_from DESC);
 CREATE INDEX IF NOT EXISTS idx_incr_employee ON salary_increments (employee_id, effective_from DESC);
+
+-- ── 11. Organisation hierarchy levels ──────────────────────────────────────
+-- GreenHR parity: "Organization Hierarchy" (AddCompanyLevels.aspx) — pick a
+-- company, say how many levels it has, name each one, save.
+--
+-- A level is the rung on the ladder (L1 Board, L2 Leadership, L3 Management…),
+-- owned per company because two companies inside one organisation rarely have
+-- the same shape. Designations carry the level, so every employee inherits one
+-- from the designation they already hold and there is nothing extra to maintain
+-- per person.
+CREATE TABLE IF NOT EXISTS org_levels (
+  id              BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT      REFERENCES organisations(id) ON DELETE CASCADE,
+  company_id      BIGINT      NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  level_no        INT         NOT NULL,          -- 1 = top of the house
+  name            TEXT        NOT NULL,
+  description     TEXT,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (company_id, level_no)
+);
+CREATE INDEX IF NOT EXISTS idx_org_levels_company ON org_levels (company_id, level_no);
+
+ALTER TABLE designations ADD COLUMN IF NOT EXISTS level_id BIGINT REFERENCES org_levels(id) ON DELETE SET NULL;
+
+-- ── 12. Dynamic payslip components ─────────────────────────────────────────
+-- Payslip lines used to be fixed columns on salary_structures — Basic, HRA,
+-- LTA, Personal, Misc, City, Performance Pay, PF, PT, Welfare — which is fine
+-- until the second client wants "Conveyance" and "Food Coupons" and no LTA.
+--
+-- The component list is now data, per company. `calc` says how the amount is
+-- reached:
+--   PCT_CTC   value% of the monthly CTC
+--   PCT_OF    value% of another component (basis_code)
+--   FLAT      value rupees
+--   BALANCE   whatever is left of the CTC after every other earning — at most
+--             one per company, so gross always reconciles to the CTC
+--
+-- `prorate` decides whether a part-month attendance factor applies. Earnings
+-- prorate; PT and Welfare are flat monthly charges that do not. Deduction
+-- PCT_OF reads the already-prorated earning (PF on prorated Basic), which is
+-- what payroll actually does.
+--
+-- `statutory` tags the line so the PF / ESIC / PT registers keep finding it
+-- whatever a client chose to call it on the payslip.
+CREATE TABLE IF NOT EXISTS salary_components (
+  id              BIGSERIAL PRIMARY KEY,
+  organisation_id BIGINT      REFERENCES organisations(id) ON DELETE CASCADE,
+  company_id      BIGINT      NOT NULL REFERENCES companies(id) ON DELETE CASCADE,
+  code            TEXT        NOT NULL,                     -- BASIC, HRA, CONVEYANCE…
+  label           TEXT        NOT NULL,                     -- what the payslip prints
+  kind            TEXT        NOT NULL,                     -- EARNING | DEDUCTION
+  calc            TEXT        NOT NULL,                     -- PCT_CTC | PCT_OF | FLAT | BALANCE
+  basis_code      TEXT,                                     -- required when calc = PCT_OF
+  value           NUMERIC(12,2) NOT NULL DEFAULT 0,         -- percent or rupees
+  prorate         BOOLEAN     NOT NULL DEFAULT true,
+  taxable         BOOLEAN     NOT NULL DEFAULT true,
+  statutory       TEXT,                                     -- PF | PT | WELFARE | ESIC | TDS
+  per_employee    BOOLEAN     NOT NULL DEFAULT true,        -- may an employee override the value?
+  sort_order      INT         NOT NULL DEFAULT 100,
+  active          BOOLEAN     NOT NULL DEFAULT true,
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  UNIQUE (company_id, code)
+);
+CREATE INDEX IF NOT EXISTS idx_sal_comp_company ON salary_components (company_id, kind, sort_order);
+
+-- Per-employee overrides of a component's value. Absent row = use the
+-- company's value, so a new joiner needs no rows at all.
+CREATE TABLE IF NOT EXISTS employee_component_values (
+  employee_id  BIGINT        NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  component_id BIGINT        NOT NULL REFERENCES salary_components(id) ON DELETE CASCADE,
+  value        NUMERIC(12,2) NOT NULL,
+  updated_at   TIMESTAMPTZ   NOT NULL DEFAULT now(),
+  PRIMARY KEY (employee_id, component_id)
+);
+CREATE INDEX IF NOT EXISTS idx_emp_comp_emp ON employee_component_values (employee_id);

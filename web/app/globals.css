@@ -63,6 +63,10 @@ main table thead th {
   background: #f7f9fb;
   border-bottom: 1px solid #d9dfe7;
   padding-top: 8px; padding-bottom: 8px;
+  /* Horizontal padding so a right-aligned header never butts against the next
+     one (or the table edge). A page that sets its own px-* class still wins,
+     since a utility class outranks this descendant selector. */
+  padding-left: 16px; padding-right: 16px;
   white-space: nowrap;
 }
 main table tbody td { padding-top: 9px; padding-bottom: 9px; }

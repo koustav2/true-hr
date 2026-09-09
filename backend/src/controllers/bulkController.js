@@ -13,10 +13,17 @@ import ExcelJS from 'exceljs';
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 
+// A blank cell must never read as a value. ExcelJS gives null for an empty
+// cell and Number(null) is 0, so the naive version silently wrote zeros over
+// every column the user left alone — which on leave balances would wipe an
+// entire tenant's allocations. So: null means "blank, leave it alone", NaN
+// means "something is in the cell but it is not a number" and is reported.
 const num = (raw) => {
-  const v = typeof raw === 'object' && raw?.result != null ? raw.result : raw;
+  const v = typeof raw === 'object' && raw !== null && raw.result != null ? raw.result : raw;
+  if (v === null || v === undefined) return null;
+  if (typeof v === 'string' && v.trim() === '') return null;
   const n = Number(v);
-  return Number.isFinite(n) ? n : null;
+  return Number.isFinite(n) ? n : NaN;
 };
 const str = (raw) => {
   const v = typeof raw === 'object' && raw !== null
@@ -273,7 +280,8 @@ async function readRow(kind, row, h, ctx, req, emp) {
 
   if (kind === 'salary') {
     const v = num(cell('new monthly ctc'));
-    if (v == null) return out;
+    if (v === null) return out;
+    if (Number.isNaN(v)) throw new Error('New Monthly CTC is not a number');
     if (v <= 0) throw new Error('New Monthly CTC must be greater than zero');
     out.push({ field: 'monthly_ctc', label: 'Monthly CTC', value: Math.round(v), display: `₹${Math.round(v)}` });
     return out;
@@ -341,7 +349,8 @@ async function readRow(kind, row, h, ctx, req, emp) {
   if (kind === 'leave-balance') {
     for (const t of ctx.types) {
       const v = num(cell(`new ${t.code.toLowerCase()} allocated`));
-      if (v == null) continue;
+      if (v === null) continue;
+      if (Number.isNaN(v)) throw new Error(`${t.code} allocation is not a number`);
       if (v < 0) throw new Error(`${t.code} allocation cannot be negative`);
       out.push({ field: `leave:${t.id}`, label: `${t.code} allocated`, value: v, display: String(v) });
     }

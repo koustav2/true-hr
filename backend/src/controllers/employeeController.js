@@ -559,7 +559,7 @@ export async function orgChart(req, res, next) {
          LEFT JOIN companies co ON co.id = e.company_id
         WHERE ($1::bigint IS NULL OR e.organisation_id = $1)
           AND ($2::bigint IS NULL OR e.company_id = $2)
-          AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')
+          AND e.onboarding_status <> 'EXPIRED'
         ORDER BY e.first_name, e.last_name`,
       [req.orgId || null, req.companyScope || null]);
 

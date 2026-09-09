@@ -36,11 +36,29 @@ body {
 .scrollbar-none { scrollbar-width: none; }
 .scrollbar-none::-webkit-scrollbar { display: none; }
 
-/* Page titles: quiet and structural — no gradient accent bars. */
-.page-title { letter-spacing: -0.015em; font-weight: 600; }
-main h1.page-title { font-size: 20px; line-height: 1.25; }
-@media (max-width: 640px) { main h1.page-title { font-size: 18px; } }
-main h1.page-title + p { max-width: 660px; font-size: 13px; }
+/* Scroll affordance: a hairline fade at the bottom of a scrolling pane, so a
+   nav item cut off mid-row reads as "scroll for more" and not as a paint bug.
+   `background-attachment: local` on the second layer means the fade shows only
+   while there is content below. */
+.scroll-fade {
+  background:
+    linear-gradient(#fff 30%, rgba(255,255,255,0)) top / 100% 14px no-repeat,
+    linear-gradient(rgba(255,255,255,0), #fff 70%) bottom / 100% 14px no-repeat,
+    radial-gradient(farthest-side at 50% 0, rgba(18,40,63,.10), rgba(18,40,63,0)) top / 100% 5px no-repeat,
+    radial-gradient(farthest-side at 50% 100%, rgba(18,40,63,.10), rgba(18,40,63,0)) bottom / 100% 5px no-repeat;
+  background-attachment: local, local, scroll, scroll;
+}
+
+/* ── Page titles ────────────────────────────────────────────────────────────
+   One heading treatment for the whole console. Pages used to set their own
+   size and weight inline (26px extrabold on some screens, 24px on others,
+   20px on a third set), so moving between sections felt like moving between
+   products. The inline classes are gone; this rule is the only authority, and
+   because nothing competes with it a change here restyles all 43 screens.
+   ------------------------------------------------------------------------- */
+.page-title { letter-spacing: -0.018em; font-weight: 600; font-size: 20px; line-height: 1.2; }
+@media (max-width: 640px) { .page-title { font-size: 18px; } }
+main h1.page-title + p { max-width: 660px; font-size: 12.5px; line-height: 1.4; margin-top: 2px; }
 
 main section > h2 {
   display: flex; align-items: center; gap: 8px;
@@ -52,27 +70,51 @@ main section > h2::before {
   background: #0a5fd1;
 }
 
-/* Dense data tables everywhere (admin + ESS) */
-main table { font-size: 13px; }
+/* ── Data tables ────────────────────────────────────────────────────────────
+   These carry the product. A payroll register or an employee list is hundreds
+   of rows, so vertical rhythm decides whether the screen is readable or a
+   scroll marathon: every 2px of cell padding is another row off the fold.
+
+   `border-collapse: separate` with zero spacing keeps sticky headers from
+   losing their bottom hairline (collapsed borders are painted by the cell that
+   scrolls away).
+   ------------------------------------------------------------------------- */
+main table {
+  font-size: 12.5px;
+  border-collapse: separate;
+  border-spacing: 0;
+  width: 100%;
+}
 main table thead th {
   text-transform: uppercase;
-  font-size: 10.5px;
-  letter-spacing: .07em;
+  font-size: 10px;
+  letter-spacing: .075em;
   font-weight: 700;
   color: #7a8899;
   background: #f7f9fb;
   border-bottom: 1px solid #d9dfe7;
-  padding-top: 8px; padding-bottom: 8px;
+  padding-top: 6px; padding-bottom: 6px;
   /* Horizontal padding so a right-aligned header never butts against the next
      one (or the table edge). A page that sets its own px-* class still wins,
      since a utility class outranks this descendant selector. */
   padding-left: 16px; padding-right: 16px;
   white-space: nowrap;
 }
-main table tbody td { padding-top: 9px; padding-bottom: 9px; }
+main table tbody td {
+  padding-top: 6px; padding-bottom: 6px;
+  line-height: 1.35;
+  vertical-align: middle;
+}
 main table tbody tr { transition: background .1s ease; }
-main table tbody tr:hover { background: #eef5fd; }
+main table tbody tr:hover { background: #f4f8fe; }
 main table td.num, main table th.num { text-align: right; font-variant-numeric: tabular-nums; }
+
+/* A secondary line inside a cell (an email under a name, a code under a title)
+   is context, not content: it should not compete for the same weight. */
+main table tbody td .sub { font-size: 11px; color: #7a8899; line-height: 1.3; }
+
+/* Sticky header for any table a page puts in its own scroll box. */
+main .table-sticky thead th { position: sticky; top: 0; z-index: 1; }
 
 .mono, .font-mono { font-variant-ligatures: none; }
 .tnum { font-variant-numeric: tabular-nums; }

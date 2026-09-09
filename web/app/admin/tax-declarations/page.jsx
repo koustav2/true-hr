@@ -27,7 +27,7 @@ export default function TaxDeclarationsPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Investment Declarations</h1>
+        <h1 className="page-title text-ink">Investment Declarations</h1>
         <p className="text-ink-faint text-sm mt-0.5">Employee income-tax declarations — review the proofs, adjust approved amounts, verify or send back.</p>
       </div>
       {msg && <p className="text-sm text-rose-600">{msg}</p>}

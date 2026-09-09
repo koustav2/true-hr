@@ -43,7 +43,7 @@ export default function LettersPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Letters</h1>
+          <h1 className="page-title text-ink">Letters</h1>
           <p className="text-ink-faint text-sm mt-0.5">Issue confirmation, transfer, promotion, experience, relieving and other letters from templates.</p>
         </div>
         <Button onClick={() => { setOpen(true); setPreview(null); setMsg(''); }}>Issue a letter</Button>

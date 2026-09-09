@@ -295,6 +295,9 @@ export async function myPermissions(req, res, next) {
       role: { key: ctx.roleKey, label: ctx.roleLabel, baseRole: ctx.baseRole, rank: ctx.roleRank },
       isPlatformAdmin: ctx.isPlatformAdmin,
       organisationId: ctx.orgId,
+      // The employee portal prints this in its footer. Without it every tenant's
+      // staff saw the vendor's name at the bottom of their own HR system.
+      organisationName: ctx.orgName || null,
       // What the tenant has bought, so the portal can explain a missing section
       // as "not in your plan" rather than silently hiding it.
       subscription: ctx.subscription || null,

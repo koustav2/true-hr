@@ -34,7 +34,7 @@ export default function AuditPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Audit log</h1>
+          <h1 className="page-title text-ink">Audit log</h1>
           <p className="text-ink-faint text-sm mt-0.5">The 200 most recent system actions.</p>
         </div>
         <Button variant="outline" onClick={() => downloadCsv('audit-log.csv', (rows || []).map((a) => ({

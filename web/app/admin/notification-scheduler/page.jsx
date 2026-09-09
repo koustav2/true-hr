@@ -24,7 +24,7 @@ export default function SchedulerPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Notification Scheduler</h1>
+          <h1 className="page-title text-ink">Notification Scheduler</h1>
           <p className="text-ink-faint text-sm mt-0.5">Schedule recurring announcements to everyone, a company, or a department.</p>
         </div>
         <Button onClick={() => { setOpen(true); setMsg(''); }}>New schedule</Button>

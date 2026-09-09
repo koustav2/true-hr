@@ -10,14 +10,14 @@ import { createPortal } from 'react-dom';
 // ============================================================================
 
 export function Button({ as: As = 'button', variant = 'primary', size = 'md', className = '', children, ...props }) {
-  const base = 'inline-flex items-center justify-center gap-2 font-semibold rounded transition-colors duration-100 outline-none focus-visible:shadow-focus disabled:opacity-45 disabled:cursor-not-allowed whitespace-nowrap';
-  const sizes = { lg: 'px-5 py-2.5 text-sm', md: 'px-4 py-2 text-[13px]', sm: 'px-3 py-1.5 text-xs' };
+  const base = 'inline-flex items-center justify-center gap-1.5 font-semibold rounded transition-colors duration-100 outline-none focus-visible:ring-2 focus-visible:ring-brand-600/40 disabled:opacity-45 disabled:cursor-not-allowed whitespace-nowrap';
+  const sizes = { lg: 'px-4 py-2 text-[13.5px]', md: 'px-3.5 py-[7px] text-[13px]', sm: 'px-2.5 py-1 text-[12px]' };
   const styles = {
-    primary: 'bg-brand-600 text-white hover:bg-brand-700 shadow-btn',
-    soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100 ring-1 ring-inset ring-brand-200',
+    primary: 'bg-brand-600 text-white hover:bg-brand-700 active:bg-brand-800',
+    soft: 'bg-brand-50 text-brand-700 hover:bg-brand-100 active:bg-brand-200 ring-1 ring-inset ring-brand-200',
     ghost: 'text-ink-soft hover:bg-slate-100 hover:text-ink',
     danger: 'bg-white border border-neg/40 text-neg hover:bg-neg-bg',
-    outline: 'bg-white border border-line text-ink-soft hover:bg-canvas hover:text-ink',
+    outline: 'bg-white border border-line text-ink-soft hover:bg-canvas hover:border-slate-400 hover:text-ink',
   };
   return <As className={`${base} ${sizes[size] || sizes.md} ${styles[variant]} ${className}`} {...props}>{children}</As>;
 }
@@ -39,7 +39,7 @@ export function Field({ label, hint, required, children }) {
   );
 }
 
-const inputCls = 'w-full rounded border border-line bg-white px-3 py-2 text-[13px] text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-slate-400 focus:border-brand-600 focus:shadow-focus';
+const inputCls = 'w-full rounded border border-line bg-white px-2.5 py-[7px] text-[13px] text-ink placeholder:text-ink-faint outline-none transition-colors hover:border-slate-400 focus:border-brand-600 focus:ring-2 focus:ring-brand-600/25 disabled:bg-canvas disabled:text-ink-faint disabled:cursor-not-allowed';
 // Callers may pass an explicit width (w-24, w-40, w-[…]); drop the built-in
 // w-full then, otherwise the two width utilities conflict and w-full can win.
 const inputBase = (extra) => /(^|\s)w-(\d|\[)/.test(extra || '') ? inputCls.replace('w-full ', '') : inputCls;
@@ -148,25 +148,44 @@ export function SearchPicker({ value, onChange, options = [], getLabel, placehol
 // Shared primitives every module adopts.
 // ─────────────────────────────────────────────────────────────────────────────
 
-const AVATAR_GRADIENTS = [
-  'linear-gradient(135deg,#0a5fd1,#12a150)', 'linear-gradient(135deg,#5b3fd1,#9b6ef3)',
-  'linear-gradient(135deg,#0891b2,#0a5fd1)', 'linear-gradient(135deg,#0e7a3c,#4ec27f)',
-  'linear-gradient(135deg,#c9700c,#e8a34a)', 'linear-gradient(135deg,#b31760,#e0609a)',
-  'linear-gradient(135deg,#1a70da,#83b5f1)', 'linear-gradient(135deg,#0848a0,#4a92e8)',
+// Four steps of the brand ramp — enough to tell two adjacent rows apart at a
+// glance, without turning a table into confetti.
+const AVATAR_STEPS = [
+  { bg: '#e7effb', fg: '#0848a0' },
+  { bg: '#dbe7f8', fg: '#093a7f' },
+  { bg: '#eaf1fc', fg: '#0a5fd1' },
+  { bg: '#e1ebfa', fg: '#0b3068' },
 ];
+const AVATAR_LARGE = 'linear-gradient(135deg,#0a5fd1,#12a150)';
 export function initialsOf(name) {
   return (name || '?').trim().split(/\s+/).map((x) => x[0]).slice(0, 2).join('').toUpperCase();
 }
-function gradientFor(name) {
+function stepFor(name) {
   let h = 0; const t = name || '';
   for (let i = 0; i < t.length; i++) h = (h * 31 + t.charCodeAt(i)) >>> 0;
-  return AVATAR_GRADIENTS[h % AVATAR_GRADIENTS.length];
+  return AVATAR_STEPS[h % AVATAR_STEPS.length];
 }
-/** Identity avatar — a compact gradient square with initials. */
+/**
+ * Identity avatar — initials in a compact square.
+ *
+ * Small sizes (in tables and lists) get a flat brand tint: present enough to
+ * anchor the row, quiet enough that thirty of them read as a column rather than
+ * a mosaic. From 44px up it is an object-page portrait, so it keeps the brand
+ * gradient and white type.
+ */
 export function Avatar({ name, size = 32, className = '' }) {
+  const big = size >= 44;
+  const step = stepFor(name);
   return (
-    <span className={`grid place-items-center rounded text-white font-bold shrink-0 ${className}`}
-      style={{ width: size, height: size, fontSize: Math.round(size * 0.36), backgroundImage: gradientFor(name) }}>
+    <span
+      className={`grid place-items-center rounded font-bold shrink-0 tracking-[.01em] ${big ? 'text-white' : ''} ${className}`}
+      style={{
+        width: size, height: size, fontSize: Math.round(size * (big ? 0.36 : 0.4)),
+        ...(big
+          ? { backgroundImage: AVATAR_LARGE }
+          : { background: step.bg, color: step.fg }),
+      }}
+    >
       {initialsOf(name)}
     </span>
   );
@@ -180,8 +199,8 @@ const BADGE_TONES = {
 /** Status chip. tone: neutral|brand|ok|warn|danger|info|grape */
 export function Badge({ tone = 'neutral', dot = false, children, className = '' }) {
   return (
-    <span className={`inline-flex items-center gap-1.5 rounded-sm px-2 py-0.5 text-[10.5px] font-bold tracking-[.02em] ${BADGE_TONES[tone] || BADGE_TONES.neutral} ${className}`}>
-      {dot && <span className="h-1.5 w-1.5 rounded-full bg-current" />}
+    <span className={`inline-flex items-center gap-1 rounded-sm px-1.5 py-px text-[10.5px] font-bold uppercase tracking-[.04em] leading-[16px] ${BADGE_TONES[tone] || BADGE_TONES.neutral} ${className}`}>
+      {dot && <span className="h-1 w-1 rounded-full bg-current opacity-80" />}
       {children}
     </span>
   );
@@ -190,10 +209,10 @@ export function Badge({ tone = 'neutral', dot = false, children, className = '' 
 /** Consistent page header: breadcrumb-quiet title, optional subtitle + action. */
 export function PageHeader({ title, subtitle, action, className = '' }) {
   return (
-    <div className={`flex flex-wrap items-start justify-between gap-4 ${className}`}>
+    <div className={`flex flex-wrap items-start justify-between gap-3 ${className}`}>
       <div className="min-w-0">
         <h1 className="page-title text-[20px] font-semibold text-ink">{title}</h1>
-        {subtitle && <p className="text-ink-faint text-[13px] mt-1 max-w-2xl">{subtitle}</p>}
+        {subtitle && <p className="text-ink-faint text-[12.5px] mt-0.5 max-w-2xl leading-snug">{subtitle}</p>}
       </div>
       {action && <div className="shrink-0">{action}</div>}
     </div>
@@ -207,7 +226,7 @@ const TILE_TONE = { brand: 'text-brand-600', ok: 'text-pos', warn: 'text-crit', 
  */
 export function StatTile({ Icon, tone = 'brand', label, value, unit, caption, foot, footTone, className = '' }) {
   return (
-    <Card hover className={`p-3.5 min-h-[104px] flex flex-col ${className}`}>
+    <Card hover className={`p-3 flex flex-col ${className}`}>
       <div className="flex items-start gap-2">
         <div className="min-w-0">
           <div className="text-[12.5px] font-semibold text-ink-soft leading-tight">{label}</div>
@@ -215,7 +234,7 @@ export function StatTile({ Icon, tone = 'brand', label, value, unit, caption, fo
         </div>
         {Icon && <span className="ml-auto grid place-items-center h-7 w-7 rounded bg-brand-50 text-brand-600 shrink-0"><Icon width={15} height={15} /></span>}
       </div>
-      <div className={`mt-auto text-[28px] leading-none font-semibold tracking-tight tabular-nums ${TILE_TONE[tone] || TILE_TONE.brand}`}>
+      <div className={`mt-2.5 text-[26px] leading-none font-semibold tracking-[-.02em] tabular-nums ${TILE_TONE[tone] || TILE_TONE.brand}`}>
         {value}{unit && <span className="text-[12px] text-ink-faint font-medium ml-1">{unit}</span>}
       </div>
       {foot && <div className={`mt-1.5 text-[11.5px] font-semibold ${TILE_TONE[footTone] || 'text-ink-faint'}`}>{foot}</div>}

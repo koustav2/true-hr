@@ -13,7 +13,7 @@ export default function WishesPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Wishes &amp; Reminders</h1>
+          <h1 className="page-title text-ink">Wishes &amp; Reminders</h1>
           <p className="text-ink-faint text-sm mt-0.5">Upcoming birthdays and work anniversaries across the organisation.</p>
         </div>
         <Select value={days} onChange={(e) => setDays(e.target.value)} className="w-40">

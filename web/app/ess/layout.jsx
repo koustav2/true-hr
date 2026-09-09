@@ -1,10 +1,11 @@
 'use client';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { Spinner } from '@/components/ui.jsx';
 import { FEATURES } from '@/lib/flags.js';
+import { api } from '@/lib/api.js';
 
 // Employee self-service portal (GreenHR-style: everything usable from the web,
 // desktop or phone browser). Brand banner + sticky glass pill-nav shell.
@@ -32,8 +33,18 @@ export default function EssLayout({ children }) {
   const { auth, user, logout, ready } = useAuth();
   const pathname = usePathname();
   const router = useRouter();
+  const [orgName, setOrgName] = useState('');
 
   useEffect(() => { if (ready && !auth?.token) router.replace('/login'); }, [ready, auth, router]);
+
+  // Whose system this is. Failing quietly is right — a missing footer name is
+  // not worth an error banner on every ESS page.
+  useEffect(() => {
+    if (!ready || !auth?.token) return;
+    api.get('/me/permissions')
+      .then((p) => setOrgName(p?.organisationName || ''))
+      .catch(() => {});
+  }, [ready, auth]);
 
   if (!ready || !auth?.token) {
     return <div className="min-h-screen grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
@@ -97,7 +108,12 @@ export default function EssLayout({ children }) {
 
       <footer className="border-t border-line bg-white py-4 mt-2">
         <div className="max-w-[1400px] mx-auto px-4 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-faint">
-          <span>© {new Date().getFullYear()} TRUE KIND Foundation · TRUE HR</span>
+          {/* "Acme Labs Pvt Ltd · TRUE HR", but just "TRUE HR" for a tenant
+              whose own name is already that — no "TRUE HR · TRUE HR". */}
+          <span>
+            © {new Date().getFullYear()}{' '}
+            {!orgName || /true\s*hr/i.test(orgName) ? 'TRUE HR' : `${orgName} · TRUE HR`}
+          </span>
           <span className="flex gap-4">
             <Link href="/privacy" className="hover:text-ink-soft">Privacy</Link>
             <Link href="/terms" className="hover:text-ink-soft">Terms</Link>

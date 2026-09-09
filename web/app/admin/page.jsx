@@ -45,7 +45,7 @@ export default function DashboardPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[12px] text-ink-faint">Workspace › Overview</div>
-          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Organisation Overview</h1>
+          <h1 className="page-title text-ink">Organisation Overview</h1>
           <p className="text-[13px] text-ink-faint mt-1">Everything moving across the organisation today.</p>
         </div>
         <Button as={Link} href="/admin/employees/new"><IconPlus width={15} height={15} /> Onboard employee</Button>

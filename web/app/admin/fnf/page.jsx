@@ -39,7 +39,7 @@ export default function FnfPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Full &amp; Final Settlement</h1>
+          <h1 className="page-title text-ink">Full &amp; Final Settlement</h1>
           <p className="text-ink-faint text-sm mt-0.5">Compute exit pay — final salary, leave encashment, gratuity, notice recovery — for a resigning employee.</p>
         </div>
         <Button onClick={() => { setOpen(true); setComputed(null); setSavedId(null); setMsg(''); }}>New settlement</Button>

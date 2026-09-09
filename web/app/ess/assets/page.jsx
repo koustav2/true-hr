@@ -11,7 +11,7 @@ export default function EssAssetsPage() {
   async function ack(id) { try { await api.post(`/me/assets/${id}/acknowledge`, {}); load(); } catch (e) { setMsg(e.message); } }
   return (
     <div className="space-y-4 max-w-3xl">
-      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">My Assets</h1>
+      <h1 className="page-title text-ink">My Assets</h1>
       <p className="text-ink-faint text-sm">Company assets currently assigned to you.</p>
       {msg && <p className="text-sm text-rose-600">{msg}</p>}
       {!rows ? <Spinner className="text-brand-600 h-6 w-6" /> : !rows.length ? <Empty title="No assets assigned" /> : (

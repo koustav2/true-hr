@@ -115,7 +115,7 @@ export default function UsersPage() {
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
           <div className="text-[12px] text-ink-faint">Administration › Users &amp; accounts</div>
-          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Users &amp; accounts</h1>
+          <h1 className="page-title text-ink">Users &amp; accounts</h1>
           <p className="text-ink-faint text-[13px] mt-1">
             Who can sign in, and which role each person holds.
             {canView('ROLES') && (

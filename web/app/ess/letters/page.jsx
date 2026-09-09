@@ -12,7 +12,7 @@ export default function EssLettersPage() {
   }
   return (
     <div className="space-y-4 max-w-3xl">
-      <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">My Letters</h1>
+      <h1 className="page-title text-ink">My Letters</h1>
       {!rows ? <Spinner className="text-brand-600 h-6 w-6" /> : !rows.length ? <Empty title="No letters yet" subtitle="Letters issued to you by HR will appear here." /> : (
         <div className="grid sm:grid-cols-2 gap-3">
           {rows.map((l) => (

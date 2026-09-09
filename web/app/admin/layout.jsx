@@ -342,7 +342,7 @@ function AdminShell({ children }) {
 
   const SidebarBody = ({ collapsed }) => (
     <>
-      <div className={`pt-3 flex-1 overflow-y-auto ${collapsed ? 'px-1.5' : 'px-2'}`}>
+      <div className={`pt-2 flex-1 overflow-y-auto scroll-fade ${collapsed ? 'px-1.5' : 'px-2'}`}>
         {isPlatformAdmin ? (
           <NavGroup title="Platform" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
         ) : (
@@ -372,7 +372,7 @@ function AdminShell({ children }) {
           </div>
         )}
         <button onClick={() => { logout(); router.replace('/login'); }} title="Sign out"
-          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14.5px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
+          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
           <IconLogout className="text-ink-faint" />{!collapsed && 'Sign out'}
         </button>
       </div>

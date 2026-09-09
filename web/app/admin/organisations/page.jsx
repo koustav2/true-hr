@@ -110,7 +110,7 @@ export default function OrganisationsPage() {
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div>
           <div className="text-[12px] text-ink-faint">Platform › Organisations</div>
-          <h1 className="page-title text-[20px] font-semibold text-ink mt-0.5">Organisation Management</h1>
+          <h1 className="page-title text-ink">Organisation Management</h1>
           <p className="text-[13px] text-ink-faint mt-1 max-w-2xl">
             Each organisation is an isolated tenant with its own people, payroll and roles. You work inside one at a time.
           </p>

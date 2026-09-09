@@ -28,11 +28,11 @@ export default function EmployeesPage() {
       key: 'name', label: 'Employee', sortable: true,
       sortValue: (r) => `${r.first_name} ${r.last_name}`,
       render: (r) => (
-        <div className="flex items-center gap-3">
-          <Avatar name={`${r.first_name} ${r.last_name}`} size={38} />
+        <div className="flex items-center gap-2.5">
+          <Avatar name={`${r.first_name} ${r.last_name}`} size={28} />
           <span className="min-w-0">
-            <span className="font-semibold text-ink block">{r.first_name} {r.last_name}</span>
-            <span className="text-xs text-ink-faint font-mono">{r.official_email}</span>
+            <span className="font-semibold text-ink block leading-tight">{r.first_name} {r.last_name}</span>
+            <span className="sub block truncate">{r.official_email}</span>
           </span>
         </div>
       ),
@@ -50,7 +50,7 @@ export default function EmployeesPage() {
     <div className="space-y-6">
       <div className="flex flex-wrap items-center justify-between gap-4">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Employees</h1>
+          <h1 className="page-title text-ink">Employees</h1>
           <p className="text-ink-faint text-sm mt-0.5">{rows ? `${rows.length} total` : 'Loading…'}</p>
         </div>
         <div className="flex items-center gap-2.5 flex-wrap">

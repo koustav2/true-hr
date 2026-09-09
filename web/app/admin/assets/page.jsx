@@ -47,7 +47,7 @@ export default function AssetsPage() {
     <div className="space-y-5">
       <div className="flex items-start justify-between gap-4 flex-wrap">
         <div>
-          <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Asset Management</h1>
+          <h1 className="page-title text-ink">Asset Management</h1>
           <p className="text-ink-faint text-sm mt-0.5">IT &amp; non-IT assets — register, assign to employees, and record returns.</p>
         </div>
         <Button onClick={() => setAddOpen(true)}>Add asset</Button>

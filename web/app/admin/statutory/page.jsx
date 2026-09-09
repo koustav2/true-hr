@@ -41,7 +41,7 @@ export default function StatutoryPage() {
   return (
     <div className="space-y-5">
       <div>
-        <h1 className="page-title text-[26px] font-extrabold tracking-tight text-ink">Statutory records</h1>
+        <h1 className="page-title text-ink">Statutory records</h1>
         <p className="text-ink-faint text-sm mt-0.5">PF / ESIC / gratuity identifiers and nominations, plus statutory registers and Form 16.</p>
       </div>
       {msg && <p className="text-sm text-brand-700">{msg}</p>}

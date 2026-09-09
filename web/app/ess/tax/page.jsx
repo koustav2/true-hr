@@ -36,7 +36,7 @@ export default function EssTaxPage() {
   return (
     <div className="space-y-4 max-w-3xl">
       <div>
-        <h1 className="page-title text-[24px] font-extrabold tracking-tight text-ink">Investment Declaration</h1>
+        <h1 className="page-title text-ink">Investment Declaration</h1>
         <p className="text-ink-faint text-sm mt-0.5">FY {data.fy} · status: <b>{data.declaration?.status || 'not started'}</b>. Declare your tax-saving investments so TDS is computed correctly.</p>
       </div>
       {msg && <p className="text-sm text-brand-700">{msg}</p>}

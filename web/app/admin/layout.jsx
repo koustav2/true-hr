@@ -35,7 +35,8 @@ const WORKSPACE = [
   { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
   { href: '/admin/fnf', label: 'Full & Final', Icon: IconExit, module: 'FNF' },
   { href: '/admin/letters', label: 'Letters', Icon: IconFile, module: 'LETTERS' },
-  { href: '/admin/bulk-salary', label: 'Bulk Salary', Icon: IconMoney, module: 'PAYROLL' },
+  { href: '/admin/bulk', label: 'Bulk utilities', Icon: IconMoney, module: 'BULK' },
+  { href: '/admin/hrmis', label: 'HRMIS reports', Icon: IconFile, module: 'HRMIS' },
   { href: '/admin/resignations', label: 'Resignations', Icon: IconExit, module: 'RESIGNATION' },
   { href: '/admin/terminations', label: 'Terminations', Icon: IconExit, module: 'TERMINATION' },
 ];

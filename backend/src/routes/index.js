@@ -42,6 +42,7 @@ import * as statutory from '../controllers/statutoryController.js';
 import * as wishes from '../controllers/wishesController.js';
 import * as notifSched from '../controllers/notificationScheduleController.js';
 import * as bulk from '../controllers/bulkController.js';
+import * as hrmis from '../controllers/hrmisController.js';
 import {
   authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
   requireModule, requirePlatformAdmin, requireOrg,
@@ -449,6 +450,17 @@ r.delete('/admin/notification-schedules/:id', authenticate, requireModule('BANNE
 // --- Bulk Excel tools ---
 r.get('/admin/bulk/salary/template', authenticate, requireModule('PAYROLL'), bulk.salaryTemplate);
 r.post('/admin/bulk/salary', authenticate, requireModule('PAYROLL', 'manage'), bulk.salaryUpload);
+
+// --- Bulk Excel utilities (GreenHR: Bulk Update family) ---
+// The generic engine. Salary keeps its own PAYROLL-gated routes above so the
+// existing Bulk Salary screen is unaffected.
+r.get('/admin/bulk/kinds', authenticate, requireOrg, requireModule('BULK'), bulk.kinds);
+r.get('/admin/bulk/:kind/template', authenticate, requireOrg, requireModule('BULK'), bulk.template);
+r.post('/admin/bulk/:kind', authenticate, requireOrg, requireModule('BULK', 'manage'), bulk.upload);
+
+// --- HRMIS reports (GreenHR: HRMIS Reports) ---
+r.get('/admin/reports/hrmis/summary', authenticate, requireOrg, requireModule('HRMIS'), hrmis.summary);
+r.get('/admin/reports/hrmis', authenticate, requireOrg, requireModule('HRMIS'), hrmis.workbook);
 
 // --- Full & Final settlement (exit pay; ties to resignation, not NFA) ---
 r.post('/admin/fnf/preview/:employeeId', authenticate, requireModule('FNF', 'manage'), fnf.preview);

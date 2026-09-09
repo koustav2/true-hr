@@ -2,7 +2,98 @@
 
 **Operated by:** L R Technology (proprietor: Debasish Panigrahi, GSTIN 21BYYPP0116P1ZY)
 **Product:** TrueHR — HRMS with a web admin console and a native Android employee app
-**Last updated:** 8 September 2026
+**Last updated:** 9 September 2026
+
+---
+
+## CHECKPOINT — 9 September 2026 (GreenHR parity pass: five modules closed)
+
+Commits `92d3c83` → `e39cc26`. **Committed, not yet pushed, not yet deployed.**
+
+The GreenHR tenant was crawled page by page — 129 pages across 21 menus — and
+each one assessed against what TRUE HR actually has in code. Score before this
+pass: 56 have / 38 partial / 28 missing / 4 n/a. Five of the highest-value gaps
+are now closed, taking the missing count to 19.
+
+### 1. Change requests — module `CHANGEREQ`
+Closes GreenHR's *Pending Info Approvals* and *Pending Bank Changes*.
+An employee cannot edit their own record: they propose a change from
+`/ess/change-request` and HR decides at `/admin/change-requests`. Nothing is
+written until approval, a rejection must carry a reason the employee sees, and
+only one request per kind may be open at a time.
+- New table `employee_change_requests` (kind, JSONB payload, status, reviewer).
+- Field whitelist per kind — PROFILE / ADDRESS / BANK — so a crafted payload
+  can never reach a column it shouldn't.
+- Bank account numbers are re-encrypted on apply, never stored in the clear.
+
+### 2. Organisation chart — module `ORGCHART`
+`GET /admin/org-chart` returns a flat feed; the client builds the forest. The
+reporting, functional and operational lines are each selectable. Anyone whose
+manager is missing or out of scope surfaces as a root instead of vanishing, and
+a manager cycle is broken at the second visit rather than recursing.
+
+### 3. Increment management — module `INCREMENT`
+The biggest gap: `salary_structures` is one row per employee, so editing a CTC
+destroyed the previous figure and there was no record of who approved it.
+- New table `salary_increments` — the ledger: old/new monthly CTC, grade,
+  designation, reason, and the three timestamps.
+- **Propose → approve → apply**, deliberately separate. Only APPLIED touches
+  payroll, so an April increment can be prepared in February without disturbing
+  February's payslip. The summary flags approved revisions already past their
+  effective date.
+- Apply refreshes `employees.ctc` (what the offer annexure reads) and can issue
+  the INCREMENT / PROMOTION letter through the existing letters engine.
+- A reduction is refused unless typed as a CORRECTION; an applied revision
+  cannot be cancelled — a correction supersedes it — so the trail is never
+  rewritten.
+
+### 4. Bulk utilities — module `BULK`
+GreenHR ships seven separate bulk-update screens; TRUE HR had bulk salary
+alone. One engine now covers five kinds — salary, contact & employment details,
+all three manager lines, department/designation transfer, leave balances —
+because they are the same round trip.
+- Templates download pre-filled with current values; a blank cell means *leave
+  it alone*; `NONE` clears a manager line.
+- **Preview only** (`dryRun`) reports every intended change and writes nothing,
+  which is what makes a 400-row sheet reviewable before it lands on payroll.
+- The column written comes from the registry in the controller, never from the
+  sheet, so a crafted header cannot steer an UPDATE.
+- Rows are matched on employee code inside the caller's org and company scope;
+  managers and transfers are validated against real rows before any write.
+- `/admin/bulk-salary` now redirects into the unified screen; its PAYROLL-gated
+  API routes are unchanged.
+
+### 5. HRMIS reports — module `HRMIS`
+Replaces GreenHR's *Active HRMIS* / *Inactive HRMIS* pair with one seven-sheet
+workbook — People, Compensation, Statutory, Leave balances, Assets, Exits,
+Headcount — scoped to active or everyone.
+- PAN and Aadhaar stay encrypted: the Statutory sheet reports only whether each
+  is *on file*, so a bulk download can never leak them while per-employee
+  access stays audited on the employee's own screen.
+- The screen flags data gaps first — no salary structure, no bank details, no
+  UAN, no reporting manager — before the file goes to finance. Every export is
+  written to the audit log.
+
+### Verification done this pass
+- `next build` of the whole web app in a clean install: all 6 new routes compile.
+- Every one of the **35 new SQL statements** planned against the real schema in
+  a throwaway Postgres loaded from `schema.sql` + `schema_tenancy.sql`.
+- The backend run locally against that database: migrate + seed clean, then all
+  new endpoints exercised, including the bulk Excel round trip and PDF output.
+
+Two real bugs were caught that way and fixed in `e39cc26`:
+- `/admin/org-chart` filtered on `'REJECTED'`, which is **not** a member of the
+  `onboarding_state` enum — the endpoint would have 500'd on its first call.
+- ExcelJS returns `null` for an empty cell and `Number(null)` is `0`, so blank
+  "New …" columns read as deliberate zeros. On bulk leave balances that would
+  have wiped a tenant's allocations. `num()` now separates blank (skip) from
+  unparseable (reported).
+
+### Still open from the parity matrix
+Increment *eligibility* report; bulk shift and profile/grade (no shift model
+yet); family details & family floaters (needs a dependants table); shifts, work
+schedules, geofence config and attendance-cycle setup; salary-calculator UI;
+per-company SMTP; asset brand/invoice masters; department-scoped notifications.
 
 ---
 

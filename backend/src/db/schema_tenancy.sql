@@ -185,3 +185,38 @@ CREATE TABLE IF NOT EXISTS employee_change_requests (
 );
 CREATE INDEX IF NOT EXISTS idx_ecr_status ON employee_change_requests (organisation_id, status, submitted_at DESC);
 CREATE INDEX IF NOT EXISTS idx_ecr_employee ON employee_change_requests (employee_id, submitted_at DESC);
+
+-- ── 10. Salary revisions / increment management ────────────────────────────
+-- GreenHR parity: "Increment Management". salary_structures holds only the
+-- CURRENT compensation (one row per employee), so a revision has nowhere to
+-- live and history is lost the moment HR edits the structure. This table is
+-- the ledger: every proposed revision, what it changed from and to, who
+-- approved it, and when it was actually written onto the structure.
+--
+-- A revision is only reflected in payroll once status = 'APPLIED'. Keeping
+-- propose/approve/apply as three steps means an increment can be prepared in
+-- advance of its effective date without disturbing the current month's payslip.
+CREATE TABLE IF NOT EXISTS salary_increments (
+  id                 BIGSERIAL PRIMARY KEY,
+  employee_id        BIGINT      NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  organisation_id    BIGINT      REFERENCES organisations(id),
+  revision_type      TEXT        NOT NULL DEFAULT 'INCREMENT',  -- INCREMENT | PROMOTION | CORRECTION
+  effective_from     DATE        NOT NULL,
+  old_monthly_ctc    NUMERIC(12,2),
+  new_monthly_ctc    NUMERIC(12,2) NOT NULL,
+  old_grade          TEXT,
+  new_grade          TEXT,
+  old_designation_id BIGINT      REFERENCES designations(id),
+  new_designation_id BIGINT      REFERENCES designations(id),
+  reason             TEXT,
+  status             TEXT        NOT NULL DEFAULT 'PROPOSED',   -- PROPOSED | APPROVED | APPLIED | CANCELLED
+  letter_id          BIGINT      REFERENCES issued_letters(id),
+  created_by         BIGINT      REFERENCES user_accounts(id),
+  created_at         TIMESTAMPTZ NOT NULL DEFAULT now(),
+  approved_by        BIGINT      REFERENCES user_accounts(id),
+  approved_at        TIMESTAMPTZ,
+  applied_at         TIMESTAMPTZ,
+  cancel_note        TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_incr_org ON salary_increments (organisation_id, status, effective_from DESC);
+CREATE INDEX IF NOT EXISTS idx_incr_employee ON salary_increments (employee_id, effective_from DESC);

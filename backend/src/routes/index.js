@@ -3,6 +3,7 @@ import * as auth from '../controllers/authController.js';
 import * as emp from '../controllers/employeeController.js';
 import * as ob from '../controllers/onboardingController.js';
 import * as chg from '../controllers/changeRequestController.js';
+import * as incr from '../controllers/incrementController.js';
 import * as meta from '../controllers/metaController.js';
 import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
@@ -264,6 +265,16 @@ r.post('/admin/change-requests/:id/reject', authenticate, requireOrg, requireMod
 
 // --- Organisation chart (GreenHR: Organization Chart) ---
 r.get('/admin/org-chart', authenticate, requireOrg, requireModule('ORGCHART'), emp.orgChart);
+
+// --- Increment management (GreenHR: Increment Management) ---
+// Three steps on purpose: propose -> approve -> apply. Only APPLIED touches payroll.
+r.get('/admin/increments', authenticate, requireOrg, requireModule('INCREMENT'), incr.list);
+r.get('/admin/increments/summary', authenticate, requireOrg, requireModule('INCREMENT'), incr.summary);
+r.post('/admin/increments', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.propose);
+r.post('/admin/increments/:id/approve', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.approve);
+r.post('/admin/increments/:id/apply', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.apply);
+r.post('/admin/increments/:id/cancel', authenticate, requireOrg, requireModule('INCREMENT', 'manage'), incr.cancel);
+r.get('/me/increments', authenticate, incr.mine);
 r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
 r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 

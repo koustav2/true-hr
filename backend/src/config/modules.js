@@ -38,6 +38,8 @@ export const MODULES = [
     sensitive: true, note: 'Ending an employee’s service' },
   { key: 'PAYROLL',       label: 'Payroll & Payslips',   group: MODULE_GROUPS.PAYROLL,     path: '/admin/payroll',
     sensitive: true, note: 'Salary structures, runs and bank sheets' },
+  { key: 'INCREMENT',     label: 'Increment Management', group: MODULE_GROUPS.PAYROLL,     path: '/admin/increments',
+    sensitive: true, note: 'Salary revisions: propose, approve, apply and letter' },
   { key: 'STATUTORY',     label: 'Statutory (PF/ESIC/Gratuity)', group: MODULE_GROUPS.PAYROLL, path: '/admin/statutory',
     sensitive: true, note: 'PF/ESIC/gratuity records, nominees, registers & Form 16' },
   { key: 'INVDECL',       label: 'Investment Declarations', group: MODULE_GROUPS.PAYROLL,     path: '/admin/tax-declarations',
@@ -102,7 +104,7 @@ export const SYSTEM_ROLES = [
     rank: 10,
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
-      'TERMINATION', 'PAYROLL', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
+      'TERMINATION', 'PAYROLL', 'INCREMENT', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
@@ -197,7 +199,7 @@ const STARTER = [
   'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART',
 ];
 const GROWTH = [
-  ...STARTER, 'COMPANIES', 'PAYROLL', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
+  ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
   'RESIGNATION', 'TERMINATION', 'ASSETS', 'BANNERS',
 ];
 

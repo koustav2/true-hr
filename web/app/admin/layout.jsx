@@ -30,6 +30,7 @@ const WORKSPACE = [
   { href: '/admin/banners', label: 'App Banners', Icon: IconFile, module: 'BANNERS' },
   { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },
   { href: '/admin/payroll', label: 'Payroll', Icon: IconMoney, module: 'PAYROLL' },
+  { href: '/admin/increments', label: 'Increments', Icon: IconMoney, module: 'INCREMENT' },
   { href: '/admin/statutory', label: 'Statutory', Icon: IconMoney, module: 'STATUTORY' },
   { href: '/admin/tax-declarations', label: 'Investment decl.', Icon: IconFile, module: 'INVDECL' },
   { href: '/admin/fnf', label: 'Full & Final', Icon: IconExit, module: 'FNF' },

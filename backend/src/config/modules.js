@@ -27,6 +27,10 @@ export const MODULES = [
   { key: 'LEAVE',         label: 'Leave Configuration',  group: MODULE_GROUPS.PEOPLE,      path: '/admin/leave-config' },
   { key: 'STRUCTURE',     label: 'Departments & Roles',  group: MODULE_GROUPS.PEOPLE,
     note: 'Departments and designations inside a company' },
+  { key: 'CHANGEREQ',     label: 'Change Requests',      group: MODULE_GROUPS.PEOPLE,      path: '/admin/change-requests',
+    note: 'Employee-submitted profile, address and bank changes awaiting approval' },
+  { key: 'ORGCHART',      label: 'Organisation Chart',   group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-chart',
+    note: 'Reporting hierarchy by manager level' },
   { key: 'RESIGNATION',   label: 'Resignations',         group: MODULE_GROUPS.PEOPLE,      path: '/admin/resignations' },
   { key: 'LETTERS',       label: 'Letters',              group: MODULE_GROUPS.PEOPLE,      path: '/admin/letters',
     note: 'Confirmation, transfer, experience, relieving and more' },
@@ -98,7 +102,7 @@ export const SYSTEM_ROLES = [
     rank: 10,
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
-      'TERMINATION', 'PAYROLL', 'POLICIES', 'SUPPORT', 'BANNERS',
+      'TERMINATION', 'PAYROLL', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
     ],
@@ -190,7 +194,7 @@ export const GRACE_MODULES = ['DASHBOARD'];
 
 const STARTER = [
   'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'STRUCTURE',
-  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT',
+  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART',
 ];
 const GROWTH = [
   ...STARTER, 'COMPANIES', 'PAYROLL', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',

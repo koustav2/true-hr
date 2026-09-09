@@ -165,3 +165,23 @@ CREATE TABLE IF NOT EXISTS organisation_modules (
   PRIMARY KEY (organisation_id, module_key)
 );
 CREATE INDEX IF NOT EXISTS idx_org_modules_org ON organisation_modules (organisation_id);
+
+-- ── 9. Employee self-service change requests ───────────────────────────────
+-- GreenHR parity: "Pending Info Approvals" and "Pending Bank Changes". An
+-- employee proposes a correction to their own record; HR approves and the
+-- change is applied, or rejects it with a note. Nothing is written to the
+-- employee record until approval.
+CREATE TABLE IF NOT EXISTS employee_change_requests (
+  id              BIGSERIAL PRIMARY KEY,
+  employee_id     BIGINT      NOT NULL REFERENCES employees(id) ON DELETE CASCADE,
+  organisation_id BIGINT      REFERENCES organisations(id),
+  kind            TEXT        NOT NULL,                     -- PROFILE | ADDRESS | BANK
+  payload         JSONB       NOT NULL,                     -- proposed values
+  status          TEXT        NOT NULL DEFAULT 'PENDING',   -- PENDING | APPROVED | REJECTED
+  submitted_at    TIMESTAMPTZ NOT NULL DEFAULT now(),
+  reviewed_by     BIGINT      REFERENCES user_accounts(id),
+  reviewed_at     TIMESTAMPTZ,
+  review_note     TEXT
+);
+CREATE INDEX IF NOT EXISTS idx_ecr_status ON employee_change_requests (organisation_id, status, submitted_at DESC);
+CREATE INDEX IF NOT EXISTS idx_ecr_employee ON employee_change_requests (employee_id, submitted_at DESC);

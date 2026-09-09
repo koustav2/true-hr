@@ -543,3 +543,38 @@ export async function updateBankStatutory(req, res, next) {
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
+
+// GET /admin/org-chart — the reporting hierarchy, flat. The client assembles the
+// tree; roots are anyone without a manager (or whose manager is out of scope).
+export async function orgChart(req, res, next) {
+  try {
+    const { rows } = await query(
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.official_email,
+              e.reporting_manager_id, e.function_manager_id, e.operational_manager_id,
+              d.title AS designation, dep.name AS department, co.name AS company,
+              e.onboarding_status
+         FROM employees e
+         LEFT JOIN designations d ON d.id = e.designation_id
+         LEFT JOIN departments dep ON dep.id = e.department_id
+         LEFT JOIN companies co ON co.id = e.company_id
+        WHERE ($1::bigint IS NULL OR e.organisation_id = $1)
+          AND ($2::bigint IS NULL OR e.company_id = $2)
+          AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')
+        ORDER BY e.first_name, e.last_name`,
+      [req.orgId || null, req.companyScope || null]);
+
+    res.json(rows.map((r) => ({
+      id: Number(r.id),
+      code: r.employee_code,
+      name: `${r.first_name} ${r.last_name}`.trim(),
+      email: r.official_email,
+      designation: r.designation,
+      department: r.department,
+      company: r.company,
+      status: r.onboarding_status,
+      managerId: r.reporting_manager_id != null ? Number(r.reporting_manager_id) : null,
+      functionManagerId: r.function_manager_id != null ? Number(r.function_manager_id) : null,
+      operationalManagerId: r.operational_manager_id != null ? Number(r.operational_manager_id) : null,
+    })));
+  } catch (e) { next(e); }
+}

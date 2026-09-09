@@ -2,6 +2,7 @@ import { Router } from 'express';
 import * as auth from '../controllers/authController.js';
 import * as emp from '../controllers/employeeController.js';
 import * as ob from '../controllers/onboardingController.js';
+import * as chg from '../controllers/changeRequestController.js';
 import * as meta from '../controllers/metaController.js';
 import * as users from '../controllers/userController.js';
 import * as attendance from '../controllers/attendanceController.js';
@@ -253,6 +254,16 @@ r.get('/employees/:id/offer-letter', authenticate, requireOrg, requireModule('EM
 r.get('/employees/:id/documents/:docId', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.downloadDocument);
 r.get('/employees/:id/sheet', authenticate, requireOrg, requireModule('EMPLOYEES'), emp.generateSheet);
 r.get('/onboarding/queue', authenticate, requireOrg, requireModule('ONBOARDING'), emp.reviewQueue);
+
+// --- Employee self-service change requests (GreenHR: Pending Info/Bank Approvals) ---
+r.post('/me/change-request', authenticate, chg.submit);
+r.get('/me/change-requests', authenticate, chg.mine);
+r.get('/admin/change-requests', authenticate, requireOrg, requireModule('CHANGEREQ'), chg.list);
+r.post('/admin/change-requests/:id/approve', authenticate, requireOrg, requireModule('CHANGEREQ', 'manage'), chg.approve);
+r.post('/admin/change-requests/:id/reject', authenticate, requireOrg, requireModule('CHANGEREQ', 'manage'), chg.reject);
+
+// --- Organisation chart (GreenHR: Organization Chart) ---
+r.get('/admin/org-chart', authenticate, requireOrg, requireModule('ORGCHART'), emp.orgChart);
 r.post('/onboarding/:id/approve', authenticate, requireModule('ONBOARDING', 'manage'), emp.approveOnboarding);
 r.post('/onboarding/:id/send-back', authenticate, requireModule('ONBOARDING', 'manage'), emp.sendBack);
 

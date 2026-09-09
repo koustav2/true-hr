@@ -25,6 +25,7 @@ const NAV = [
   { href: '/ess/vendors', label: 'Vendors' },
   { href: '/ess/resignation', label: 'Resignation' },
   { href: '/ess/profile', label: 'Profile' },
+  { href: '/ess/change-request', label: 'Request a change' },
 ];
 
 export default function EssLayout({ children }) {

@@ -21,6 +21,8 @@ const WORKSPACE = [
   { href: '/admin', label: 'Dashboard', Icon: IconDashboard, module: 'DASHBOARD' },
   { href: '/admin/employees', label: 'Employees', Icon: IconUsers, module: 'EMPLOYEES' },
   { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
+  { href: '/admin/change-requests', label: 'Change requests', Icon: IconReview, module: 'CHANGEREQ' },
+  { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
   { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
   { href: '/admin/support', label: 'Support Desk', Icon: IconSupport, module: 'SUPPORT' },
   { href: '/admin/wishes', label: 'Wishes', Icon: IconUsers, module: 'EMPLOYEES' },

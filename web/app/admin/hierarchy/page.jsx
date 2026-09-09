@@ -20,12 +20,17 @@ export default function HierarchyPage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
+  // /meta/companies, not /admin/companies: the latter needs the COMPANIES
+  // module, which HR deliberately does not have — asking for it left this page
+  // spinning forever with no company id to load. /meta/companies is the
+  // organisation-scoped lookup every staff role can read.
   useEffect(() => {
-    api.get('/admin/companies').then((r) => {
+    api.get('/meta/companies').then((r) => {
       const list = Array.isArray(r) ? r : [];
       setCompanies(list);
       if (list[0]) setCompanyId(String(list[0].id));
-    }).catch(() => setCompanies([]));
+      else setErr('No company is set up for this organisation yet — add one before setting levels.');
+    }).catch((e) => { setCompanies([]); setErr(e.message); });
   }, []);
 
   const load = (id) => {
@@ -103,7 +108,10 @@ export default function HierarchyPage() {
       {err && <p className="text-sm text-neg">{err}</p>}
       {msg && <p className="text-sm text-pos">{msg}</p>}
 
-      {data === null ? <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card> : (
+      {!companyId ? (
+        <Card><Empty title="No company yet"
+          subtitle="Levels belong to a company. Add one on the Companies screen first, then set its ladder here." /></Card>
+      ) : data === null ? <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card> : (
         <>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Levels" value={data.levels.length} tone="neutral" />

@@ -128,11 +128,11 @@ const ROLE_BADGE = {
 function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate }) {
   return (
     <Link href={href} title={collapsed ? label : undefined} onClick={onNavigate}
-      className={`relative flex items-center gap-2.5 rounded px-2.5 py-[7px] text-[13px] transition-colors duration-100 border-l-[3px] ${collapsed ? 'justify-center' : ''} ${
+      className={`relative flex items-center gap-2.5 rounded px-2.5 py-2 text-[14.5px] transition-colors duration-100 border-l-[3px] ${collapsed ? 'justify-center' : ''} ${
         active
           ? 'bg-brand-50 text-brand-700 border-brand-600 font-semibold'
           : 'text-ink-soft hover:bg-canvas hover:text-ink border-transparent font-medium'}`}>
-      <Icon className={active ? 'text-brand-600' : 'text-ink-faint'} />
+      <Icon width={18} height={18} className={`shrink-0 ${active ? 'text-brand-600' : 'text-ink-faint'}`} />
       {!collapsed && <span className="truncate">{label}</span>}
     </Link>
   );
@@ -158,12 +158,12 @@ function NavGroup({ title, items, canView, isActive, collapsed, onNavigate, open
           type="button"
           onClick={onToggle}
           aria-expanded={shown}
-          className="group flex w-full items-center gap-1.5 rounded px-2.5 py-1 text-[10px] font-bold uppercase tracking-[.1em] text-ink-faint hover:text-ink-soft">
+          className="group flex w-full items-center gap-1.5 rounded px-2.5 py-1 text-[11.5px] font-bold uppercase tracking-[.09em] text-ink-faint hover:text-ink-soft">
           <IconChevronRight
-            width={11} height={11}
+            width={12} height={12}
             className={`shrink-0 transition-transform duration-100 ${shown ? 'rotate-90' : ''} text-ink-faint/70`} />
           <span className="truncate">{title}</span>
-          {!shown && <span className="ml-auto tabular-nums text-ink-faint/70">{visible.length}</span>}
+          {!shown && <span className="ml-auto tabular-nums text-ink-faint/70 text-[11px]">{visible.length}</span>}
         </button>
       )}
       {(shown || collapsed) && (
@@ -370,7 +370,7 @@ function AdminShell({ children }) {
           </div>
         )}
         <button onClick={() => { logout(); router.replace('/login'); }} title="Sign out"
-          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
+          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14.5px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
           <IconLogout className="text-ink-faint" />{!collapsed && 'Sign out'}
         </button>
       </div>
@@ -406,7 +406,7 @@ function AdminShell({ children }) {
                   <div className="text-[12.5px] font-semibold text-ink truncate">{user?.email}</div>
                   <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
                 </div>
-                <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
+                <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14.5px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
                   <IconLogout className="text-ink-faint" /> Sign out
                 </button>
               </div>

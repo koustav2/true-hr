@@ -97,8 +97,14 @@ export async function postReject(req, res, next) {
       await c.query(`UPDATE onboarding_tokens SET used_at=now() WHERE id=$1`, [t.id]);
     });
 
-    const emp = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [t.employee_id])).rows[0];
-    const hrUsers = (await query(`SELECT id FROM user_accounts WHERE role IN ('HR_ADMIN','SUPER_ADMIN') AND status='ACTIVE'`)).rows;
+    const emp = (await query(`SELECT first_name, last_name, organisation_id FROM employees WHERE id=$1`, [t.employee_id])).rows[0];
+    // Token-gated public endpoint: there is no session, so the organisation
+    // comes from the candidate's own row. Unfiltered, this named the candidate
+    // in EVERY tenant's HR notification feed.
+    const hrUsers = (await query(
+      `SELECT id FROM user_accounts
+        WHERE role IN ('HR_ADMIN','SUPER_ADMIN') AND status='ACTIVE'
+          AND organisation_id = $1`, [emp.organisation_id])).rows;
     for (const hr of hrUsers) {
       await query(`INSERT INTO notifications (recipient_user_id, type, title, body) VALUES ($1,'OFFER_REJECTED','Offer declined',$2)`,
         [hr.id, `${emp.first_name} ${emp.last_name} has declined the offer.${reason ? ' Reason: ' + reason : ''}`]);
@@ -226,9 +232,14 @@ export async function postEsign(req, res, next) {
       await c.query(`UPDATE onboarding_tokens SET used_at=now() WHERE id=$1`, [t.id]);
     });
 
-    const emp = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [t.employee_id])).rows[0];
-    // Notify all HR admins
-    const hrUsers = (await query(`SELECT id FROM user_accounts WHERE role='HR_ADMIN' AND status='ACTIVE'`)).rows;
+    const emp = (await query(`SELECT first_name, last_name, organisation_id FROM employees WHERE id=$1`, [t.employee_id])).rows[0];
+    // Notify this candidate's own HR admins. Token-gated public endpoint, so
+    // the organisation comes from the employee row, not a session. Unfiltered,
+    // every tenant's HR feed learned this candidate's name.
+    const hrUsers = (await query(
+      `SELECT id FROM user_accounts
+        WHERE role='HR_ADMIN' AND status='ACTIVE'
+          AND organisation_id = $1`, [emp.organisation_id])).rows;
     const reviewUrl = `${config.appBaseUrl}/admin/review`;
     for (const hr of hrUsers) {
       await query(`INSERT INTO notifications (recipient_user_id, type, title, body) VALUES ($1,'REVIEW','Onboarding submitted',$2)`,

@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 
 // Static issue catalog (mirrors the Support Desk dropdowns). Served to the app so
@@ -116,6 +117,13 @@ export async function adminList(req, res, next) {
       params.push(`%${req.query.q}%`);
       conds.push(`(e.first_name ILIKE $${params.length} OR e.last_name ILIKE $${params.length} OR e.employee_code ILIKE $${params.length} OR s.issue_type ILIKE $${params.length} OR s.description ILIKE $${params.length})`);
     }
+    // support_tickets carries no organisation_id; the join to employees was here
+    // but with no org predicate, so the desk listed every tenant's tickets —
+    // descriptions, official email and phone included.
+    params.push(req.orgId || null);
+    conds.push(`($${params.length}::bigint IS NULL OR e.organisation_id=$${params.length})`);
+    params.push(req.companyScope || null);
+    conds.push(`($${params.length}::bigint IS NULL OR e.company_id=$${params.length})`);
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
     const rows = (await query(
       `SELECT s.id, s.category, s.issue_type, s.issue_detail, s.description, s.status, s.applied_at, s.resolved_at, s.resolution_note,
@@ -132,10 +140,14 @@ export async function resolve(req, res, next) {
   try {
     const status = String(req.body.status || 'RESOLVED').toUpperCase();
     if (!['PENDING', 'RESOLVED'].includes(status)) return res.status(400).json({ error: 'status must be PENDING or RESOLVED' });
+    // Unscoped, this resolved (or reopened) another tenant's ticket and wrote a
+    // resolution note their employee then reads.
+    const mine = await scopedByEmployee(req, 'support_tickets', req.params.id, { cols: 't.id' });
+    if (!mine) return res.status(404).json({ error: 'Ticket not found' });
     const r = (await query(
       `UPDATE support_tickets SET status=$1, resolution_note=$2,
          resolved_at = CASE WHEN $1='RESOLVED' THEN now() ELSE NULL END
-       WHERE id=$3 RETURNING id`, [status, req.body.note || null, req.params.id])).rows[0];
+       WHERE id=$3 RETURNING id`, [status, req.body.note || null, mine.id])).rows[0];
     if (!r) return res.status(404).json({ error: 'Ticket not found' });
     await audit(req.user.id, `SUPPORT_${status}`, 'support_ticket', req.params.id, { note: req.body.note || null });
     res.json({ ok: true });
@@ -145,7 +157,9 @@ export async function resolve(req, res, next) {
 // GET /admin/support/:id/attachment  (staff can view any)
 export async function adminAttachment(req, res, next) {
   try {
-    const row = (await query(`SELECT attachment, attachment_mime FROM support_tickets WHERE id=$1`, [req.params.id])).rows[0];
+    // Unscoped, this served the document attached to any tenant's ticket.
+    const row = await scopedByEmployee(req, 'support_tickets', req.params.id,
+      { cols: 't.attachment, t.attachment_mime' });
     if (!row?.attachment) return res.status(404).json({ error: 'No attachment' });
     res.setHeader('Content-Type', row.attachment_mime || 'application/octet-stream');
     res.setHeader('Cache-Control', 'private, max-age=86400');

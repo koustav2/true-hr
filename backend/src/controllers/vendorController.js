@@ -1,6 +1,7 @@
 // Vendor Registration + Agreements (GreenHR NFA submenu: "Vendor Registration",
 // "Upload Rent Agreement", admin "Approve Agreements").
 import { query } from '../db/pool.js';
+import { scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
@@ -54,11 +55,20 @@ export async function listVendors(req, res, next) {
     const wh = ['TRUE'];
     if (!isStaff(req.user)) { params.push(req.user.employeeId); wh.push(`v.registered_by = $${params.length}`); }
     if (req.query.status) { params.push(req.query.status); wh.push(`v.status = $${params.length}`); }
+    // vendor_registrations carries no organisation_id — the tenant is the
+    // registering employee's. The staff branch added no predicate at all, so
+    // `WHERE TRUE` returned every tenant's vendor PAN, GST, ESIC/PF numbers and
+    // contact people. The employees join becomes inner: a registration whose
+    // owner cannot be resolved belongs to no tenant.
+    params.push(req.orgId || null);
+    wh.push(`($${params.length}::bigint IS NULL OR e.organisation_id = $${params.length})`);
+    params.push(req.companyScope || null);
+    wh.push(`($${params.length}::bigint IS NULL OR e.company_id = $${params.length})`);
     const rows = (await query(
       `SELECT v.*, gc.name AS association_name, e.employee_code, e.first_name, e.last_name
          FROM vendor_registrations v
          LEFT JOIN group_companies gc ON gc.id = v.association_with
-         LEFT JOIN employees e ON e.id = v.registered_by
+         JOIN employees e ON e.id = v.registered_by
         WHERE ${wh.join(' AND ')} ORDER BY v.created_at DESC LIMIT 500`, params)).rows;
     res.json(rows.map(shapeVendor));
   } catch (e) { next(e); }
@@ -71,9 +81,15 @@ export async function reviewVendor(req, res, next) {
     const id = Number(req.params.id);
     const action = (req.body || {}).action;
     if (!['APPROVED', 'REJECTED'].includes(action)) return res.status(400).json({ error: 'action must be APPROVED or REJECTED' });
+    // Scope through the registering employee: unscoped, this approved or rejected
+    // another tenant's vendor and, on approval, injected its name into the
+    // shared clients_vendors master.
+    const mine = await scopedByEmployee(req, 'vendor_registrations', id,
+      { employeeCol: 'registered_by', cols: 't.id' });
+    if (!mine) return res.status(404).json({ error: 'Not found or already reviewed' });
     const row = (await query(
       `UPDATE vendor_registrations SET status=$2, reviewed_by=$3, reviewed_at=now() WHERE id=$1 AND status='PENDING' RETURNING *`,
-      [id, action, req.user.employeeId])).rows[0];
+      [mine.id, action, req.user.employeeId])).rows[0];
     if (!row) return res.status(404).json({ error: 'Not found or already reviewed' });
     if (action === 'APPROVED') {
       await query(
@@ -104,6 +120,13 @@ const A_JOINS = `FROM agreements a
   LEFT JOIN office_locations ol ON ol.id = a.location_id
   LEFT JOIN clients_vendors cv ON cv.id = a.client_id
   LEFT JOIN employees e ON e.id = a.uploaded_by`;
+// agreements carries no organisation_id either — the tenant is the uploading
+// employee's. Used by the list, which otherwise spanned tenants.
+const A_ORG_JOIN = `FROM agreements a
+  LEFT JOIN projects p ON p.id = a.project_id
+  LEFT JOIN office_locations ol ON ol.id = a.location_id
+  LEFT JOIN clients_vendors cv ON cv.id = a.client_id
+  JOIN employees e ON e.id = a.uploaded_by`;
 const A_COLS = `a.*, p.name AS project_name, ol.name AS location_name, cv.name AS client_name,
   e.employee_code, e.first_name, e.last_name`;
 
@@ -132,7 +155,13 @@ export async function listAgreements(req, res, next) {
     const wh = ['TRUE'];
     if (!isStaff(req.user)) { params.push(req.user.employeeId); wh.push(`a.uploaded_by = $${params.length}`); }
     if (req.query.status) { params.push(req.query.status); wh.push(`a.status = $${params.length}`); }
-    const rows = (await query(`SELECT ${A_COLS} ${A_JOINS} WHERE ${wh.join(' AND ')} ORDER BY a.created_at DESC LIMIT 500`, params)).rows;
+    // The staff branch was `WHERE TRUE`: every tenant's rent/vendor agreements,
+    // their clients, locations and terms.
+    params.push(req.orgId || null);
+    wh.push(`($${params.length}::bigint IS NULL OR e.organisation_id = $${params.length})`);
+    params.push(req.companyScope || null);
+    wh.push(`($${params.length}::bigint IS NULL OR e.company_id = $${params.length})`);
+    const rows = (await query(`SELECT ${A_COLS} ${A_ORG_JOIN} WHERE ${wh.join(' AND ')} ORDER BY a.created_at DESC LIMIT 500`, params)).rows;
     res.json(rows.map(shapeAgreement));
   } catch (e) { next(e); }
 }
@@ -143,9 +172,14 @@ export async function reviewAgreement(req, res, next) {
     const id = Number(req.params.id);
     const action = (req.body || {}).action;
     if (!['APPROVED', 'REJECTED'].includes(action)) return res.status(400).json({ error: 'action must be APPROVED or REJECTED' });
+    // Scope through the uploading employee: unscoped, this approved or rejected
+    // another tenant's agreement.
+    const mine = await scopedByEmployee(req, 'agreements', id,
+      { employeeCol: 'uploaded_by', cols: 't.id' });
+    if (!mine) return res.status(404).json({ error: 'Not found or already reviewed' });
     const row = (await query(
       `UPDATE agreements SET status=$2, reviewed_by=$3, reviewed_at=now() WHERE id=$1 AND status='PENDING' RETURNING id`,
-      [id, action, req.user.employeeId])).rows[0];
+      [mine.id, action, req.user.employeeId])).rows[0];
     if (!row) return res.status(404).json({ error: 'Not found or already reviewed' });
     await audit(req.user.sub, `AGREEMENT_${action}`, 'agreement', id, {});
     const full = (await query(`SELECT ${A_COLS} ${A_JOINS} WHERE a.id=$1`, [id])).rows[0];
@@ -156,7 +190,14 @@ export async function reviewAgreement(req, res, next) {
 // GET /vendors/:id/document | /agreements/:id/document — owner or staff.
 async function serveDoc(req, res, next, table, ownerCol) {
   try {
-    const r = (await query(`SELECT ${ownerCol} AS owner, document, document_mime, document_name FROM ${table} WHERE id=$1`, [req.params.id])).rows[0];
+    // `isStaff` short-circuits the owner check below, so for staff this was the
+    // only gate: any vendor or agreement document id, in any tenant. Scope
+    // through the registering/uploading employee first; the owner check still
+    // applies to non-staff callers inside the tenant.
+    const r = await scopedByEmployee(req, table, req.params.id, {
+      employeeCol: ownerCol,
+      cols: `t.${ownerCol} AS owner, t.document, t.document_mime, t.document_name`,
+    });
     if (!r?.document) return res.status(404).json({ error: 'No document attached' });
     if (!isStaff(req.user) && Number(r.owner) !== Number(req.user.employeeId)) return res.status(403).json({ error: 'Not allowed' });
     res.setHeader('Content-Type', r.document_mime || 'application/octet-stream');

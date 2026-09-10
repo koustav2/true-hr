@@ -1,6 +1,7 @@
 // Statutory records (PF / ESIC / Gratuity identifiers + nominations) and
 // statutory reports (PF register, ESIC register, Form-16 estimate).
 import { query } from '../db/pool.js';
+import { ownsEmployee, scopedByEmployee, scopedEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 import { decrypt } from '../utils/crypto.js';
 import { estimateTax, computeRegimeTax } from '../services/incomeTax.js';
@@ -9,6 +10,10 @@ import { brandForEmployee } from '../services/docProfile.js';
 
 export async function getProfile(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
+  // statutory_profiles / statutory_nominees carry no organisation_id, so the
+  // tenant is reached through the employee. Unscoped, any id returned another
+  // tenant's UAN, PF/ESIC numbers and nominee names, DOBs and addresses.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   const p = (await query(`SELECT * FROM statutory_profiles WHERE employee_id=$1`, [employeeId])).rows[0] || null;
   const nominees = (await query(`SELECT * FROM statutory_nominees WHERE employee_id=$1 ORDER BY scheme, id`, [employeeId])).rows;
   res.json({ profile: p, nominees });
@@ -16,6 +21,9 @@ export async function getProfile(req, res) {
 
 export async function upsertProfile(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
+  // Unscoped, this wrote (or created) statutory identifiers on another tenant's
+  // employee, which then feed their PF/ESIC registers and payslips.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   const b = req.body || {};
   const row = (await query(
     `INSERT INTO statutory_profiles (employee_id, uan, pf_number, pension_number, esic_number, esic_dispensary,
@@ -34,6 +42,8 @@ export async function upsertProfile(req, res) {
 export async function addNominee(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
   const b = req.body || {};
+  // Unscoped, a nominee could be attached to another tenant's employee.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   if (!b.scheme || !b.name) return res.status(400).json({ error: 'scheme and name are required.' });
   const row = (await query(
     `INSERT INTO statutory_nominees (employee_id, scheme, name, relation, date_of_birth, share_pct, address, guardian)
@@ -46,7 +56,11 @@ export async function addNominee(req, res) {
 
 export async function deleteNominee(req, res) {
   const id = parseInt(req.params.id, 10);
-  await query(`DELETE FROM statutory_nominees WHERE id=$1`, [id]);
+  // The nominee id came straight off the URL: unscoped, this deleted another
+  // tenant's PF/gratuity nomination.
+  const mine = await scopedByEmployee(req, 'statutory_nominees', id, { cols: 't.id' });
+  if (!mine) return res.status(404).json({ error: 'Nominee not found.' });
+  await query(`DELETE FROM statutory_nominees WHERE id=$1`, [mine.id]);
   await audit(req.user.id, 'STATUTORY_NOMINEE_DELETE', 'statutory_nominee', id, {});
   res.json({ ok: true });
 }
@@ -108,7 +122,10 @@ export async function esicRegister(req, res) {
 export async function form16(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
   const fy = req.query.fy || null;
-  const e = (await query(`SELECT * FROM employees WHERE id=$1`, [employeeId])).rows[0];
+  // Unscoped, this rendered a Form-16 PDF for any employee id in the database —
+  // decrypted PAN, gross annual salary, declarations and tax — to any caller
+  // holding the reports permission in any tenant.
+  const e = await scopedEmployee(req, employeeId, 'e.*');
   if (!e) return res.status(404).json({ error: 'Employee not found.' });
   const ss = (await query(`SELECT monthly_ctc FROM salary_structures WHERE employee_id=$1`, [employeeId])).rows[0];
   const grossAnnual = Math.round((Number(ss?.monthly_ctc) || 0) * 12);

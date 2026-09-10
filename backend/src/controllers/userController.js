@@ -148,10 +148,20 @@ export async function setUserRole(req, res, next) {
 // SUPER_ADMIN: recent audit trail
 export async function getAudit(req, res, next) {
   try {
+    // The third arm of this predicate used to be "OR ua.id IS NULL", which
+    // matched every audit row with no actor account — public onboarding steps,
+    // password-reset requests made before sign-in, background workers, anything
+    // logged with actor_user_id NULL — and showed them to EVERY tenant, entity
+    // ids and metadata included. Dropped: actor-less rows are now hidden from
+    // tenants and visible only to the platform owner (req.orgId NULL), who is
+    // the right owner for platform-level activity. The cost is that a tenant no
+    // longer sees its own pre-login events (e.g. onboarding submissions) in
+    // /admin/audit; attributing those to an organisation needs a real
+    // organisation_id on audit_log, which is a separate change.
     const { rows } = await query(
       `SELECT a.id, a.action, a.entity, a.entity_id, a.metadata, a.created_at, ua.email AS actor_email
        FROM audit_log a LEFT JOIN user_accounts ua ON ua.id = a.actor_user_id
-       WHERE ($1::bigint IS NULL OR ua.organisation_id = $1 OR ua.id IS NULL)
+       WHERE ($1::bigint IS NULL OR ua.organisation_id = $1)
        ORDER BY a.id DESC LIMIT 200`, [req.orgId || null]);
     res.json(rows);
   } catch (e) { next(e); }

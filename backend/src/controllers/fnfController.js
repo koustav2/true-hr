@@ -2,6 +2,7 @@
 // Wraps the pure fnf.js engine; ties onto the existing resignation record but never
 // alters the resignation approval chain or the NFA settlement suite.
 import { query } from '../db/pool.js';
+import { ownsEmployee, scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 import { computeFnf } from '../services/fnf.js';
 import { buildFnfPdf } from '../services/docPdf.js';
@@ -46,6 +47,10 @@ async function gatherInputs(employeeId, body = {}) {
 // POST /fnf/preview/:employeeId — compute without saving.
 export async function preview(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
+  // gatherInputs reads the employee, their salary structure, resignation and
+  // leave balances by raw id. Unscoped, this returned another tenant's CTC,
+  // exit date and full settlement arithmetic.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   const g = await gatherInputs(employeeId, req.body || {});
   if (g.error) return res.status(404).json({ error: g.error });
   const computed = computeFnf(g.inputs);
@@ -55,6 +60,9 @@ export async function preview(req, res) {
 // POST /fnf/:employeeId — create or replace the draft settlement.
 export async function save(req, res) {
   const employeeId = parseInt(req.params.employeeId, 10);
+  // Unscoped, this created or overwrote a settlement row against another
+  // tenant's employee.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   const g = await gatherInputs(employeeId, req.body || {});
   if (g.error) return res.status(404).json({ error: g.error });
   const computed = computeFnf(g.inputs);
@@ -77,9 +85,13 @@ export async function save(req, res) {
 
 export async function finalise(req, res) {
   const id = parseInt(req.params.id, 10);
+  // fnf_settlements carries no organisation_id: reach the tenant through the
+  // employee. Unscoped, this finalised another tenant's exit settlement.
+  const mine = await scopedByEmployee(req, 'fnf_settlements', id, { cols: 't.id' });
+  if (!mine) return res.status(404).json({ error: 'Settlement not found.' });
   const row = (await query(
     `UPDATE fnf_settlements SET status='finalised', finalised_by=$2, finalised_at=now()
-      WHERE id=$1 AND status='draft' RETURNING *`, [id, req.user.id])).rows[0];
+      WHERE id=$1 AND status='draft' RETURNING *`, [mine.id, req.user.id])).rows[0];
   if (!row) return res.status(409).json({ error: 'Only a draft settlement can be finalised.' });
   await audit(req.user.id, 'FNF_FINALISE', 'fnf_settlement', id, {});
   res.json({ settlement: row });
@@ -87,31 +99,44 @@ export async function finalise(req, res) {
 
 export async function markPaid(req, res) {
   const id = parseInt(req.params.id, 10);
+  // Unscoped, this marked another tenant's settlement as paid.
+  const mine = await scopedByEmployee(req, 'fnf_settlements', id, { cols: 't.id' });
+  if (!mine) return res.status(404).json({ error: 'Settlement not found.' });
   const row = (await query(
-    `UPDATE fnf_settlements SET status='paid', paid_at=now() WHERE id=$1 AND status='finalised' RETURNING *`, [id])).rows[0];
+    `UPDATE fnf_settlements SET status='paid', paid_at=now() WHERE id=$1 AND status='finalised' RETURNING *`, [mine.id])).rows[0];
   if (!row) return res.status(409).json({ error: 'Only a finalised settlement can be marked paid.' });
   await audit(req.user.id, 'FNF_PAID', 'fnf_settlement', id, {});
   res.json({ settlement: row });
 }
 
 export async function list(req, res) {
+  // The join to employees was already there but carried no org predicate, so the
+  // settlement list showed every tenant's exits and net payable amounts.
   const rows = (await query(
     `SELECT f.id, f.status, f.net_amount, f.payable_by, f.last_working_date, f.created_at,
             e.first_name, e.last_name, e.employee_code
        FROM fnf_settlements f JOIN employees e ON e.id=f.employee_id
       WHERE ($1::text IS NULL OR f.status=$1)
-      ORDER BY f.created_at DESC`, [req.query.status || null])).rows;
+        AND ($2::bigint IS NULL OR e.organisation_id=$2)
+        AND ($3::bigint IS NULL OR e.company_id=$3)
+      ORDER BY f.created_at DESC`,
+    [req.query.status || null, req.orgId || null, req.companyScope || null])).rows;
   res.json({ settlements: rows });
 }
 
 export async function pdf(req, res) {
   const id = parseInt(req.params.id, 10);
+  // Same missing predicate on the employees join: unscoped, this served another
+  // tenant's settlement PDF (name, designation, LWD, every pay component).
   const row = (await query(
     `SELECT f.*, e.first_name, e.last_name, e.employee_code, d.title AS designation
        FROM fnf_settlements f
        JOIN employees e ON e.id=f.employee_id
        LEFT JOIN designations d ON d.id=e.designation_id
-      WHERE f.id=$1`, [id])).rows[0];
+      WHERE f.id=$1
+        AND ($2::bigint IS NULL OR e.organisation_id=$2)
+        AND ($3::bigint IS NULL OR e.company_id=$3)`,
+    [id, req.orgId || null, req.companyScope || null])).rows[0];
   if (!row) return res.status(404).json({ error: 'Settlement not found.' });
   const computed = row.computed || {};
   res.setHeader('Content-Type', 'application/pdf');

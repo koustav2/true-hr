@@ -1,5 +1,6 @@
 // Income-tax investment declaration — employee submits, HR verifies. Uses incomeTax.js.
 import { query } from '../db/pool.js';
+import { scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 import { estimateTax, aggregateDeductions, computeRegimeTax, SECTION_CAPS } from '../services/incomeTax.js';
 
@@ -70,18 +71,26 @@ export async function submitMine(req, res) {
 
 // Admin — GET /admin/tax-declarations?status=&fy=
 export async function adminList(req, res) {
+  // investment_declarations carries no organisation_id; the join to employees was
+  // already here but had no org predicate, so the queue listed every tenant's
+  // declarations.
   const rows = (await query(
     `SELECT d.id, d.financial_year, d.regime, d.status, d.submitted_at,
             e.first_name, e.last_name, e.employee_code
        FROM investment_declarations d JOIN employees e ON e.id=d.employee_id
       WHERE ($1::text IS NULL OR d.status=$1) AND ($2::text IS NULL OR d.financial_year=$2)
-      ORDER BY d.submitted_at DESC NULLS LAST, d.id DESC`, [req.query.status || null, req.query.fy || null])).rows;
+        AND ($3::bigint IS NULL OR e.organisation_id=$3)
+        AND ($4::bigint IS NULL OR e.company_id=$4)
+      ORDER BY d.submitted_at DESC NULLS LAST, d.id DESC`,
+    [req.query.status || null, req.query.fy || null, req.orgId || null, req.companyScope || null])).rows;
   res.json({ declarations: rows });
 }
 
 export async function adminGet(req, res) {
   const id = parseInt(req.params.id, 10);
-  const d = (await query(`SELECT * FROM investment_declarations WHERE id=$1`, [id])).rows[0];
+  // Unscoped, any declaration id exposed another tenant's investment proofs and
+  // their annual gross salary.
+  const d = await scopedByEmployee(req, 'investment_declarations', id);
   if (!d) return res.status(404).json({ error: 'Not found.' });
   const items = (await query(`SELECT * FROM investment_declaration_items WHERE declaration_id=$1 ORDER BY id`, [id])).rows;
   const grossAnnual = await grossAnnualFor(d.employee_id);
@@ -93,6 +102,11 @@ export async function adminGet(req, res) {
 export async function verify(req, res) {
   const id = parseInt(req.params.id, 10);
   const { approvals = [], remarks, reject } = req.body || {};
+  // The declaration (and therefore its items) must be the caller's own: unscoped,
+  // this approved/rejected another tenant's declaration and rewrote the approved
+  // amounts that drive their TDS.
+  const mine = await scopedByEmployee(req, 'investment_declarations', id, { cols: 't.id' });
+  if (!mine) return res.status(404).json({ error: 'Not found.' });
   for (const a of approvals) {
     await query(`UPDATE investment_declaration_items SET approved_amount=$2, admin_remark=$3 WHERE id=$1 AND declaration_id=$4`,
       [a.itemId, Number(a.approvedAmount) || 0, a.remark || null, id]);

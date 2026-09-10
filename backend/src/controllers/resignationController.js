@@ -3,6 +3,7 @@ import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
 import { invalidateAccountStatus } from '../middleware/auth.js';
 import { notifyEmployee, notifyManagersOf, employeeName } from '../services/notify.js';
+import { scopedByEmployee } from '../utils/scope.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 
@@ -176,7 +177,11 @@ async function reenableAccount(employeeId, actorUserId, reason) {
 // GET /resignation/:id/chain — the 6-stage approval trail.
 export async function chain(req, res, next) {
   try {
-    const r = (await query(`SELECT * FROM resignations WHERE id=$1`, [Number(req.params.id)])).rows[0];
+    // resignations carry no organisation_id — the tenant comes from the
+    // employee. `STAFF.includes(req.user.role)` below only asked "an HR admin
+    // somewhere", so any tenant's HR admin could read any tenant's resignation
+    // chain (names, emails, dates, remarks).
+    const r = await scopedByEmployee(req, 'resignations', req.params.id);
     if (!r) return res.status(404).json({ error: 'Not found' });
     if (!r.approval_instance_id) return res.json(null); // legacy row
     const inst = await engine.getInstance(r.approval_instance_id);
@@ -193,13 +198,16 @@ export async function chain(req, res, next) {
 export async function actOn(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const r = (await query(`SELECT * FROM resignations WHERE id=$1`, [id])).rows[0];
+    // Scoped through employees: unscoped, the isStaff override let any tenant's
+    // HR admin approve or reject another tenant's resignation — and a rejection
+    // re-enables that person's account.
+    const r = await scopedByEmployee(req, 'resignations', id);
     if (!r) return res.status(404).json({ error: 'Not found' });
     if (!r.approval_instance_id) return res.status(409).json({ error: 'Legacy resignation — use the review endpoint' });
     if (r.status !== 'PENDING') return res.status(409).json({ error: `Resignation is ${r.status}` });
     const { action, remarks } = req.body || {};
     const inst = await engine.act(r.approval_instance_id, req.user.employeeId, action, remarks, {
-      isStaff: STAFF.includes(req.user.role), actorUserId: req.user.id,
+      isStaff: STAFF.includes(req.user.role), actorUserId: req.user.id, orgId: req.orgId,
     });
     if (inst.status === 'APPROVED') {
       await query(`UPDATE resignations SET status='APPROVED', reviewed_at=now(), review_note=$2 WHERE id=$1`, [id, remarks || null]);
@@ -338,7 +346,10 @@ export async function adminReview(req, res, next) {
     const decision = String(req.body.decision || '').toUpperCase();
     const note = req.body.note || null;
     if (!['APPROVED', 'REJECTED'].includes(decision)) return res.status(400).json({ error: 'decision must be APPROVED or REJECTED' });
-    const r = (await query(`SELECT employee_id, status FROM resignations WHERE id=$1`, [id])).rows[0];
+    // HR may act on any resignation — but only in their own organisation.
+    // Unscoped, any tenant's HR admin could approve or reject another tenant's
+    // resignation and, on a rejection, re-enable that person's account.
+    const r = await scopedByEmployee(req, 'resignations', id, { cols: 't.employee_id, t.status' });
     if (!r) return res.status(404).json({ error: 'Resignation not found' });
     if (r.status !== 'PENDING') return res.status(409).json({ error: 'This request has already been reviewed' });
     await query(`UPDATE resignations SET status=$1, reviewed_by=$2, review_note=$3, reviewed_at=now() WHERE id=$4`,

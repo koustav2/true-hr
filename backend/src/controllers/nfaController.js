@@ -4,6 +4,7 @@
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
+import { ownsEmployee, scopedByEmployee } from '../utils/scope.js';
 
 const PAYMENT_TYPES = ['ADVANCE_SELF', 'ADVANCE_VENDOR', 'REIMB_SELF', 'REIMB_VENDOR', 'PPS_CANDIDATE', 'INCENTIVE'];
 const BILLABLE_TYPES = ['NON_BILLABLE', 'BILLABLE_CLIENT', 'BILLABLE_PARTNER'];
@@ -217,7 +218,11 @@ export async function pendingApprovals(req, res, next) {
 // GET /nfa/ledger?fyStart=2026 — my FY ledger (Indian FY: Apr 1 – Mar 31).
 export async function ledger(req, res, next) {
   try {
-    const empId = Number(req.query.employeeId && isStaff(req.user) ? req.query.employeeId : req.user.employeeId);
+    // `employeeId` is taken off the query string for staff. Unvalidated, an HR
+    // admin of one tenant could read any other tenant's NFA ledger.
+    const asked = req.query.employeeId && isStaff(req.user) ? req.query.employeeId : null;
+    if (asked && !(await ownsEmployee(req, asked))) return res.status(404).json({ error: 'Not found' });
+    const empId = Number(asked || req.user.employeeId);
     const now = new Date();
     const fyStart = Number(req.query.fyStart) || (now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1);
     const from = `${fyStart}-04-01`, to = `${fyStart + 1}-04-01`;
@@ -246,6 +251,10 @@ export async function detail(req, res, next) {
   try {
     const d = await detailById(Number(req.params.id));
     if (!d) return res.status(404).json({ error: 'Not found' });
+    // nfas carry no organisation_id — the tenant comes from the employee. The
+    // isStaff gate below only asked "an HR admin somewhere", so any tenant's HR
+    // admin could read any tenant's claim, amounts and approval trail.
+    if (!(await ownsEmployee(req, d.employee.id))) return res.status(404).json({ error: 'Not found' });
     const empId = req.user.employeeId;
     const inChain = d.approval?.chain.some((s) => s.approver?.id === empId);
     if (d.employee.id !== empId && !inChain && !isStaff(req.user)) return res.status(403).json({ error: 'Forbidden' });
@@ -257,12 +266,14 @@ export async function detail(req, res, next) {
 export async function actOn(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const nfa = (await query(`SELECT * FROM nfas WHERE id=$1`, [id])).rows[0];
+    // Scoped through employees: unscoped, the isStaff override let any tenant's
+    // HR admin approve, reject or query another tenant's NFA.
+    const nfa = await scopedByEmployee(req, 'nfas', id);
     if (!nfa) return res.status(404).json({ error: 'Not found' });
     if (!nfa.approval_instance_id) return res.status(409).json({ error: 'No approval chain' });
     const { action, remarks } = req.body || {};
     const inst = await engine.act(nfa.approval_instance_id, req.user.employeeId, action, remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub,
+      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
     });
     await syncStatus(id, inst);
     res.json(await detailById(id));
@@ -289,7 +300,9 @@ export async function update(req, res, next) {
     const b = req.body || {};
     if (!b.updateRemark || !String(b.updateRemark).trim())
       return res.status(400).json({ error: 'updateRemark is required' });
-    const nfa = (await query(`SELECT * FROM nfas WHERE id=$1`, [id])).rows[0];
+    // Unscoped, staff of any tenant could rewrite another tenant's expense
+    // lines and totals here.
+    const nfa = await scopedByEmployee(req, 'nfas', id);
     if (!nfa) return res.status(404).json({ error: 'Not found' });
     if (['REJECTED', 'PAYMENT_RELEASED'].includes(nfa.status)) return res.status(409).json({ error: `Cannot edit a ${nfa.status} NFA` });
 
@@ -333,7 +346,9 @@ export async function update(req, res, next) {
 export async function releasePayment(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const nfa = (await query(`SELECT * FROM nfas WHERE id=$1`, [id])).rows[0];
+    // Unscoped, staff of any tenant could release payment on another tenant's
+    // approved NFA.
+    const nfa = await scopedByEmployee(req, 'nfas', id);
     if (!nfa) return res.status(404).json({ error: 'Not found' });
     if (nfa.status !== 'APPROVED') return res.status(409).json({ error: `NFA is ${nfa.status}; approve the full chain first` });
 
@@ -353,8 +368,11 @@ export async function releasePayment(req, res, next) {
 // GET /admin/nfa — staff queue with GreenHR-style filters.
 export async function adminList(req, res, next) {
   try {
-    const params = [];
-    const wh = ['TRUE'];
+    // nfas carry no organisation_id, so the tenant is reached through the
+    // employee. Without this the staff queue listed every tenant's claims.
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = ['($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     const add = (sql, v) => { params.push(v); wh.push(sql.replace('?', `$${params.length}`)); };
     if (req.query.status) add('n.status = ?', req.query.status);
     if (req.query.from) add('n.created_at >= ?', req.query.from);

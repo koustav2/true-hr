@@ -209,6 +209,15 @@ export async function employeePhoto(req, res, next) {
         `SELECT 1 FROM employees a JOIN employees b ON b.company_id=a.company_id WHERE a.id=$1 AND b.id=$2`,
         [me, target])).rowCount > 0;
       if (!same) return res.status(403).json({ error: 'Forbidden' });
+    } else {
+      // An admin account has no employee row, so the same-company check above
+      // was skipped entirely and any HR/IT/SUPER_ADMIN could pull the photo of
+      // ANY id, including other tenants'. Admins are organisation-scoped, so
+      // require the target to be inside the caller's organisation.
+      const inOrg = (await query(
+        `SELECT 1 FROM employees WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+        [target, req.orgId || null])).rowCount > 0;
+      if (!inOrg) return res.status(404).json({ error: 'No photo' });
     }
     const row = (await query(
       `SELECT data, mime FROM documents WHERE employee_id=$1 AND type='PHOTO' ORDER BY uploaded_at DESC LIMIT 1`,

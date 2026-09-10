@@ -21,9 +21,13 @@ const shape = (r) => ({
 // GET /banners  (any employee) — carousel metadata, in display order
 export async function list(req, res, next) {
   try {
+    // Unscoped, every employee's carousel listed every tenant's banners and
+    // gave out the ids GET /banners/:id/image then served.
     const rows = (await query(
       `SELECT id, mime, filename, sort_order, created_at
-         FROM app_banners ORDER BY sort_order, id`)).rows;
+         FROM app_banners
+        WHERE ($1::bigint IS NULL OR organisation_id = $1)
+        ORDER BY sort_order, id`, [req.orgId || null])).rows;
     res.json(rows.map(shape));
   } catch (e) { next(e); }
 }
@@ -31,7 +35,12 @@ export async function list(req, res, next) {
 // GET /banners/:id/image  (any employee) — the image bytes (cacheable)
 export async function image(req, res, next) {
   try {
-    const row = (await query(`SELECT image, mime FROM app_banners WHERE id=$1`, [req.params.id])).rows[0];
+    // Any signed-in employee of any tenant could fetch any tenant's banner
+    // image by id — an uploaded image is often internal comms, not public art.
+    const row = (await query(
+      `SELECT image, mime FROM app_banners
+        WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+      [req.params.id, req.orgId || null])).rows[0];
     if (!row?.image) return res.status(404).json({ error: 'Banner not found' });
     res.setHeader('Content-Type', row.mime || 'image/jpeg');
     res.setHeader('Cache-Control', 'private, max-age=86400');
@@ -44,11 +53,14 @@ export async function image(req, res, next) {
 // GET /admin/banners
 export async function adminList(req, res, next) {
   try {
+    // Unscoped, this listed every tenant's banners AND the name of the other
+    // tenant's employee who uploaded each one.
     const rows = (await query(
       `SELECT b.id, b.mime, b.filename, b.sort_order, b.created_at,
               e.first_name || ' ' || e.last_name AS uploaded_by_name
          FROM app_banners b LEFT JOIN employees e ON e.id = b.uploaded_by
-        ORDER BY b.sort_order, b.id`)).rows;
+        WHERE ($1::bigint IS NULL OR b.organisation_id = $1)
+        ORDER BY b.sort_order, b.id`, [req.orgId || null])).rows;
     res.json(rows.map((r) => ({ ...shape(r), uploadedByName: r.uploaded_by_name })));
   } catch (e) { next(e); }
 }
@@ -68,7 +80,12 @@ export async function create(req, res, next) {
       if (bytes > MAX_IMAGE_BYTES) return res.status(400).json({ error: `images[${i}] (${img.filename || 'file'}): larger than 3MB` });
     }
 
-    const existing = (await query(`SELECT count(*)::int AS n, coalesce(max(sort_order),0) AS max FROM app_banners`)).rows[0];
+    // Per organisation: unscoped, the 15-banner cap and the sort_order
+    // sequence were shared, so one tenant's uploads filled up (and reordered)
+    // everybody else's carousel.
+    const existing = (await query(
+      `SELECT count(*)::int AS n, coalesce(max(sort_order),0) AS max FROM app_banners
+        WHERE ($1::bigint IS NULL OR organisation_id = $1)`, [req.orgId || null])).rows[0];
     if (existing.n + images.length > MAX_BANNERS) {
       return res.status(400).json({ error: `Max ${MAX_BANNERS} banners total — delete some first` });
     }
@@ -77,9 +94,10 @@ export async function create(req, res, next) {
     let order = existing.max;
     for (const img of images) {
       const row = (await query(
-        `INSERT INTO app_banners (image, mime, filename, sort_order, uploaded_by)
-         VALUES ($1,$2,$3,$4,$5) RETURNING id`,
-        [img.file, img.mime || null, img.filename || null, ++order, req.user.employeeId || null])).rows[0];
+        `INSERT INTO app_banners (image, mime, filename, sort_order, uploaded_by, organisation_id)
+         VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
+        [img.file, img.mime || null, img.filename || null, ++order,
+         req.user.employeeId || null, req.orgId || null])).rows[0];
       ids.push(row.id);
     }
     await audit(req.user.id, 'BANNER_UPLOAD', 'app_banner', ids[0], { count: ids.length });
@@ -90,7 +108,11 @@ export async function create(req, res, next) {
 // DELETE /admin/banners/:id
 export async function remove(req, res, next) {
   try {
-    const r = await query(`DELETE FROM app_banners WHERE id=$1`, [req.params.id]);
+    // Unscoped, this deleted another tenant's banner by id. 404 covers both
+    // "no such banner" and "not yours".
+    const r = await query(
+      `DELETE FROM app_banners WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+      [req.params.id, req.orgId || null]);
     if (!r.rowCount) return res.status(404).json({ error: 'Banner not found' });
     await audit(req.user.id, 'BANNER_DELETE', 'app_banner', Number(req.params.id), {});
     res.json({ ok: true });

@@ -2,6 +2,7 @@
 // Parity with GreenHR's Asset Management (minus its separate vendor/brand masters,
 // which TRUE HR already covers under the vendor module). Additive; no NFA overlap.
 import { query } from '../db/pool.js';
+import { ownsEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 
 const num = (v) => (v === '' || v == null ? null : Number(v));
@@ -63,6 +64,10 @@ export async function assignAsset(req, res) {
   const asset = (await query(`SELECT * FROM assets WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`, [id, req.orgId || null])).rows[0];
   if (!asset) return res.status(404).json({ error: 'Asset not found.' });
   if (asset.status === 'assigned') return res.status(409).json({ error: 'Asset is already assigned — return it first.' });
+  // The asset was scoped, but employeeId comes off the body and was not: an
+  // assignment row could be written pointing at another tenant's employee, and
+  // this asset then showed up in their /me/assets.
+  if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found.' });
   await query(`INSERT INTO asset_assignments (asset_id, employee_id, assigned_by, notes) VALUES ($1,$2,$3,$4)`,
     [id, employeeId, req.user.id, req.body?.notes || null]);
   await query(`UPDATE assets SET status='assigned' WHERE id=$1`, [id]);
@@ -72,20 +77,35 @@ export async function assignAsset(req, res) {
 
 export async function returnAsset(req, res) {
   const id = parseInt(req.params.id, 10);
-  const open = (await query(`SELECT * FROM asset_assignments WHERE asset_id=$1 AND returned_at IS NULL ORDER BY assigned_at DESC LIMIT 1`, [id])).rows[0];
+  // Neither statement was scoped, so any asset id could be returned or retired
+  // out from under another tenant. `assets` does carry organisation_id, so use
+  // the same predicate assignAsset/updateAsset already use.
+  const open = (await query(
+    `SELECT aa.* FROM asset_assignments aa
+       JOIN assets a ON a.id=aa.asset_id
+      WHERE aa.asset_id=$1 AND aa.returned_at IS NULL
+        AND ($2::bigint IS NULL OR a.organisation_id=$2)
+      ORDER BY aa.assigned_at DESC LIMIT 1`, [id, req.orgId || null])).rows[0];
   if (!open) return res.status(404).json({ error: 'No open assignment for this asset.' });
   await query(`UPDATE asset_assignments SET returned_at=now(), returned_condition=$2 WHERE id=$1`, [open.id, req.body?.condition || null]);
-  await query(`UPDATE assets SET status=$2, condition=COALESCE($3,condition) WHERE id=$1`, [id, req.body?.retire ? 'retired' : 'in_stock', req.body?.condition || null]);
+  await query(
+    `UPDATE assets SET status=$2, condition=COALESCE($3,condition)
+      WHERE id=$1 AND ($4::bigint IS NULL OR organisation_id=$4)`,
+    [id, req.body?.retire ? 'retired' : 'in_stock', req.body?.condition || null, req.orgId || null]);
   await audit(req.user.id, 'ASSET_RETURN', 'asset', id, { assignmentId: open.id });
   res.json({ ok: true });
 }
 
 export async function employeeAssets(req, res) {
   const empId = parseInt(req.params.employeeId, 10);
+  // Unscoped, any employee id listed that employee's asset register (tag,
+  // serial number, model) across tenants.
   const rows = (await query(
     `SELECT a.asset_tag, a.category, a.brand, a.model, a.serial_no, aa.assigned_at, aa.returned_at
        FROM asset_assignments aa JOIN assets a ON a.id=aa.asset_id
-      WHERE aa.employee_id=$1 ORDER BY aa.assigned_at DESC`, [empId])).rows;
+      WHERE aa.employee_id=$1
+        AND ($2::bigint IS NULL OR a.organisation_id=$2)
+      ORDER BY aa.assigned_at DESC`, [empId, req.orgId || null])).rows;
   res.json({ assets: rows });
 }
 

@@ -44,22 +44,33 @@ export async function dashboard(req, res, next) {
     const now = new Date();
     const fyStart = Number(req.query.fyStart) || (now.getMonth() >= 3 ? now.getFullYear() : now.getFullYear() - 1);
     const from = `${fyStart}-04-01`, to = `${fyStart + 1}-04-01`;
+    // nfas and approval_instances carry no organisation_id: both reach the
+    // tenant through employees. Unscoped, every tile aggregated all tenants —
+    // leaking other tenants' volumes and amounts, and reporting wrong figures.
+    const scope = [req.orgId || null, req.companyScope || null];
     const n = (await query(
       `SELECT count(*) AS raised,
-              count(*) FILTER (WHERE status IN ('APPROVED','PAYMENT_RELEASED')) AS approved,
-              count(*) FILTER (WHERE status='PAYMENT_RELEASED') AS released,
-              count(*) FILTER (WHERE status='PENDING') AS pending,
-              count(*) FILTER (WHERE status='QUERY') AS query,
-              count(*) FILTER (WHERE settlement_status='CLOSE') AS settled,
-              COALESCE(sum(grand_total), 0) AS raised_amount,
-              COALESCE(sum(grand_total) FILTER (WHERE status='PAYMENT_RELEASED'), 0) AS released_amount
-         FROM nfas WHERE created_at >= $1 AND created_at < $2`, [from, to])).rows[0];
+              count(*) FILTER (WHERE n.status IN ('APPROVED','PAYMENT_RELEASED')) AS approved,
+              count(*) FILTER (WHERE n.status='PAYMENT_RELEASED') AS released,
+              count(*) FILTER (WHERE n.status='PENDING') AS pending,
+              count(*) FILTER (WHERE n.status='QUERY') AS query,
+              count(*) FILTER (WHERE n.settlement_status='CLOSE') AS settled,
+              COALESCE(sum(n.grand_total), 0) AS raised_amount,
+              COALESCE(sum(n.grand_total) FILTER (WHERE n.status='PAYMENT_RELEASED'), 0) AS released_amount
+         FROM nfas n
+         JOIN employees e ON e.id = n.employee_id
+        WHERE n.created_at >= $1 AND n.created_at < $2
+          AND ($3::bigint IS NULL OR e.organisation_id = $3)
+          AND ($4::bigint IS NULL OR e.company_id = $4)`, [from, to, ...scope])).rows[0];
     const byStage = (await query(
       `SELECT st.role_key, count(*) AS pending
          FROM approval_instance_stages st
          JOIN approval_instances i ON i.id = st.instance_id AND i.status='PENDING' AND i.current_stage_seq = st.seq
+         LEFT JOIN employees e ON e.id = i.raised_by_employee_id
         WHERE i.subject_type IN ('nfa','nfa_settlement') AND st.status='PENDING'
-        GROUP BY st.role_key ORDER BY count(*) DESC`)).rows;
+          AND ($1::bigint IS NULL OR e.organisation_id = $1)
+          AND ($2::bigint IS NULL OR e.company_id = $2)
+        GROUP BY st.role_key ORDER BY count(*) DESC`, scope)).rows;
     res.json({
       financialYear: `${fyStart}-${fyStart + 1}`,
       totalRaised: Number(n.raised), totalApproved: Number(n.approved), paymentReleased: Number(n.released),
@@ -74,8 +85,12 @@ export async function dashboard(req, res, next) {
 // GreenHR "Project Wise Expence": rollup per Company/Project/Category/Header/SubHeader/Location.
 export async function projectExpense(req, res, next) {
   try {
-    const params = [];
-    const wh = [`n.status IN ('APPROVED','PAYMENT_RELEASED')`];
+    // Scoped through employees (nfas has no organisation_id): the rollup used
+    // to sum every tenant's lines into one report.
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = [`n.status IN ('APPROVED','PAYMENT_RELEASED')`,
+      '($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     if (req.query.from) { params.push(req.query.from); wh.push(`n.created_at >= $${params.length}`); }
     if (req.query.to) { params.push(req.query.to); wh.push(`n.created_at < ($${params.length}::date + 1)`); }
     if (req.query.projectId) { params.push(Number(req.query.projectId)); wh.push(`n.project_id = $${params.length}`); }
@@ -85,6 +100,7 @@ export async function projectExpense(req, res, next) {
               count(DISTINCT n.id) AS nfas, sum(l.total_amount) AS amount, max(n.created_at)::date AS last_date
          FROM nfa_lines l
          JOIN nfas n ON n.id = l.nfa_id
+         JOIN employees e ON e.id = n.employee_id
          JOIN group_companies gc ON gc.id = n.group_company_id
          JOIN projects p ON p.id = n.project_id
          JOIN expense_categories ec ON ec.id = n.expense_category_id
@@ -107,15 +123,21 @@ export async function projectExpense(req, res, next) {
 // GET /admin/reports/client-billing?from=&to=&format=csv — billable NFAs by client.
 export async function clientBilling(req, res, next) {
   try {
-    const params = [];
-    const wh = [`n.billable_type IN ('BILLABLE_CLIENT','BILLABLE_PARTNER')`];
+    // Scoped through employees: the billing report used to mix every tenant's
+    // clients and invoiced amounts together.
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = [`n.billable_type IN ('BILLABLE_CLIENT','BILLABLE_PARTNER')`,
+      '($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     if (req.query.from) { params.push(req.query.from); wh.push(`n.created_at >= $${params.length}`); }
     if (req.query.to) { params.push(req.query.to); wh.push(`n.created_at < ($${params.length}::date + 1)`); }
     const rows = (await query(
       `SELECT cv.name AS client, n.billable_type, COALESCE(n.billed_state,'—') AS billed_state,
               count(*) AS nfas, sum(n.grand_total) AS amount,
               COALESCE(sum(n.invoice_amount), 0) AS invoiced_amount
-         FROM nfas n LEFT JOIN clients_vendors cv ON cv.id = n.client_vendor_id
+         FROM nfas n
+         JOIN employees e ON e.id = n.employee_id
+         LEFT JOIN clients_vendors cv ON cv.id = n.client_vendor_id
         WHERE ${wh.join(' AND ')}
         GROUP BY cv.name, n.billable_type, n.billed_state
         ORDER BY cv.name NULLS LAST`, params)).rows
@@ -131,8 +153,11 @@ export async function clientBilling(req, res, next) {
 // GET /admin/nfa/export?…same filters as /admin/nfa…&format=csv — flat NFA export.
 export async function nfaExport(req, res, next) {
   try {
-    const params = [];
-    const wh = ['TRUE'];
+    // `WHERE TRUE` exported up to 5000 rows of every tenant's employee names,
+    // codes, amounts and purposes. nfas reaches the tenant via employees.
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = ['($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     if (req.query.status) { params.push(req.query.status); wh.push(`n.status = $${params.length}`); }
     if (req.query.from) { params.push(req.query.from); wh.push(`n.created_at >= $${params.length}`); }
     if (req.query.to) { params.push(req.query.to); wh.push(`n.created_at < ($${params.length}::date + 1)`); }
@@ -167,6 +192,8 @@ export async function nfaExport(req, res, next) {
 // GET /admin/reports/pending-settlements?format= — amount pending for settlement (client req #17).
 export async function pendingSettlements(req, res, next) {
   try {
+    // Scoped through employees: this listed every tenant's outstanding
+    // advances, by name and amount.
     const rows = (await query(
       `SELECT n.nfa_code, e.employee_code, e.first_name || ' ' || e.last_name AS employee,
               gc.name AS company, p.name AS project, n.grand_total AS amount_received,
@@ -178,7 +205,10 @@ export async function pendingSettlements(req, res, next) {
          JOIN group_companies gc ON gc.id=n.group_company_id
          JOIN projects p ON p.id=n.project_id
         WHERE n.status='PAYMENT_RELEASED' AND COALESCE(n.settlement_status,'PENDING') <> 'CLOSE'
-        ORDER BY n.settlement_due_date NULLS LAST, n.created_at`)).rows
+          AND ($1::bigint IS NULL OR e.organisation_id = $1)
+          AND ($2::bigint IS NULL OR e.company_id = $2)
+        ORDER BY n.settlement_due_date NULLS LAST, n.created_at`,
+      [req.orgId || null, req.companyScope || null])).rows
       .map((r) => ({ ...r, amount_received: Number(r.amount_received) }));
     await send(res, req, rows, [
       { key: 'nfa_code', label: 'NFA Code' }, { key: 'employee_code', label: 'Emp Code' },
@@ -193,8 +223,12 @@ export async function pendingSettlements(req, res, next) {
 // GET /admin/reports/company-expense?from=&to=&format= — one row per company (client req #17).
 export async function companyExpense(req, res, next) {
   try {
-    const params = [];
-    const wh = [`n.status IN ('APPROVED','PAYMENT_RELEASED')`];
+    // Scoped through employees: one row per company, previously across all
+    // tenants (a leak, and wrong totals for the caller's own companies).
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = [`n.status IN ('APPROVED','PAYMENT_RELEASED')`,
+      '($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     if (req.query.from) { params.push(req.query.from); wh.push(`n.created_at >= $${params.length}`); }
     if (req.query.to) { params.push(req.query.to); wh.push(`n.created_at < ($${params.length}::date + 1)`); }
     const rows = (await query(
@@ -202,7 +236,9 @@ export async function companyExpense(req, res, next) {
               count(DISTINCT n.employee_id) AS employees,
               sum(n.total_nfa_amount) AS nfa_amount, sum(n.total_logistic_amount) AS logistic_amount,
               sum(n.grand_total) AS total_amount
-         FROM nfas n JOIN group_companies gc ON gc.id = n.group_company_id
+         FROM nfas n
+         JOIN employees e ON e.id = n.employee_id
+         JOIN group_companies gc ON gc.id = n.group_company_id
         WHERE ${wh.join(' AND ')}
         GROUP BY gc.name ORDER BY sum(n.grand_total) DESC`, params)).rows
       .map((r) => ({ ...r, nfas: Number(r.nfas), employees: Number(r.employees),

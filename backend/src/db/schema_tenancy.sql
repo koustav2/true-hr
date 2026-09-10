@@ -474,3 +474,152 @@ UPDATE leave_types SET allow_certificate = true
   WHERE organisation_id IS NULL AND code = 'SL' AND allow_certificate IS NOT true;
 UPDATE leave_types SET single_date       = true
   WHERE organisation_id IS NULL AND code = 'MH' AND single_date IS NOT true;
+
+-- ── 17. Tenancy for the tables that never had an owner at all ──────────────
+-- Twelve tables predate multi-tenancy and carry no organisation column, so
+-- every handler that touched them worked across the whole deployment. There is
+-- no way to scope a handler to a row that has no owner, so the column comes
+-- first and the handler fixes follow it. What being ownerless allowed:
+--   * policies         — any employee of any tenant could fetch any tenant's
+--                        policy PDF, and the replace-on-upload
+--                        `DELETE FROM policies WHERE title=$1` deleted EVERY
+--                        tenant's document with that title;
+--   * app_banners      — listing, fetching and deleting another tenant's
+--                        dashboard images, plus their uploader's name;
+--   * approver_matrix  — reading every tenant's approvers (names + codes), and
+--                        the save path deleted another tenant's row for the
+--                        same role and installed its own approver, silently
+--                        re-routing that tenant's live approval chains;
+--   * the nine NFA masters — renaming, deactivating and deleting another
+--                        tenant's master data (which breaks its NFAs), and the
+--                        Excel import merged into another tenant's hierarchy
+--                        because `ON CONFLICT (name)` resolved to whichever
+--                        organisation happened to own the name first.
+ALTER TABLE policies            ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE app_banners         ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE approver_matrix     ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE business_operations ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE group_companies     ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE cost_zones          ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE projects            ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE office_locations    ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE clients_vendors     ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE expense_categories  ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE expense_headers     ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE expense_subheaders  ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+
+-- Backfill, step 1 of 2: rows that carry their own trail back to a tenant.
+-- These tables already hold production data, and the handlers below filter on
+-- `organisation_id`, so a row left NULL would vanish from every tenant's
+-- screens. `policies.uploaded_by` and `app_banners.uploaded_by` are the
+-- uploading employee, and `approver_matrix.approver_employee_id` is the named
+-- approver; all three reach an organisation through `employees`.
+UPDATE policies p SET organisation_id = e.organisation_id
+  FROM employees e
+ WHERE p.organisation_id IS NULL AND e.id = p.uploaded_by AND e.organisation_id IS NOT NULL;
+
+UPDATE app_banners b SET organisation_id = e.organisation_id
+  FROM employees e
+ WHERE b.organisation_id IS NULL AND e.id = b.uploaded_by AND e.organisation_id IS NOT NULL;
+
+UPDATE approver_matrix m SET organisation_id = e.organisation_id
+  FROM employees e
+ WHERE m.organisation_id IS NULL AND e.id = m.approver_employee_id AND e.organisation_id IS NOT NULL;
+
+-- Backfill, step 2 of 2: the single-organisation fallback.
+-- The nine NFA masters have no created_by / uploaded_by at all (they were
+-- seeded, not authored), and policies/banners uploaded by a since-deleted or
+-- organisation-less employee are left over from step 1. On the common
+-- deployment — exactly one row in `organisations` — that one organisation is
+-- provably the owner, so claim the rows for it.
+--
+-- On a deployment with several organisations the owner cannot be determined
+-- from the data, and those rows deliberately STAY NULL: they are then visible
+-- only to the platform owner (whose `req.orgId` is NULL and who therefore
+-- matches every `($n::bigint IS NULL OR organisation_id = $n)` predicate), and
+-- invisible to every tenant. That is the safe direction — the alternative is
+-- handing one tenant's master data or policy PDFs to another — but it does
+-- mean an existing multi-organisation deployment must re-assign the NFA
+-- masters (or re-enter them per tenant) before the NFA form has any dropdown
+-- values. Every statement below is `WHERE organisation_id IS NULL`, so
+-- re-running them never moves a row that has since been assigned, and the
+-- `ORDER BY id LIMIT 1` plus the count guard keeps the scalar subquery safe
+-- even if it is ever evaluated on a multi-organisation database.
+UPDATE policies            SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE app_banners         SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE approver_matrix     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE business_operations SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE group_companies     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE cost_zones          SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE projects            SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE office_locations    SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE clients_vendors     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE expense_categories  SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE expense_headers     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+UPDATE expense_subheaders  SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+
+-- Read paths. Every list/read in these controllers now filters on
+-- organisation_id, so give each table an index that leads with it.
+CREATE INDEX IF NOT EXISTS idx_policies_org    ON policies    (organisation_id, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_app_banners_org ON app_banners (organisation_id, sort_order);
+
+-- The approver matrix was unique deployment-wide on
+-- (project, expense category, zone, role_key). That is not merely a nuisance:
+-- with the DELETE + INSERT upsert in matrixSave it is what let one tenant
+-- take over another's approver for the same role, and even with the handler
+-- scoped, two tenants could not both configure BUSINESS_HEAD. The old index
+-- was created in schema.sql; that CREATE has been removed there (it would be
+-- re-created on the next boot and then fail on a database where two tenants
+-- share a role) and replaced by this per-organisation one.
+-- (Constraint first: if a deployment ever created this as a table constraint
+-- rather than a bare index, DROP INDEX on it would error and take the boot
+-- down with it.)
+ALTER TABLE approver_matrix DROP CONSTRAINT IF EXISTS uniq_approver_matrix;
+DROP INDEX IF EXISTS uniq_approver_matrix;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_approver_matrix_org
+  ON approver_matrix (COALESCE(organisation_id,0), COALESCE(project_id,0),
+                      COALESCE(expense_category_id,0), COALESCE(zone_id,0), role_key);
+
+-- NFA master names were unique deployment-wide (`name TEXT NOT NULL UNIQUE`),
+-- which after this section would stop a second tenant from having its own
+-- "Corporate" cost zone at all, and leaked the existence of another tenant's
+-- master through the 409 on create. They become unique per organisation. The
+-- seed inserts in schema.sql no longer use `ON CONFLICT (name)` for the same
+-- reason (they are anti-joins now); expense_headers / expense_subheaders keep
+-- their UNIQUE (parent, name), which is already per-organisation because the
+-- parent is.
+ALTER TABLE business_operations DROP CONSTRAINT IF EXISTS business_operations_name_key;
+ALTER TABLE group_companies     DROP CONSTRAINT IF EXISTS group_companies_name_key;
+ALTER TABLE cost_zones          DROP CONSTRAINT IF EXISTS cost_zones_name_key;
+ALTER TABLE projects            DROP CONSTRAINT IF EXISTS projects_name_key;
+ALTER TABLE office_locations    DROP CONSTRAINT IF EXISTS office_locations_name_key;
+ALTER TABLE expense_categories  DROP CONSTRAINT IF EXISTS expense_categories_name_key;
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_business_operations_org ON business_operations (organisation_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_group_companies_org     ON group_companies     (organisation_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_cost_zones_org          ON cost_zones          (organisation_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_projects_org            ON projects            (organisation_id, name);
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_office_locations_org    ON office_locations    (organisation_id, name);
+-- (organisation_id, name) is also the conflict target the expense-hierarchy
+-- import infers, so it must stay a plain (non-partial) unique index.
+CREATE UNIQUE INDEX IF NOT EXISTS uniq_expense_categories_org  ON expense_categories  (organisation_id, name);
+CREATE INDEX IF NOT EXISTS idx_expense_headers_org    ON expense_headers    (organisation_id);
+CREATE INDEX IF NOT EXISTS idx_expense_subheaders_org ON expense_subheaders (organisation_id);
+-- clients_vendors keeps its deployment-wide uniq_clients_vendors_name: the
+-- vendor-approval path in controllers/vendorController.js upserts into this
+-- master with `ON CONFLICT (lower(name)) DO NOTHING` inside a `.catch(() => {})`,
+-- so dropping that index would make vendor names stop reaching the master with
+-- no error anywhere. Scoping only needs the index below; making the name
+-- per-organisation as well is a follow-up that must change that handler too.
+CREATE INDEX IF NOT EXISTS idx_clients_vendors_org ON clients_vendors (organisation_id, name);

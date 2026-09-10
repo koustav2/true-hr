@@ -3,6 +3,7 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
+import { scopedByEmployee } from '../utils/scope.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 const isStaff = (u) => STAFF.includes(u.role);
@@ -84,7 +85,15 @@ export async function submit(req, res, next) {
 export async function forNfa(req, res, next) {
   try {
     const nfaId = Number(req.params.id);
-    const r = (await query(`SELECT ${COLS} ${JOINS} WHERE s.nfa_id=$1 ORDER BY s.raised_at DESC LIMIT 1`, [nfaId])).rows[0];
+    // nfa_settlements carry no organisation_id — the tenant comes from the
+    // employee. Unscoped, the isStaff gate below served any tenant's
+    // settlement, amount and approval trail to any tenant's HR admin.
+    const r = (await query(
+      `SELECT ${COLS} ${JOINS} WHERE s.nfa_id=$1
+          AND ($2::bigint IS NULL OR e.organisation_id = $2)
+          AND ($3::bigint IS NULL OR e.company_id = $3)
+        ORDER BY s.raised_at DESC LIMIT 1`,
+      [nfaId, req.orgId || null, req.companyScope || null])).rows[0];
     if (!r) return res.status(404).json({ error: 'No settlement yet' });
     const d = await detailById(r.id);
     const empId = req.user.employeeId;
@@ -98,11 +107,13 @@ export async function forNfa(req, res, next) {
 export async function actOn(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const s = (await query(`SELECT * FROM nfa_settlements WHERE id=$1`, [id])).rows[0];
+    // Scoped through employees: unscoped, the isStaff override let any tenant's
+    // HR admin close or reject another tenant's settlement.
+    const s = await scopedByEmployee(req, 'nfa_settlements', id);
     if (!s) return res.status(404).json({ error: 'Not found' });
     const { action, remarks } = req.body || {};
     const inst = await engine.act(s.approval_instance_id, req.user.employeeId, action, remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub,
+      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
     });
     if (inst.status === 'APPROVED') {
       await query(`UPDATE nfa_settlements SET status='CLOSED', closed_at=now() WHERE id=$1`, [id]);
@@ -143,8 +154,11 @@ export async function pendingApprovals(req, res, next) {
 // GET /admin/settlements?status=&year=&month= — Approved/Rejected Settlement report.
 export async function adminList(req, res, next) {
   try {
-    const params = [];
-    const wh = ['TRUE'];
+    // Reached the tenant only through employees; `WHERE TRUE` reported every
+    // tenant's settlements, amounts and chains.
+    const params = [req.orgId || null, req.companyScope || null];
+    const wh = ['($1::bigint IS NULL OR e.organisation_id = $1)',
+      '($2::bigint IS NULL OR e.company_id = $2)'];
     if (req.query.status) { params.push(req.query.status); wh.push(`s.status = $${params.length}`); }
     if (req.query.year) { params.push(Number(req.query.year)); wh.push(`EXTRACT(YEAR FROM s.raised_at) = $${params.length}`); }
     if (req.query.month) { params.push(Number(req.query.month)); wh.push(`EXTRACT(MONTH FROM s.raised_at) = $${params.length}`); }
@@ -162,20 +176,32 @@ export async function adminList(req, res, next) {
 // ── settlement documents ────────────────────────────────────────────────────
 
 const S_STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
-async function canSeeSettlement(user, settlementId) {
-  if (S_STAFF.includes(user.role)) return true;
-  const r = (await query(
-    `SELECT 1 FROM nfa_settlements s
-      LEFT JOIN approval_instance_stages ais ON ais.instance_id = s.approval_instance_id
-     WHERE s.id=$1 AND (s.employee_id=$2 OR ais.approver_employee_id=$2) LIMIT 1`,
-    [settlementId, user.employeeId]));
-  return !!r.rowCount;
+// Takes `req` (not just the user) because the staff shortcut has to be
+// narrowed to the caller's own organisation: `S_STAFF.includes(user.role)`
+// alone said "an HR admin somewhere", so any tenant's HR admin was served any
+// tenant's uploaded settlement bills.
+async function canSeeSettlement(req, settlementId) {
+  const user = req.user;
+  const rows = (await query(
+    `SELECT s.employee_id, ais.approver_employee_id AS approver
+       FROM nfa_settlements s
+       JOIN employees e ON e.id = s.employee_id
+       LEFT JOIN approval_instance_stages ais ON ais.instance_id = s.approval_instance_id
+      WHERE s.id=$1
+        AND ($2::bigint IS NULL OR e.organisation_id = $2)
+        AND ($3::bigint IS NULL OR e.company_id = $3)`,
+    [settlementId, req.orgId || null, req.companyScope || null])).rows;
+  if (!rows.length) return false;                      // absent, or not this tenant's
+  if (S_STAFF.includes(user.role)) return true;        // staff, now only in-tenant
+  if (user.employeeId == null) return false;           // no employee => neither owner nor approver
+  return rows.some((r) => Number(r.employee_id) === Number(user.employeeId)
+    || (r.approver != null && Number(r.approver) === Number(user.employeeId)));
 }
 
 // GET /settlements/:id/documents — metadata (owner, chain approvers, staff)
 export async function listDocs(req, res, next) {
   try {
-    if (!(await canSeeSettlement(req.user, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
+    if (!(await canSeeSettlement(req, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
     const rows = (await query(
       `SELECT id, mime, filename, created_at FROM nfa_settlement_docs WHERE settlement_id=$1 ORDER BY id`, [req.params.id])).rows;
     res.json(rows.map((r) => ({ id: r.id, mime: r.mime, filename: r.filename, uploadedAt: r.created_at })));
@@ -185,7 +211,7 @@ export async function listDocs(req, res, next) {
 // GET /settlements/:id/documents/:docId — the file
 export async function getDoc(req, res, next) {
   try {
-    if (!(await canSeeSettlement(req.user, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
+    if (!(await canSeeSettlement(req, req.params.id))) return res.status(403).json({ error: 'Not allowed' });
     const r = (await query(
       `SELECT document, mime, filename FROM nfa_settlement_docs WHERE id=$1 AND settlement_id=$2`,
       [req.params.docId, req.params.id])).rows[0];

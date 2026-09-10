@@ -21,6 +21,12 @@ function def(req, res) {
   if (!d) res.status(404).json({ error: 'Unknown master type' });
   return d;
 }
+// Every statement below carries `($n::bigint IS NULL OR organisation_id = $n)`.
+// The masters had no organisation column at all, so this whole controller ran
+// deployment-wide: one tenant's admin listed, renamed, deactivated and deleted
+// another tenant's master data (deleting one breaks that tenant's NFAs), and
+// /meta/nfa-masters served all of it to every employee. `${d.table}` is still
+// interpolated from the MASTERS whitelist above and never from user input.
 const camel = (s) => s.replace(/_(\w)/g, (_, c) => c.toUpperCase());
 const snake = (s) => s.replace(/[A-Z]/g, (c) => `_${c.toLowerCase()}`);
 const shape = (r) => Object.fromEntries(Object.entries(r).map(([k, v]) => [camel(k), v]));
@@ -32,6 +38,8 @@ export async function list(req, res, next) {
     const params = [];
     let where = req.query.all ? 'TRUE' : 'active';
     if (req.query.q) { params.push(`%${req.query.q}%`); where += ` AND name ILIKE $${params.length}`; }
+    params.push(req.orgId || null);
+    where += ` AND ($${params.length}::bigint IS NULL OR organisation_id = $${params.length})`;
     const rows = (await query(`SELECT * FROM ${d.table} WHERE ${where} ORDER BY name`, params)).rows;
     res.json(rows.map(shape));
   } catch (e) { next(e); }
@@ -48,6 +56,8 @@ export async function create(req, res, next) {
       if (v !== undefined && v !== '') { cols.push(c); params.push(v); vals.push(`$${params.length}`); }
     }
     if (!cols.includes('name')) return res.status(400).json({ error: 'name is required' });
+    // Stamp the owner, or the new row would be another ownerless master.
+    cols.push('organisation_id'); params.push(req.orgId || null); vals.push(`$${params.length}`);
     const row = (await query(
       `INSERT INTO ${d.table} (${cols.join(',')}) VALUES (${vals.join(',')}) RETURNING *`, params)).rows[0];
     await audit(req.user.sub, 'MASTER_CREATED', d.table, row.id, { name: row.name });
@@ -70,8 +80,15 @@ export async function update(req, res, next) {
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
     params.push(Number(req.params.id));
+    const idParam = params.length;
+    params.push(req.orgId || null);
     const row = (await query(
-      `UPDATE ${d.table} SET ${sets.join(', ')} WHERE id=$${params.length} RETURNING *`, params)).rows[0];
+      `UPDATE ${d.table} SET ${sets.join(', ')}
+        WHERE id=$${idParam}
+          AND ($${params.length}::bigint IS NULL OR organisation_id = $${params.length})
+        RETURNING *`, params)).rows[0];
+    // 404 for "not yours" as well as "no such row", so a probe cannot map
+    // another tenant's master ids.
     if (!row) return res.status(404).json({ error: 'Not found' });
     await audit(req.user.sub, 'MASTER_UPDATED', d.table, row.id, { name: row.name });
     res.json(shape(row));
@@ -85,7 +102,10 @@ export async function update(req, res, next) {
 export async function remove(req, res, next) {
   try {
     const d = def(req, res); if (!d) return;
-    const r = await query(`DELETE FROM ${d.table} WHERE id=$1`, [Number(req.params.id)]);
+    const r = await query(
+      `DELETE FROM ${d.table}
+        WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id = $2)`,
+      [Number(req.params.id), req.orgId || null]);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found' });
     await audit(req.user.sub, 'MASTER_DELETED', d.table, Number(req.params.id));
     res.json({ ok: true });
@@ -102,27 +122,40 @@ export async function importExpenseHierarchy(req, res, next) {
   try {
     const rows = (req.body || {}).rows;
     if (!Array.isArray(rows) || !rows.length) return res.status(400).json({ error: 'rows[] required' });
+    const org = req.orgId || null;
     let created = { categories: 0, headers: 0, subheaders: 0 }, skipped = 0;
     for (const r of rows) {
       const category = String(r.category || '').trim();
       const header = String(r.header || '').trim();
       const subheader = String(r.subheader || '').trim();
       if (!category) { skipped++; continue; }
+      // The conflict target is now (organisation_id, name) — see the new unique
+      // index in schema_tenancy.sql section 17. On the old deployment-wide
+      // `ON CONFLICT (name)` an import resolved to whichever organisation owned
+      // the name first, so a tenant importing its Excel reactivated another
+      // tenant's category and then hung its own headers underneath it, merging
+      // the two hierarchies. (For the platform owner, whose organisation_id is
+      // NULL, NULLs do not collide, so a repeat import adds rather than
+      // reactivates — the price of a plain, inferrable unique index.)
       const cat = (await query(
-        `INSERT INTO expense_categories (name) VALUES ($1)
-         ON CONFLICT (name) DO UPDATE SET active=TRUE RETURNING id, (xmax = 0) AS inserted`, [category])).rows[0];
+        `INSERT INTO expense_categories (name, organisation_id) VALUES ($1,$2)
+         ON CONFLICT (organisation_id, name) DO UPDATE SET active=TRUE
+         RETURNING id, (xmax = 0) AS inserted`, [category, org])).rows[0];
       if (cat.inserted) created.categories++;
       if (!header) continue;
+      // (category_id, name) and (header_id, name) stay the conflict targets:
+      // the parent is this organisation's row, resolved above, so they are
+      // already per-organisation.
       const hdr = (await query(
-        `INSERT INTO expense_headers (category_id, name) VALUES ($1,$2)
+        `INSERT INTO expense_headers (category_id, name, organisation_id) VALUES ($1,$2,$3)
          ON CONFLICT (category_id, name) DO UPDATE SET active=TRUE RETURNING id, (xmax = 0) AS inserted`,
-        [cat.id, header])).rows[0];
+        [cat.id, header, org])).rows[0];
       if (hdr.inserted) created.headers++;
       if (!subheader) continue;
       const sub = (await query(
-        `INSERT INTO expense_subheaders (header_id, name) VALUES ($1,$2)
+        `INSERT INTO expense_subheaders (header_id, name, organisation_id) VALUES ($1,$2,$3)
          ON CONFLICT (header_id, name) DO UPDATE SET active=TRUE RETURNING (xmax = 0) AS inserted`,
-        [hdr.id, subheader])).rows[0];
+        [hdr.id, subheader, org])).rows[0];
       if (sub.inserted) created.subheaders++;
     }
     await audit(req.user.sub, 'EXPENSE_HIERARCHY_IMPORTED', 'expense_categories', null, { rows: rows.length, created });
@@ -134,16 +167,21 @@ export async function importExpenseHierarchy(req, res, next) {
 // does all cascading locally (operation → projects/categories → headers → subheaders).
 export async function nfaMasters(req, res, next) {
   try {
+    // Nine unfiltered selects served to every signed-in employee: this was the
+    // widest leak of the set — every tenant's projects, clients and vendors,
+    // group companies and cost zones, readable by any employee anywhere.
+    const org = req.orgId || null;
+    const scoped = 'AND ($1::bigint IS NULL OR organisation_id = $1)';
     const [ops, companies, zones, projects, locations, cv, cats, headers, subs] = await Promise.all([
-      query(`SELECT id, name FROM business_operations WHERE active ORDER BY name`),
-      query(`SELECT id, name FROM group_companies WHERE active ORDER BY name`),
-      query(`SELECT id, name FROM cost_zones WHERE active ORDER BY name`),
-      query(`SELECT id, name, business_operation_id, group_company_id FROM projects WHERE active ORDER BY name`),
-      query(`SELECT id, name, kind FROM office_locations WHERE active ORDER BY name`),
-      query(`SELECT id, name, type FROM clients_vendors WHERE active ORDER BY name`),
-      query(`SELECT id, name, business_operation_id FROM expense_categories WHERE active ORDER BY name`),
-      query(`SELECT id, name, category_id FROM expense_headers WHERE active ORDER BY name`),
-      query(`SELECT id, name, header_id FROM expense_subheaders WHERE active ORDER BY name`),
+      query(`SELECT id, name FROM business_operations WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name FROM group_companies WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name FROM cost_zones WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, business_operation_id, group_company_id FROM projects WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, kind FROM office_locations WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, type FROM clients_vendors WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, business_operation_id FROM expense_categories WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, category_id FROM expense_headers WHERE active ${scoped} ORDER BY name`, [org]),
+      query(`SELECT id, name, header_id FROM expense_subheaders WHERE active ${scoped} ORDER BY name`, [org]),
     ]);
     res.json({
       businessOperations: ops.rows,

@@ -395,7 +395,10 @@ async function runInputs(employeeId, year, month) {
 }
 
 // Shared by single + bulk generation. Returns { ok } or { skip: reason }.
-async function generateFor(employeeId, year, month, opts, reqUser) {
+// Exported so the demo seed can build its payslips through the real engine
+// instead of inserting rows by hand — what a demo shows should be what the
+// product computes, so a wrong figure there is a bug and not just bad seed data.
+export async function generateFor(employeeId, year, month, opts, reqUser) {
   const existing = (await query(
     `SELECT status FROM payslips WHERE employee_id=$1 AND year=$2 AND month=$3`, [employeeId, year, month])).rows[0];
   if (existing?.status === 'PUBLISHED') return { skip: 'already published (unpublish first to regenerate)' };

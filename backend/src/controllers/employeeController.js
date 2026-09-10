@@ -12,6 +12,7 @@ import { audit } from '../utils/audit.js';
 import { buildPersonalInfoSheet } from '../services/personalInfoSheet.js';
 import { brandForEmployee } from '../services/docProfile.js';
 import { annexureFromComponents } from '../services/payComponents.js';
+import { scopedEmployee, ownsEmployee } from '../utils/scope.js';
 
 const dataUrlToBuffer = (s) => {
   if (!s) return null;
@@ -231,7 +232,14 @@ export async function generateSheet(req, res, next) {
        LEFT JOIN departments dep ON dep.id=e.department_id
        JOIN companies c ON c.id=e.company_id
        LEFT JOIN employees rm ON rm.id=e.reporting_manager_id
-       WHERE e.id=$1`, [id])).rows[0];
+       WHERE e.id=$1
+         AND ($2::bigint IS NULL OR e.organisation_id=$2)
+         AND ($3::bigint IS NULL OR e.company_id=$3)`,
+      [id, req.orgId || null, req.companyScope || null])).rows[0];
+    // Unscoped, this rendered any tenant's Personal Information Sheet — the PDF
+    // prints the decrypted bank account number, PAN and Aadhaar. The 404 also
+    // covers the bank / statutory / address / document sub-reads below, which
+    // all key off the same id.
     if (!e) return res.status(404).json({ error: 'Employee not found' });
 
     const bank = (await query(`SELECT * FROM employee_bank WHERE employee_id=$1`, [id])).rows[0] || {};
@@ -287,6 +295,10 @@ function contentDisposition(name, fallback, disposition = 'inline') {
 // HR downloads/views an employee-uploaded e-joining document
 export async function downloadDocument(req, res, next) {
   try {
+    // `employee_id=$2` only proved the document belonged to THAT employee, not
+    // that the employee is the caller's — so any tenant's uploaded ID proofs
+    // were downloadable.
+    if (!(await ownsEmployee(req, req.params.id))) return res.status(404).json({ error: 'Document not found' });
     const row = (await query(
       `SELECT filename, mime, data FROM documents WHERE id=$1 AND employee_id=$2`,
       [req.params.docId, req.params.id]
@@ -301,8 +313,13 @@ export async function downloadDocument(req, res, next) {
 // HR downloads/views the uploaded offer letter PDF
 export async function downloadOfferLetter(req, res, next) {
   try {
+    // Unscoped, this served another tenant's stored offer letter PDF.
     const row = (await query(
-      `SELECT offer_letter_name, offer_letter_mime, offer_letter_data FROM employees WHERE id=$1`, [req.params.id]
+      `SELECT offer_letter_name, offer_letter_mime, offer_letter_data FROM employees
+        WHERE id=$1
+          AND ($2::bigint IS NULL OR organisation_id=$2)
+          AND ($3::bigint IS NULL OR company_id=$3)`,
+      [req.params.id, req.orgId || null, req.companyScope || null]
     )).rows[0];
     if (!row?.offer_letter_data) return res.status(404).json({ error: 'No offer letter on file' });
     res.setHeader('Content-Type', row.offer_letter_mime || 'application/pdf');
@@ -315,7 +332,17 @@ export async function downloadOfferLetter(req, res, next) {
 export async function approveOnboarding(req, res, next) {
   try {
     const obId = req.params.id;
-    const ob = (await query(`SELECT * FROM onboarding WHERE id=$1`, [obId])).rows[0];
+    // `onboarding` carries no organisation_id, so the tenant is reached through
+    // its employee. Unscoped, an HR admin of any tenant could approve another
+    // tenant's candidate — minting an employee code, creating a login account
+    // and emailing out a temporary password for it.
+    const ob = (await query(
+      `SELECT o.* FROM onboarding o
+         JOIN employees e ON e.id=o.employee_id
+        WHERE o.id=$1
+          AND ($2::bigint IS NULL OR e.organisation_id=$2)
+          AND ($3::bigint IS NULL OR e.company_id=$3)`,
+      [obId, req.orgId || null, req.companyScope || null])).rows[0];
     if (!ob) return res.status(404).json({ error: 'Onboarding not found' });
     if (!['DETAILS_SUBMITTED', 'HR_REVIEW'].includes(ob.state))
       return res.status(400).json({ error: `Cannot approve from state ${ob.state}` });
@@ -361,7 +388,16 @@ export async function sendBack(req, res, next) {
   try {
     const obId = req.params.id;
     const notes = req.body.notes || '';
-    const ob = (await query(`SELECT * FROM onboarding WHERE id=$1`, [obId])).rows[0];
+    // Same missing join as approveOnboarding: unscoped, this re-issued a valid
+    // magic FORM token for another tenant's candidate, which is a live link
+    // into their onboarding data.
+    const ob = (await query(
+      `SELECT o.* FROM onboarding o
+         JOIN employees e ON e.id=o.employee_id
+        WHERE o.id=$1
+          AND ($2::bigint IS NULL OR e.organisation_id=$2)
+          AND ($3::bigint IS NULL OR e.company_id=$3)`,
+      [obId, req.orgId || null, req.companyScope || null])).rows[0];
     if (!ob) return res.status(404).json({ error: 'Onboarding not found' });
 
     const emp = (await query(`SELECT * FROM employees WHERE id=$1`, [ob.employee_id])).rows[0];
@@ -392,7 +428,9 @@ export async function setEmployeeActive(req, res, next) {
   try {
     const id = Number(req.params.id);
     const active = !!req.body?.active;
-    const emp = (await query(`SELECT id, onboarding_status FROM employees WHERE id=$1`, [id])).rows[0];
+    // Unscoped this was a remote login kill-switch on another tenant: it
+    // disables the employee AND their user_account below.
+    const emp = await scopedEmployee(req, id, 'e.id, e.onboarding_status');
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     if (!['ACTIVE', 'INACTIVE'].includes(emp.onboarding_status)) {
       return res.status(409).json({ error: `Employee is ${emp.onboarding_status} — only fully onboarded employees can be toggled` });
@@ -455,8 +493,37 @@ export async function updateEmployee(req, res, next) {
         [parseInt(v, 10), kind, req.orgId || null])).rowCount;
       if (!ok) return res.status(400).json({ error: `That ${label} is not on your organisation's list.` });
     }
+
+    // Same problem one table over: the three manager columns are plain
+    // employees FKs, and nothing checked WHOSE employee. A crafted id pointed
+    // this employee at ANOTHER organisation's employee as manager, and the
+    // self-join in `orgChart` (and every "my manager" lookup) then surfaced
+    // that foreign person's name and employee code inside this tenant.
+    // 400, not 404 — this is bad input in the body, not a record being read.
+    for (const [key, label] of [
+      ['reportingManagerId', 'Reporting manager'],
+      ['functionManagerId', 'Function manager'],
+      ['operationalManagerId', 'Operational manager'],
+    ]) {
+      const v = req.body[key];
+      if (v == null || v === '') continue;
+      if (!(await ownsEmployee(req, v))) {
+        return res.status(400).json({ error: `${label} not found in your organisation` });
+      }
+    }
     vals.push(id);
-    const r = await query(`UPDATE employees SET ${sets.join(', ')} WHERE id=$${vals.length} RETURNING id, official_email`, vals);
+    const idParam = vals.length;
+    vals.push(req.orgId || null, req.companyScope || null);
+    // The predicate belongs on the UPDATE itself. Unscoped, this rewrote any
+    // tenant's employee row — and through the user_accounts.email sync just
+    // below, the address their login and password resets go to, which is an
+    // account-takeover path.
+    const r = await query(
+      `UPDATE employees SET ${sets.join(', ')}
+        WHERE id=$${idParam}
+          AND ($${idParam + 1}::bigint IS NULL OR organisation_id=$${idParam + 1})
+          AND ($${idParam + 2}::bigint IS NULL OR company_id=$${idParam + 2})
+        RETURNING id, official_email`, vals);
     if (!r.rowCount) return res.status(404).json({ error: 'Employee not found' });
     // Keep the login account in sync when the official email changes.
     if (req.body.officialEmail) {
@@ -482,7 +549,13 @@ export async function generateOfferLetter(req, res, next) {
          LEFT JOIN designations d ON d.id = e.designation_id
          LEFT JOIN departments dep ON dep.id = e.department_id
          LEFT JOIN salary_structures ss ON ss.employee_id = e.id
-        WHERE e.id=$1`, [req.params.id])).rows[0];
+        WHERE e.id=$1
+          AND ($2::bigint IS NULL OR e.organisation_id=$2)
+          AND ($3::bigint IS NULL OR e.company_id=$3)`,
+      [req.params.id, req.orgId || null, req.companyScope || null])).rows[0];
+    // Unscoped, this read another tenant's CTC and salary structure and then
+    // overwrote their stored offer letter with one built on the caller's
+    // branding.
     if (!e) return res.status(404).json({ error: 'Employee not found' });
     if (!e.effective_ctc) {
       return res.status(400).json({ error: 'Set the CTC or a salary structure first — Annexure A needs it' });
@@ -501,8 +574,12 @@ export async function generateOfferLetter(req, res, next) {
     const pdf = Buffer.concat(chunks).toString('base64');
     await query(
       `UPDATE employees SET offer_letter_data=$2, offer_letter_mime='application/pdf',
-              offer_letter_name=$3 WHERE id=$1`,
-      [e.id, pdf, `offer-letter-${(e.first_name || 'employee').toLowerCase()}.pdf`]);
+              offer_letter_name=$3
+        WHERE id=$1
+          AND ($4::bigint IS NULL OR organisation_id=$4)
+          AND ($5::bigint IS NULL OR company_id=$5)`,
+      [e.id, pdf, `offer-letter-${(e.first_name || 'employee').toLowerCase()}.pdf`,
+       req.orgId || null, req.companyScope || null]);
     await audit(req.user.id, 'OFFER_LETTER_GENERATED', 'employee', e.id, {});
     res.json({ ok: true });
   } catch (e2) { next(e2); }
@@ -516,8 +593,9 @@ export async function uploadEmployeeDocument(req, res, next) {
     const { type, file, mime, filename } = req.body || {};
     if (!type || !file) return res.status(400).json({ error: 'type and file are required' });
     if (Math.floor(String(file).length * 3 / 4) > 8 * 1024 * 1024) return res.status(400).json({ error: 'File larger than 8MB' });
-    const emp = (await query(`SELECT id FROM employees WHERE id=$1`, [id])).rows[0];
-    if (!emp) return res.status(404).json({ error: 'Employee not found' });
+    // The existence check proved only that the id exists somewhere: unscoped,
+    // this DELETEd and replaced another tenant's document of that type.
+    if (!(await ownsEmployee(req, id))) return res.status(404).json({ error: 'Employee not found' });
     await query(`DELETE FROM documents WHERE employee_id=$1 AND type=$2`, [id, type]); // replace-on-upload
     const row = (await query(
       `INSERT INTO documents (employee_id, type, filename, mime, data) VALUES ($1,$2,$3,$4,$5) RETURNING id`,
@@ -532,6 +610,9 @@ export async function uploadEmployeeDocument(req, res, next) {
 export async function updateBankStatutory(req, res, next) {
   try {
     const id = Number(req.params.id);
+    // The id went straight from the URL into the upserts, so this overwrote
+    // another tenant's bank account, PAN and Aadhaar.
+    if (!(await ownsEmployee(req, id))) return res.status(404).json({ error: 'Employee not found' });
     const { bank = {}, statutory = {} } = req.body || {};
     const bad = [];
     if (bank.accountNumber && !/^\d{9,18}$/.test(String(bank.accountNumber))) bad.push('Account number: 9\u201318 digits');

@@ -207,11 +207,23 @@ async function advance(instanceId, fromSeq, actorUserId) {
 }
 
 // Approver (or staff override) acts on the current stage.
-export async function act(instanceId, actorEmployeeId, action, remarks = '', { isStaff = false, actorUserId = null } = {}) {
+export async function act(instanceId, actorEmployeeId, action, remarks = '', { isStaff = false, actorUserId = null, orgId = null } = {}) {
   if (!ACTIONS.includes(action)) throw Object.assign(new Error('Invalid action'), { status: 400 });
 
   const inst = (await query(`SELECT * FROM approval_instances WHERE id=$1`, [instanceId])).rows[0];
   if (!inst) throw Object.assign(new Error('Approval instance not found'), { status: 404 });
+
+  // approval_instances carries no organisation_id: an instance reaches a tenant
+  // only through the employee who raised it. Unscoped, the `isStaff` override
+  // below asked "is this an HR admin somewhere", not "in THIS tenant", so any
+  // tenant's HR admin could approve, reject or query another tenant's NFA,
+  // settlement, resignation or PMS rating. `orgId` NULL = platform owner.
+  const inTenant = (await query(
+    `SELECT 1 FROM approval_instances i
+       LEFT JOIN employees e ON e.id = i.raised_by_employee_id
+      WHERE i.id = $1 AND ($2::bigint IS NULL OR e.organisation_id = $2)`,
+    [instanceId, orgId || null])).rowCount;
+  if (!inTenant) throw Object.assign(new Error('Approval instance not found'), { status: 404 });
   if (inst.status !== 'PENDING') throw Object.assign(new Error(`Instance is ${inst.status}, not actionable`), { status: 409 });
 
   const stage = (await query(

@@ -649,24 +649,35 @@ CREATE TABLE IF NOT EXISTS expense_subheaders (
 );
 
 -- Seed the values observed in the GreenHR reference demos (editable by HR).
-INSERT INTO business_operations (name) VALUES
+-- Anti-joins rather than `ON CONFLICT (name) DO NOTHING`: a master name is
+-- unique PER ORGANISATION now (schema_tenancy.sql section 17), so there is no
+-- deployment-wide unique index on `name` left to infer as a conflict target.
+-- The NOT EXISTS is on the name across every organisation, which keeps this
+-- idempotent after section 17 has handed these seeded rows to a tenant — the
+-- next boot then adds nothing instead of re-seeding an ownerless duplicate.
+INSERT INTO business_operations (name)
+SELECT v.name FROM (VALUES
   ('Advisory Services'),('BPO'),('Corporate'),('CSR Initiative'),
   ('Infra Set Up and Support Service'),('IT / Software'),('KPO'),('Managed Services'),
   ('Operations and Maintenance (O&M)'),('Skilling'),('Sourcing'),('Staffing'),
   ('Training & Development')
-ON CONFLICT (name) DO NOTHING;
+) AS v(name)
+ WHERE NOT EXISTS (SELECT 1 FROM business_operations b WHERE b.name = v.name);
 
-INSERT INTO cost_zones (name) VALUES ('Corporate'),('North Star'),('South-East'),('North-West')
-ON CONFLICT (name) DO NOTHING;
+INSERT INTO cost_zones (name)
+SELECT v.name FROM (VALUES ('Corporate'),('North Star'),('South-East'),('North-West')) AS v(name)
+ WHERE NOT EXISTS (SELECT 1 FROM cost_zones z WHERE z.name = v.name);
 
-INSERT INTO expense_categories (name) VALUES
+INSERT INTO expense_categories (name)
+SELECT v.name FROM (VALUES
   ('General Administrative Expenses'),('Skill Project Expenses'),('HR Expenses'),
   ('IT Infra'),('IT Software'),('Legal Compliance Expenses'),('Marketing & Branding'),
   ('New Business Development Expenses'),('Recruitment Expenses'),('Salary Expense'),
   ('Staffing Expenses'),('Talent Acquisition'),('Training & Development'),
   ('Asset Procurement Expenses'),('Banking & Finance Expenses'),('Compliance Expenses'),
   ('Charitable Activity')
-ON CONFLICT (name) DO NOTHING;
+) AS v(name)
+ WHERE NOT EXISTS (SELECT 1 FROM expense_categories c WHERE c.name = v.name);
 
 -- ── Generic approval-chain engine ────────────────────────────────────────────
 -- One engine powers all multi-stage workflows (NFA, NFA settlement, resignation,
@@ -755,8 +766,11 @@ CREATE TABLE IF NOT EXISTS approver_matrix (
   approver_employee_id BIGINT NOT NULL REFERENCES employees(id),
   updated_at           TIMESTAMPTZ NOT NULL DEFAULT now()
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_approver_matrix
-  ON approver_matrix (COALESCE(project_id,0), COALESCE(expense_category_id,0), COALESCE(zone_id,0), role_key);
+-- The uniqueness key is (organisation, project, category, zone, role_key) and
+-- lives in schema_tenancy.sql section 17, because organisation_id does not
+-- exist yet at this point in the boot. It cannot also be created here: on a
+-- database where two tenants configure the same role the deployment-wide
+-- version of this index no longer builds, which would break every boot.
 
 -- Seed the flows observed in the GreenHR reference demos (27-06-2026).
 INSERT INTO approval_flows (code, name) VALUES

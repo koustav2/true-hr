@@ -18,9 +18,15 @@ async function runOnce() {
   const ids = rows.map((r) => r.employee_id);
   await query(`UPDATE employees SET onboarding_status='REJECTED' WHERE id = ANY($1) AND onboarding_status='OFFER_SENT'`, [ids]);
 
-  const hr = (await query(`SELECT id FROM user_accounts WHERE role IN ('HR_ADMIN','SUPER_ADMIN') AND status='ACTIVE'`)).rows;
+  // Background worker, so there is no session: each fan-out is scoped to the
+  // organisation of the employee it is about. Unfiltered, every tenant's HR
+  // feed was told the name of every other tenant's expired candidate.
   for (const r of rows) {
-    const emp = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [r.employee_id])).rows[0];
+    const emp = (await query(`SELECT first_name, last_name, organisation_id FROM employees WHERE id=$1`, [r.employee_id])).rows[0];
+    const hr = (await query(
+      `SELECT id FROM user_accounts
+        WHERE role IN ('HR_ADMIN','SUPER_ADMIN') AND status='ACTIVE'
+          AND organisation_id = $1`, [emp.organisation_id])).rows;
     for (const u of hr) {
       await query(`INSERT INTO notifications (recipient_user_id, type, title, body) VALUES ($1,'OFFER_EXPIRED','Offer auto-rejected',$2)`,
         [u.id, `${emp.first_name} ${emp.last_name}'s offer expired and was automatically rejected.`]);

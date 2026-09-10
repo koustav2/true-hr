@@ -30,7 +30,10 @@ export async function stats(req, res, next) {
             WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
       one(`SELECT COUNT(*)::int n FROM support_tickets r JOIN employees e ON e.id=r.employee_id
             WHERE r.status='PENDING' AND ($1::bigint IS NULL OR e.organisation_id=$1)`, [org]),
-      one(`SELECT COUNT(*)::int n FROM policies`),
+      // policies had no organisation column, so this tile counted every
+      // tenant's documents — a live readout of how much other tenants hold.
+      one(`SELECT COUNT(*)::int n FROM policies
+            WHERE ($1::bigint IS NULL OR organisation_id=$1)`, [org]),
       one(`SELECT COUNT(*)::int n FROM payslips p JOIN employees e ON e.id=p.employee_id
             WHERE p.year=$1 AND p.month=$2 AND p.status='PUBLISHED'
               AND ($3::bigint IS NULL OR e.organisation_id=$3)`, [year, month, org]),

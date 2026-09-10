@@ -3,6 +3,7 @@
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import * as engine from '../services/approvalEngine.js';
+import { scopedByEmployee } from '../utils/scope.js';
 import {
   resolveScore, validateBands, normaliseBands, achievementPct, ratingFromBands, DEFAULT_BANDS,
 } from '../services/kpiBands.js';
@@ -179,6 +180,11 @@ export async function teamPending(req, res, next) {
 // GET /kpi/:id — owner, their manager, or staff.
 export async function detail(req, res, next) {
   try {
+    // kpis carry no organisation_id — the tenant comes from the employee. The
+    // isStaff gate below only asked "an HR admin somewhere", so any tenant's HR
+    // admin could read any tenant's KRAs, scores, remarks and final grade.
+    if (!(await scopedByEmployee(req, 'kpis', req.params.id, { cols: 't.id' })))
+      return res.status(404).json({ error: 'Not found' });
     const d = await kpiDetail(Number(req.params.id));
     if (!d) return res.status(404).json({ error: 'Not found' });
     const me = req.user.employeeId;
@@ -192,7 +198,10 @@ export async function detail(req, res, next) {
 export async function reviewKpi(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const k = (await query(`SELECT * FROM kpis WHERE id=$1`, [id])).rows[0];
+    // Scoped through employees: isStaff bypasses isManagerOf below, so without
+    // this any tenant's HR admin could approve (LOCK) or send back another
+    // tenant's KPI.
+    const k = await scopedByEmployee(req, 'kpis', id);
     if (!k) return res.status(404).json({ error: 'Not found' });
     if (k.status !== 'RM_PENDING') return res.status(409).json({ error: `KPI is ${k.status}` });
     const me = req.user.employeeId;
@@ -305,7 +314,18 @@ export async function pendingRatings(req, res, next) {
 export async function rate(req, res, next) {
   try {
     const id = Number(req.params.id);
-    const s = (await query(`SELECT * FROM pms_submissions WHERE id=$1`, [id])).rows[0];
+    // pms_submissions has neither organisation_id nor employee_id: it reaches
+    // the tenant through kpis → employees. Unscoped, the isStaff override let
+    // any tenant's HR admin rate and stamp final_grade on another tenant's
+    // submission.
+    const s = (await query(
+      `SELECT s.* FROM pms_submissions s
+         JOIN kpis k ON k.id = s.kpi_id
+         JOIN employees e ON e.id = k.employee_id
+        WHERE s.id=$1
+          AND ($2::bigint IS NULL OR e.organisation_id = $2)
+          AND ($3::bigint IS NULL OR e.company_id = $3)`,
+      [id, req.orgId || null, req.companyScope || null])).rows[0];
     if (!s) return res.status(404).json({ error: 'Not found' });
     const b = req.body || {};
     if (num(b.pliPct) == null || num(b.pliRating) == null)
@@ -323,7 +343,7 @@ export async function rate(req, res, next) {
     const before = await engine.getInstance(s.approval_instance_id);
     const stage = before.chain.find((x) => x.seq === before.currentStageSeq);
     const inst = await engine.act(s.approval_instance_id, req.user.employeeId, 'APPROVED', b.remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub,
+      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
     });
 
     await query(

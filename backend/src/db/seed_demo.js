@@ -640,8 +640,8 @@ async function content(org, company, byCode) {
   // Support tickets, in a mix of states.
   await pool.query(`DELETE FROM support_tickets WHERE description LIKE '%[demo]%'`);
   const TICKETS = [
-    ['TKF1004', 'IT', 'Hardware', 'Laptop battery drains in 2 hours [demo]', 'OPEN'],
-    ['TKF1005', 'HR', 'Payslip', 'Payslip for last month shows wrong PT [demo]', 'OPEN'],
+    ['TKF1004', 'IT', 'Hardware', 'Laptop battery drains in 2 hours [demo]', 'PENDING'],
+    ['TKF1005', 'HR', 'Payslip', 'Payslip for last month shows wrong PT [demo]', 'PENDING'],
     ['TKF1007', 'Admin', 'Facilities', 'AC not working in the east wing [demo]', 'RESOLVED'],
   ];
   let tick = 0;
@@ -767,8 +767,8 @@ async function pms(org, byCode) {
     if (!sub) {
       sub = await one(
         `INSERT INTO pms_submissions (kpi_id, status, self_rating, submitted_at, final_grade, final_pli_pct)
-         VALUES ($1,'RATED',$2, now(), $3, $4) RETURNING id`,
-        [k.id, 4, 'OAT-4', 90]);
+         VALUES ($1,'FUNCTIONAL_APPROVED',$2, now(), $3, $4) RETURNING id`,
+        [k.id, 4, 'SAT', 90]);
     }
     for (const [i, [, , target, achieved]] of rows.entries()) {
       const has = await one(

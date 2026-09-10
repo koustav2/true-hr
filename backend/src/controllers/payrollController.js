@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { ownsEmployee, scopedByEmployee } from '../utils/scope.js';
 import { legacyComponents, loadForEmployee, computeFromComponents } from '../services/payComponents.js';
 import { brandForEmployee, resolveBrand, BANK_SHEET_COLUMNS, DEFAULT_OPTIONS } from '../services/docProfile.js';
 import { audit } from '../utils/audit.js';
@@ -202,6 +203,7 @@ export async function pdf(req, res, next) {
 // employee's company template so HR only needs to enter CTC.
 export async function getStructure(req, res, next) {
   try {
+    if (!(await ownsEmployee(req, req.params.employeeId))) return res.status(404).json({ error: 'Employee not found' });
     const row = (await query(`SELECT * FROM salary_structures WHERE employee_id=$1`, [req.params.employeeId])).rows[0];
     if (row) return res.json({ ...shapeStructure(row), saved: true });
     const companyId = await resolveCompanyId(req, req.params.employeeId);
@@ -246,6 +248,7 @@ export async function setTemplate(req, res, next) {
 export async function setStructure(req, res, next) {
   try {
     const id = parseInt(req.params.employeeId, 10);
+    if (!(await ownsEmployee(req, id))) return res.status(404).json({ error: 'Employee not found' });
     const b = req.body || {};
     await query(
       `INSERT INTO salary_structures
@@ -476,6 +479,9 @@ export async function generate(req, res, next) {
   try {
     const { employeeId, year, month } = req.body;
     if (!employeeId || !year || !month) return res.status(400).json({ error: 'employeeId, year and month are required' });
+    // Unscoped, this generated a payslip for another tenant's employee and
+    // returned their gross, deductions and net pay in the response.
+    if (!(await ownsEmployee(req, employeeId))) return res.status(404).json({ error: 'Employee not found' });
     const out = await generateFor(employeeId, year, month, req.body, req.user);
     if (out.skip) return res.status(409).json({ error: `Cannot generate: ${out.skip}` });
     res.json(shapePayslip(out.row));
@@ -536,8 +542,10 @@ async function notifyPublished(payslipId) {
 // POST /admin/payslips/:id/publish
 export async function publish(req, res, next) {
   try {
+    const mine = await scopedByEmployee(req, 'payslips', req.params.id, { cols: 't.id' });
+    if (!mine) return res.status(404).json({ error: 'Payslip not found' });
     const row = (await query(
-      `UPDATE payslips SET status='PUBLISHED', published_at=now() WHERE id=$1 RETURNING id`, [req.params.id])).rows[0];
+      `UPDATE payslips SET status='PUBLISHED', published_at=now() WHERE id=$1 RETURNING id`, [mine.id])).rows[0];
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     await audit(req.user.id, 'PAYSLIP_PUBLISH', 'payslip', row.id, {});
     await notifyPublished(row.id);
@@ -627,8 +635,10 @@ export async function exportBankSheet(req, res, next) {
 // POST /admin/payslips/:id/unpublish — revert a published payslip to draft so it can be corrected
 export async function unpublish(req, res, next) {
   try {
+    const mine = await scopedByEmployee(req, 'payslips', req.params.id, { cols: 't.id' });
+    if (!mine) return res.status(404).json({ error: 'Payslip not found' });
     const row = (await query(
-      `UPDATE payslips SET status='DRAFT', published_at=NULL WHERE id=$1 RETURNING id`, [req.params.id])).rows[0];
+      `UPDATE payslips SET status='DRAFT', published_at=NULL WHERE id=$1 RETURNING id`, [mine.id])).rows[0];
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     await audit(req.user.id, 'PAYSLIP_UNPUBLISH', 'payslip', row.id, {});
     res.json({ ok: true });
@@ -638,13 +648,13 @@ export async function unpublish(req, res, next) {
 // DELETE /admin/payslips/:id — only drafts can be deleted
 export async function remove(req, res, next) {
   try {
-    const row = (await query(`SELECT status FROM payslips WHERE id=$1`, [req.params.id])).rows[0];
+    const row = await scopedByEmployee(req, 'payslips', req.params.id, { cols: 't.id, t.status' });
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     if (row.status === 'PUBLISHED') {
       return res.status(409).json({ error: 'Published payslips cannot be deleted. Unpublish it first.' });
     }
-    await query(`DELETE FROM payslips WHERE id=$1`, [req.params.id]);
-    await audit(req.user.id, 'PAYSLIP_DELETE', 'payslip', req.params.id, {});
+    await query(`DELETE FROM payslips WHERE id=$1`, [row.id]);
+    await audit(req.user.id, 'PAYSLIP_DELETE', 'payslip', row.id, {});
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -652,7 +662,7 @@ export async function remove(req, res, next) {
 // GET /admin/payslips/:id  — HR view (any status)
 export async function adminDetail(req, res, next) {
   try {
-    const row = (await query(`SELECT * FROM payslips WHERE id=$1`, [req.params.id])).rows[0];
+    const row = await scopedByEmployee(req, 'payslips', req.params.id);
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     res.json(shapePayslip(row));
   } catch (e) { next(e); }
@@ -661,7 +671,7 @@ export async function adminDetail(req, res, next) {
 // GET /admin/payslips/:id/pdf — HR download (any status)
 export async function adminPdf(req, res, next) {
   try {
-    const row = (await query(`SELECT * FROM payslips WHERE id=$1`, [req.params.id])).rows[0];
+    const row = await scopedByEmployee(req, 'payslips', req.params.id);
     if (!row) return res.status(404).json({ error: 'Payslip not found' });
     res.setHeader('Content-Type', 'application/pdf');
     res.setHeader('Content-Disposition', `inline; filename="payslip-${row.year}-${String(row.month).padStart(2, '0')}.pdf"`);

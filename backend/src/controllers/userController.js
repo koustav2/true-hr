@@ -4,6 +4,7 @@ import { hashPassword } from '../utils/password.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { credentialsEmail } from '../services/emailTemplates.js';
 import { audit } from '../utils/audit.js';
+import { scopedEmployee } from '../utils/scope.js';
 import { invalidateAccountStatus } from '../middleware/auth.js';
 
 // SUPER_ADMIN: list all staff + employee user accounts
@@ -160,8 +161,13 @@ export async function getAudit(req, res, next) {
 // Sets a temp password (returned once for hand-over + emailed), forces change on next login.
 export async function resetEmployeePassword(req, res, next) {
   try {
-    const emp = (await query(
-      `SELECT id, first_name, employee_code, official_email FROM employees WHERE id=$1`, [req.params.id])).rows[0];
+    // Scoped to the caller's own organisation. Unscoped, this was a
+    // cross-tenant account takeover: an admin of one tenant could reset any
+    // other tenant's employee login and read the temp password out of the
+    // response. 404 for "not yours" as well as "not found", so the endpoint
+    // cannot be used to enumerate another tenant's employee ids.
+    const emp = await scopedEmployee(req, req.params.id,
+      'e.id, e.first_name, e.employee_code, e.official_email');
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
     const acc = (await query(`SELECT * FROM user_accounts WHERE employee_id=$1`, [emp.id])).rows[0];
     if (!acc) return res.status(404).json({ error: 'No login account exists for this employee yet' });

@@ -186,9 +186,12 @@ export async function getEmployee(req, res, next) {
        LEFT JOIN employees rm ON rm.id=e.reporting_manager_id
        LEFT JOIN employees fm ON fm.id=e.function_manager_id
        LEFT JOIN employees om ON om.id=e.operational_manager_id
-       WHERE e.id=$1`, [id])).rows[0];
+       WHERE e.id=$1
+         AND ($2::bigint IS NULL OR e.organisation_id=$2)`, [id, req.orgId || null])).rows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
-    // A per-company admin may only open employees of their own company.
+    // A per-company admin may only open employees of their own company. The
+    // organisation predicate above is the tenant boundary: companyScope is NULL
+    // for an org-wide admin, so on its own it let any tenant's record through.
     if (req.companyScope && String(emp.company_id) !== String(req.companyScope)) {
       return res.status(404).json({ error: 'Employee not found' });
     }

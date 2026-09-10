@@ -1,6 +1,7 @@
 // Letters engine — template management + issue-and-store + PDF.
 // Parity with GreenHR's letter factory (10 built-in types + custom templates).
 import { query } from '../db/pool.js';
+import { ownsEmployee, scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
 import { LETTER_TYPES, buildLetter, placeholders } from '../services/letters.js';
 import { buildLetterPdf } from '../services/docPdf.js';
@@ -60,13 +61,22 @@ export async function issue(req, res) {
   const { employeeId, typeCode, templateId, data = {} } = req.body || {};
   const empId = parseInt(employeeId, 10);
   if (!Number.isFinite(empId)) return res.status(400).json({ error: 'employeeId is required.' });
+  // The employee must be the caller's own — otherwise a letter could be issued
+  // against another tenant's staff, merging their real details into it.
+  if (!(await ownsEmployee(req, empId))) return res.status(404).json({ error: 'Employee not found.' });
   const base = await employeeMergeData(empId);
   if (!base) return res.status(404).json({ error: 'Employee not found.' });
   const merge = { ...base, ...data };
 
   let tpl = { typeCode };
   if (templateId) {
-    const t = (await query(`SELECT * FROM letter_templates WHERE id=$1`, [templateId])).rows[0];
+    // letter_templates DOES carry organisation_id (see `types` and
+    // `saveTemplate`), so scope it the same way rather than rendering another
+    // tenant's custom wording into this letter.
+    const t = (await query(
+      `SELECT * FROM letter_templates
+        WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+      [templateId, req.orgId || null])).rows[0];
     if (!t) return res.status(404).json({ error: 'Template not found.' });
     tpl = { typeCode: t.type_code, customTitle: t.title, customBody: t.body };
   } else if (!LETTER_TYPES[typeCode]) {
@@ -84,16 +94,23 @@ export async function issue(req, res) {
 
 export async function listIssued(req, res) {
   const empId = req.query.employeeId ? parseInt(req.query.employeeId, 10) : null;
+  // issued_letters carries no organisation_id, so the tenant is reached
+  // through the employee. Without this the list showed every tenant's letters.
   const rows = (await query(
     `SELECT l.id, l.type_code, l.ref_no, l.title, l.issued_at, e.first_name, e.last_name, e.employee_code
        FROM issued_letters l JOIN employees e ON e.id=l.employee_id
-      WHERE ($1::bigint IS NULL OR l.employee_id=$1) ORDER BY l.issued_at DESC LIMIT 500`, [empId])).rows;
+      WHERE ($1::bigint IS NULL OR l.employee_id=$1)
+        AND ($2::bigint IS NULL OR e.organisation_id=$2)
+        AND ($3::bigint IS NULL OR e.company_id=$3)
+      ORDER BY l.issued_at DESC LIMIT 500`,
+    [empId, req.orgId || null, req.companyScope || null])).rows;
   res.json({ letters: rows });
 }
 
 export async function pdf(req, res) {
-  const id = parseInt(req.params.id, 10);
-  const row = (await query(`SELECT * FROM issued_letters WHERE id=$1`, [id])).rows[0];
+  // Unscoped, this served any tenant's letter PDF to anyone with the LETTERS
+  // module — body and all, rendered on the caller's own letterhead.
+  const row = await scopedByEmployee(req, 'issued_letters', req.params.id);
   if (!row) return res.status(404).json({ error: 'Letter not found.' });
   res.setHeader('Content-Type', 'application/pdf');
   res.setHeader('Content-Disposition', `inline; filename="letter-${row.ref_no || row.id}.pdf"`);

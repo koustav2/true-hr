@@ -25,14 +25,52 @@ const MANAGER_COLS = {
   MATRIX_MANAGER: 'operational_manager_id',
 };
 
-async function resolveApprover(stage, employeeId, ctx) {
-  if (stage.resolver_type === 'named_user') return stage.default_approver_employee_id || null;
+/** The organisation an approval belongs to: the raiser's. */
+async function orgOfEmployee(employeeId) {
+  if (!employeeId) return null;
+  const r = await query(`SELECT organisation_id FROM employees WHERE id=$1`, [employeeId]);
+  return r.rows[0]?.organisation_id ?? null;
+}
+
+/**
+ * Only accept an approver who is in the same organisation as the raiser.
+ *
+ * Every branch below can produce an employee id from configuration or from
+ * legacy data, and none of it was checked. approver_matrix in particular had no
+ * owner at all until schema_tenancy.sql §17, so a tenant's chain could resolve
+ * to another tenant's employee — who would then be able to act on it. A
+ * cross-org id is treated as unresolved, which is the case the flow already
+ * handles: the stage bypasses if it is optional, and otherwise stays WAITING
+ * with a warning for staff to override.
+ */
+async function sameOrg(approverId, orgId) {
+  if (!approverId) return null;
+  if (orgId == null) return approverId;          // platform-level, nothing to compare
+  const r = await query(
+    `SELECT 1 FROM employees WHERE id=$1 AND organisation_id=$2`, [approverId, orgId]);
+  return r.rowCount ? approverId : null;
+}
+
+async function resolveApprover(stage, employeeId, ctx, orgId = undefined) {
+  // Resolve the tenant once if the caller did not. Passing it in is cheaper —
+  // this runs per stage — but deriving it here means no call site can omit it.
+  const org = orgId === undefined ? await orgOfEmployee(employeeId) : orgId;
+  const fallback = () => sameOrg(stage.default_approver_employee_id || null, org);
+
+  if (stage.resolver_type === 'named_user') return fallback();
 
   if (stage.resolver_type === 'manager_chain') {
     const col = MANAGER_COLS[stage.role_key];
-    if (!col) return stage.default_approver_employee_id || null;
-    const r = await query(`SELECT ${col} AS mgr FROM employees WHERE id=$1`, [employeeId]);
-    return r.rows[0]?.mgr || stage.default_approver_employee_id || null;
+    if (!col) return fallback();
+    // The manager must be inside the raiser's organisation. updateEmployee and
+    // createEmployee now validate that when a manager is assigned, but rows
+    // written before that check could still point across tenants.
+    const r = await query(
+      `SELECT m.id AS mgr
+         FROM employees e
+         JOIN employees m ON m.id = e.${col}
+        WHERE e.id = $1 AND m.organisation_id = e.organisation_id`, [employeeId]);
+    return r.rows[0]?.mgr || await fallback();
   }
 
   if (stage.resolver_type === 'matrix') {
@@ -44,11 +82,12 @@ async function resolveApprover(stage, employeeId, ctx) {
           AND (project_id          IS NULL OR project_id          = $2)
           AND (expense_category_id IS NULL OR expense_category_id = $3)
           AND (zone_id             IS NULL OR zone_id             = $4)
+          AND ($5::bigint IS NULL OR organisation_id = $5)
         ORDER BY (project_id IS NOT NULL)::int + (expense_category_id IS NOT NULL)::int + (zone_id IS NOT NULL)::int DESC
         LIMIT 1`,
-      [stage.role_key, ctx.projectId || null, ctx.expenseCategoryId || null, ctx.zoneId || null]
+      [stage.role_key, ctx.projectId || null, ctx.expenseCategoryId || null, ctx.zoneId || null, org]
     );
-    return r.rows[0]?.approver_employee_id || stage.default_approver_employee_id || null;
+    return await sameOrg(r.rows[0]?.approver_employee_id, org) || await fallback();
   }
   return null;
 }
@@ -60,13 +99,18 @@ export async function previewChain(flowCode, employeeId, ctx = {}) {
        JOIN approval_flows f ON f.id = s.flow_id
       WHERE f.code = $1 AND f.active ORDER BY s.seq`, [flowCode])).rows;
   const out = [];
+  const orgId = await orgOfEmployee(employeeId);
   for (const s of stages) {
-    const approverId = await resolveApprover(s, employeeId, ctx);
+    const approverId = await resolveApprover(s, employeeId, ctx, orgId);
     let approver = null;
     if (approverId) {
+      // Belt and braces: resolveApprover already refuses a cross-org approver,
+      // so this predicate should never be what filters a row out — but a
+      // preview is read straight back to a user, and it costs nothing here.
       const e = (await query(
-        `SELECT id, employee_code, first_name, last_name, official_email FROM employees WHERE id=$1`,
-        [approverId])).rows[0];
+        `SELECT id, employee_code, first_name, last_name, official_email FROM employees
+          WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+        [approverId, orgId])).rows[0];
       if (e) approver = { id: e.id, employeeCode: e.employee_code, name: `${e.first_name} ${e.last_name}`.trim(), email: e.official_email };
     }
     out.push({ seq: s.seq, roleKey: s.role_key, approver, willBypass: !approverId && s.optional_bypass });
@@ -162,8 +206,9 @@ export async function createInstance(flowCode, subjectType, subjectId, raisedByE
      VALUES ($1,$2,$3,$4,$5) RETURNING *`,
     [flow.id, subjectType, subjectId, raisedByEmployeeId, JSON.stringify(ctx)])).rows[0];
 
+  const orgId = await orgOfEmployee(raisedByEmployeeId);
   for (const s of stages) {
-    const approverId = await resolveApprover(s, raisedByEmployeeId, ctx);
+    const approverId = await resolveApprover(s, raisedByEmployeeId, ctx, orgId);
     await query(
       `INSERT INTO approval_instance_stages (instance_id, seq, role_key, approver_employee_id)
        VALUES ($1,$2,$3,$4)`, [inst.id, s.seq, s.role_key, approverId]);

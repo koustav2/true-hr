@@ -21,6 +21,42 @@ function def(req, res) {
   if (!d) res.status(404).json({ error: 'Unknown master type' });
   return d;
 }
+
+// Which of the whitelisted columns are foreign keys to ANOTHER master, and the
+// table each points at. Scoping the row itself was not enough: these ids come
+// off the request body and nothing checked whose master they named, so a header
+// could be hung under another tenant's category — where it would then show up
+// in that tenant's cascading dropdowns.
+const PARENT_OF = {
+  business_operation_id: 'business_operations',
+  group_company_id: 'group_companies',
+  category_id: 'expense_categories',
+  header_id: 'expense_headers',
+};
+
+/**
+ * Check every parent id in the body belongs to the caller.
+ *
+ * Deliberately tolerant of an ownerless parent (organisation_id IS NULL): on a
+ * multi-organisation deployment the §17 backfill could not work out who owns
+ * the masters it inherited, and refusing those would break master creation
+ * outright rather than securing it. A parent owned by a DIFFERENT tenant is
+ * always refused. Returns an error string, or null when everything is fine.
+ */
+async function badParent(req, d, body) {
+  for (const col of d.cols) {
+    const table = PARENT_OF[col];
+    if (!table) continue;
+    const v = body[camel(col)] ?? body[col];
+    if (v == null || v === '') continue;
+    const ok = await query(
+      `SELECT 1 FROM ${table}
+        WHERE id = $1 AND (organisation_id IS NULL OR $2::bigint IS NULL OR organisation_id = $2)`,
+      [v, req.orgId || null]);
+    if (!ok.rowCount) return `${camel(col)} does not exist in your organisation`;
+  }
+  return null;
+}
 // Every statement below carries `($n::bigint IS NULL OR organisation_id = $n)`.
 // The masters had no organisation column at all, so this whole controller ran
 // deployment-wide: one tenant's admin listed, renamed, deactivated and deleted
@@ -56,6 +92,8 @@ export async function create(req, res, next) {
       if (v !== undefined && v !== '') { cols.push(c); params.push(v); vals.push(`$${params.length}`); }
     }
     if (!cols.includes('name')) return res.status(400).json({ error: 'name is required' });
+    const parentErr = await badParent(req, d, body);
+    if (parentErr) return res.status(400).json({ error: parentErr });
     // Stamp the owner, or the new row would be another ownerless master.
     cols.push('organisation_id'); params.push(req.orgId || null); vals.push(`$${params.length}`);
     const row = (await query(
@@ -79,6 +117,8 @@ export async function update(req, res, next) {
       if (v !== undefined) { params.push(v === '' ? null : v); sets.push(`${c}=$${params.length}`); }
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+    const parentErr = await badParent(req, d, body);
+    if (parentErr) return res.status(400).json({ error: parentErr });
     params.push(Number(req.params.id));
     const idParam = params.length;
     params.push(req.orgId || null);

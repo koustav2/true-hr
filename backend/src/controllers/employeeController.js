@@ -62,6 +62,23 @@ export async function createEmployee(req, res, next) {
       if (olMime !== 'application/pdf') return res.status(400).json({ error: 'Offer letter must be a PDF' });
     }
 
+    // The same manager check updateEmployee does. These three are plain FKs to
+    // employees and nothing verified WHOSE employee, so a crafted id could put
+    // another organisation's person in this employee's chain — where orgChart's
+    // self-join, every "my manager" lookup and the approval engine's
+    // manager_chain resolver would all pick them up.
+    for (const [key, label] of [
+      ['reportingManagerId', 'Reporting manager'],
+      ['functionManagerId', 'Function manager'],
+      ['operationalManagerId', 'Operational manager'],
+    ]) {
+      const v = b[key];
+      if (v == null || v === '') continue;
+      if (!(await ownsEmployee(req, v))) {
+        return res.status(400).json({ error: `${label} not found in your organisation` });
+      }
+    }
+
     const result = await tx(async (c) => {
       const emp = (await c.query(
         `INSERT INTO employees

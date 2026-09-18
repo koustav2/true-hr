@@ -1,5 +1,6 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { checkUpload, sendAttachment, ANY_KINDS } from '../utils/uploads.js';
 
 // Fixed catalogue of company documents. These titles always appear in the app (static
 // list); HR uploads the actual PDF against each from the admin portal, and employees can
@@ -76,10 +77,8 @@ export async function file(req, res, next) {
         WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
       [req.params.id, req.orgId || null])).rows[0];
     if (!row?.file) return res.status(404).json({ error: 'Policy not found' });
-    res.setHeader('Content-Type', row.mime || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${(row.filename || 'policy').replace(/[^\x20-\x7E]/g, '_')}"`);
-    res.setHeader('Cache-Control', 'private, max-age=86400');
-    res.send(Buffer.from(row.file, 'base64'));
+    sendAttachment(res, { data: row.file, mime: row.mime,
+      name: row.filename, fallbackName: 'policy' });
   } catch (e) { next(e); }
 }
 
@@ -114,10 +113,17 @@ export async function create(req, res, next) {
     await query(
       `DELETE FROM policies WHERE title=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
       [title, req.orgId || null]);
+    // Staff-uploaded, but every employee downloads it, so it goes through the
+    // same allowlist as anything else a person supplies. 10MB: policy handbooks
+    // are the largest legitimate upload in the product.
+    const doc = checkUpload({
+      data: fileB64, mime, name: filename, label: 'policy document',
+      maxMb: 10, kinds: ANY_KINDS, required: true,
+    });
     const row = (await query(
       `INSERT INTO policies (title, category, file, mime, filename, uploaded_by, policy_type_id, organisation_id)
        VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
-      [title, category || null, fileB64, mime || null, filename || null,
+      [title, category || null, doc.data, doc.mime, doc.name,
        req.user.employeeId || null, typeId, req.orgId || null])).rows[0];
     await audit(req.user.id, 'POLICY_CREATE', 'policy', row.id, { title });
     res.status(201).json({ ok: true, id: row.id });

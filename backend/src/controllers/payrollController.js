@@ -445,9 +445,13 @@ export async function generateFor(employeeId, year, month, opts, reqUser) {
     unexplainedDays: auto.unexplainedDays,
     manualOverride: opts.daysPaid != null && opts.daysPaid !== '',
   } : { basis: 'CALENDAR', payableDays: auto.payableDays, lopDays: auto.lopDays };
+  // The pay engine's own warnings ride along with the attendance ones, so an
+  // over-CTC salary structure shows up on the run sheet HR already reviews
+  // instead of being silently paid.
+  const warnings = [...(auto.warnings || []), ...(calc.warnings || [])];
   const data = {
     earnings: calc.earnings, deductions: calc.deductions, arrears: calc.arrears, meta,
-    warnings: auto.warnings || [],
+    warnings,
   };
 
   const row = (await query(
@@ -473,7 +477,7 @@ export async function generateFor(employeeId, year, month, opts, reqUser) {
      auto.presentDays ?? null, auto.leaveDays ?? null, auto.holidayDays ?? null,
      auto.weekOffDays ?? null, auto.lopDays ?? 0, auto.unexplainedDays ?? 0, auto.basis || 'CALENDAR'])).rows[0];
   await audit(reqUser.id, 'PAYSLIP_GENERATE', 'payslip', row.id, { employeeId, year, month });
-  return { ok: true, row, warnings: auto.warnings || [] };
+  return { ok: true, row, warnings };
 }
 
 // POST /admin/payslips/generate { employeeId, year, month, daysPaid?, arrears, bonus, tds }

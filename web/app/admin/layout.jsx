@@ -117,8 +117,16 @@ const SECTIONS = [
 ];
 
 const ALL = SECTIONS.flatMap((s) => s.items);
-// The platform owner (Master) manages only organisations — nothing else shows.
-const MASTER = [{ href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' }];
+// The platform owner (Master) manages only organisations and the master-ticket
+// inbox — nothing else shows.
+const MASTER = [
+  { href: '/admin/organisations', label: 'Organisations', Icon: IconBriefcase, module: 'ORGANISATIONS' },
+  { href: '/admin/platform-tickets', label: 'Master tickets', Icon: IconShield, module: 'ORGANISATIONS' },
+];
+// Routes the Master is allowed to stand on. Anything else bounces back to the
+// organisation list, so this list and the MASTER nav must stay in step.
+const MASTER_PATHS = MASTER.map((i) => i.href);
+const isMasterPath = (pathname) => MASTER_PATHS.some((p) => pathname.startsWith(p));
 
 const ROLE_BADGE = {
   MASTER: 'bg-shell/10 text-shell',
@@ -317,7 +325,7 @@ function AdminShell({ children }) {
   // The Master (platform owner) works only in the Master Admin section — any
   // other admin route bounces back, so the organisation list is the whole surface.
   useEffect(() => {
-    if (ready && auth?.token && isPlatformAdmin && !pathname.startsWith('/admin/organisations')) {
+    if (ready && auth?.token && isPlatformAdmin && !isMasterPath(pathname)) {
       router.replace('/admin/organisations');
     }
   }, [ready, auth, isPlatformAdmin, pathname, router]);
@@ -337,7 +345,7 @@ function AdminShell({ children }) {
   // Route-level permission gate. Nav hides links, but a directly-typed URL would
   // still render; block it unless the live permissions allow this section.
   const firstAllowed = ALL.find((i) => canView(i.module));
-  const masterElsewhere = isPlatformAdmin && !pathname.startsWith('/admin/organisations');
+  const masterElsewhere = isPlatformAdmin && !isMasterPath(pathname);
   const blocked = !isPlatformAdmin && current && !canView(current.module);
 
   const SidebarBody = ({ collapsed }) => (
@@ -370,6 +378,17 @@ function AdminShell({ children }) {
             <div className="text-[12px] font-semibold text-ink truncate">{user?.email}</div>
             <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
           </div>
+        )}
+        {/* A line to us, not to this organisation's own HR/IT desk. Outside the
+            module system on purpose: every login must be able to reach us, even
+            when their roles grant them almost nothing. */}
+        {!isPlatformAdmin && (
+          <Link href="/admin/help" onClick={() => setMobileOpen(false)} title="Contact TrueHR"
+            className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+              isActive('/admin/help') ? 'text-brand-700 bg-brand-50' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+            } ${collapsed ? 'justify-center' : ''}`}>
+            <IconSupport className="text-ink-faint" />{!collapsed && 'Contact TrueHR'}
+          </Link>
         )}
         <button onClick={() => { logout(); router.replace('/login'); }} title="Sign out"
           className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>

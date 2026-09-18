@@ -223,3 +223,37 @@ export function approvalPendingEmail({ name, subjectLabel, raiserName, details }
     <p>${btn(`${PORTAL}/ess/approvals`, 'Review & approve')}</p>
   `);
 }
+
+// ---- Master tickets (platform support) ----
+// Raised inside a tenant, read only by the platform owner. The alert has to be
+// self-contained: we should be able to triage from a phone without logging in.
+const esc = (s) => String(s ?? '')
+  .replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+
+export function platformTicketRaisedEmail({
+  code, subject, description, orgName, raiserName, raiserRole,
+  contactEmail, contactPhone, hasScreenshot,
+}) {
+  const reach = [contactEmail, contactPhone].filter(Boolean).join(' · ') || '—';
+  return shell(`New master ticket · ${esc(code)}`, `
+    <p style="margin:0 0 14px"><strong>${esc(subject)}</strong></p>
+    <table style="width:100%;border-collapse:collapse;font-size:13px;margin:0 0 16px">
+      <tr><td style="padding:5px 0;color:#6b7280;width:130px">Organisation</td><td style="padding:5px 0"><strong>${esc(orgName)}</strong></td></tr>
+      <tr><td style="padding:5px 0;color:#6b7280">Raised by</td><td style="padding:5px 0">${esc(raiserName)}${raiserRole ? ` <span style="color:#6b7280">(${esc(raiserRole)})</span>` : ''}</td></tr>
+      <tr><td style="padding:5px 0;color:#6b7280">Reach them at</td><td style="padding:5px 0">${esc(reach)}</td></tr>
+      <tr><td style="padding:5px 0;color:#6b7280">Screenshot</td><td style="padding:5px 0">${hasScreenshot ? 'Attached — open the ticket to download' : 'None'}</td></tr>
+    </table>
+    <div style="background:#f8fafc;border-left:3px solid #94a3b8;padding:12px 14px;white-space:pre-wrap;font-size:13.5px;line-height:1.6">${esc(description)}</div>
+  `, '#334155');
+}
+
+export function platformTicketRepliedEmail({ code, subject, status, reply, name }) {
+  const label = { OPEN: 'Open', IN_PROGRESS: 'In progress', RESOLVED: 'Resolved', CLOSED: 'Closed' }[status] || status;
+  return shell(`Your request · ${esc(code)}`, `
+    <p style="margin:0 0 6px">Hi ${esc(name || 'there')},</p>
+    <p style="margin:0 0 16px">we have an update on <strong>${esc(subject)}</strong>. It is now
+      <strong>${esc(label)}</strong>.</p>
+    <div style="background:#f0fdf4;border-left:3px solid #059669;padding:12px 14px;white-space:pre-wrap;font-size:13.5px;line-height:1.6">${esc(reply)}</div>
+    <p style="margin:16px 0 0;color:#6b7280;font-size:12.5px">Reply to this email if it still isn&rsquo;t right &mdash; quote ${esc(code)}.</p>
+  `);
+}

@@ -33,6 +33,9 @@ export const config = {
   appLoginUrl: process.env.APP_LOGIN_URL || '',
   appDownloadUrl: process.env.APP_DOWNLOAD_URL || 'https://play.google.com/store/apps/details?id=com.truehr.app',
   offerExpiryDays: parseFloat(process.env.OFFER_EXPIRY_DAYS || '3'), // offer link validity (days)
+  // Where master tickets (raised by any tenant, read only by us) are announced.
+  // Unset = the platform inbox is the only place they appear.
+  platformSupportEmail: process.env.PLATFORM_SUPPORT_EMAIL || '',
   // When true, payroll derives Professional Tax from the employee's work state
   // (statutoryRates slabs) instead of the fixed structure value. Default off so
   // existing runs are byte-for-byte unchanged until an org opts in.

@@ -162,10 +162,10 @@ export async function create(req, res, next) {
 
     const inst = await engine.createInstance('NFA', 'nfa', nfa.id, empId, {
       projectId: b.projectId, expenseCategoryId: b.expenseCategoryId, zoneId: b.zoneId,
-    }, req.user.sub);
+    }, req.user.id);
     await query(`UPDATE nfas SET approval_instance_id=$2 WHERE id=$1`, [nfa.id, inst.id]);
     await syncStatus(nfa.id, inst);
-    await audit(req.user.sub, 'NFA_CREATED', 'nfa', nfa.id, { code: nfa.nfa_code, grandTotal: nfa.grand_total });
+    await audit(req.user.id, 'NFA_CREATED', 'nfa', nfa.id, { code: nfa.nfa_code, grandTotal: nfa.grand_total });
     res.status(201).json(await detailById(nfa.id));
   } catch (e) { next(e); }
 }
@@ -273,7 +273,7 @@ export async function actOn(req, res, next) {
     if (!nfa.approval_instance_id) return res.status(409).json({ error: 'No approval chain' });
     const { action, remarks } = req.body || {};
     const inst = await engine.act(nfa.approval_instance_id, req.user.employeeId, action, remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
+      isStaff: isStaff(req.user), actorUserId: req.user.id, orgId: req.orgId,
     });
     await syncStatus(id, inst);
     res.json(await detailById(id));
@@ -286,7 +286,7 @@ export async function resubmit(req, res, next) {
     const id = Number(req.params.id);
     const nfa = (await query(`SELECT * FROM nfas WHERE id=$1`, [id])).rows[0];
     if (!nfa) return res.status(404).json({ error: 'Not found' });
-    const inst = await engine.resubmit(nfa.approval_instance_id, req.user.employeeId, (req.body || {}).remarks, req.user.sub);
+    const inst = await engine.resubmit(nfa.approval_instance_id, req.user.employeeId, (req.body || {}).remarks, req.user.id);
     await syncStatus(id, inst);
     res.json(await detailById(id));
   } catch (e) { next(e); }
@@ -337,7 +337,7 @@ export async function update(req, res, next) {
       }
       if (sets.length) await client.query(`UPDATE nfas SET ${sets.join(', ')}, updated_at=now() WHERE id=$1`, params);
     });
-    await audit(req.user.sub, 'NFA_EDITED_BY_APPROVER', 'nfa', id, { remark: b.updateRemark });
+    await audit(req.user.id, 'NFA_EDITED_BY_APPROVER', 'nfa', id, { remark: b.updateRemark });
     res.json(await detailById(id));
   } catch (e) { next(e); }
 }
@@ -360,7 +360,7 @@ export async function releasePayment(req, res, next) {
       `UPDATE nfas SET status='PAYMENT_RELEASED', status_label=NULL, settlement_status='PENDING',
               payment_released_at=now(), payment_released_by=$2, updated_at=now()
         WHERE id=$1`, [id, req.user.employeeId]);
-    await audit(req.user.sub, 'NFA_PAYMENT_RELEASED', 'nfa', id, { code: nfa.nfa_code, amount: nfa.grand_total });
+    await audit(req.user.id, 'NFA_PAYMENT_RELEASED', 'nfa', id, { code: nfa.nfa_code, amount: nfa.grand_total });
     res.json(await detailById(id));
   } catch (e) { next(e); }
 }

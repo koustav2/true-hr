@@ -105,7 +105,7 @@ export async function createKpi(req, res, next) {
       }
       return k;
     });
-    await audit(req.user.sub, 'KPI_CREATED', 'kpi', kpi.id, { year, month });
+    await audit(req.user.id, 'KPI_CREATED', 'kpi', kpi.id, { year, month });
     res.status(201).json(await kpiDetail(kpi.id));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'KPI already exists for this month' });
@@ -211,7 +211,7 @@ export async function reviewKpi(req, res, next) {
     await query(
       `UPDATE kpis SET status=$2, approved_by=$3, approved_at = CASE WHEN $2='LOCKED' THEN now() ELSE approved_at END WHERE id=$1`,
       [id, action === 'APPROVE' ? 'LOCKED' : 'DISCUSS', me]);
-    await audit(req.user.sub, `KPI_${action}`, 'kpi', id, {});
+    await audit(req.user.id, `KPI_${action}`, 'kpi', id, {});
     res.json(await kpiDetail(id));
   } catch (e) { next(e); }
 }
@@ -274,9 +274,9 @@ export async function submitPms(req, res, next) {
       }
       return s;
     });
-    const inst = await engine.createInstance('PMS_RATING', 'pms', sub.id, k.employee_id, {}, req.user.sub);
+    const inst = await engine.createInstance('PMS_RATING', 'pms', sub.id, k.employee_id, {}, req.user.id);
     await query(`UPDATE pms_submissions SET approval_instance_id=$2 WHERE id=$1`, [sub.id, inst.id]);
-    await audit(req.user.sub, 'PMS_SUBMITTED', 'pms', sub.id, { kpiId: id, selfRating });
+    await audit(req.user.id, 'PMS_SUBMITTED', 'pms', sub.id, { kpiId: id, selfRating });
     res.status(201).json(await kpiDetail(id));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'PMS already submitted for this month' });
@@ -343,7 +343,7 @@ export async function rate(req, res, next) {
     const before = await engine.getInstance(s.approval_instance_id);
     const stage = before.chain.find((x) => x.seq === before.currentStageSeq);
     const inst = await engine.act(s.approval_instance_id, req.user.employeeId, 'APPROVED', b.remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
+      isStaff: isStaff(req.user), actorUserId: req.user.id, orgId: req.orgId,
     });
 
     await query(
@@ -367,7 +367,7 @@ export async function rate(req, res, next) {
         `UPDATE pms_submissions SET status='FUNCTIONAL_APPROVED', final_grade=$2, final_pli_pct=$3 WHERE id=$1`,
         [id, grade?.code || null, num(b.pliPct)]);
     }
-    await audit(req.user.sub, 'PMS_RATED', 'pms', id, { roleKey: stage.roleKey, pliPct: num(b.pliPct) });
+    await audit(req.user.id, 'PMS_RATED', 'pms', id, { roleKey: stage.roleKey, pliPct: num(b.pliPct) });
     const kpiId = (await query(`SELECT kpi_id FROM pms_submissions WHERE id=$1`, [id])).rows[0].kpi_id;
     res.json(await kpiDetail(kpiId));
   } catch (e) { next(e); }

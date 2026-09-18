@@ -29,11 +29,20 @@ async function proxy(request, { params }) {
     });
   }
 
-  const body = await resp.arrayBuffer();
-  return new Response(body, {
-    status: resp.status,
-    headers: { 'content-type': resp.headers.get('content-type') || 'application/json' },
-  });
+  // Forward the headers a download actually needs. Rebuilding the response with
+  // content-type alone dropped Content-Disposition, so payslip PDFs and Excel
+  // exports arrived with no filename — and, now that attachments are served as
+  // downloads, without the header that makes them download at all.
+  const out = new Headers();
+  for (const h of ['content-type', 'content-disposition', 'content-length',
+    'x-content-type-options', 'cache-control']) {
+    const v = resp.headers.get(h);
+    if (v) out.set(h, v);
+  }
+  if (!out.has('content-type')) out.set('content-type', 'application/json');
+  // Stream it through rather than await resp.arrayBuffer(): a large export was
+  // held whole in this process's memory before a byte reached the browser.
+  return new Response(resp.body, { status: resp.status, headers: out });
 }
 
 export {

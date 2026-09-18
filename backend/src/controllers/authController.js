@@ -243,12 +243,39 @@ export async function myPhoto(req, res, next) {
   } catch (e) { next(e); }
 }
 
+// POST /auth/change-password { currentPassword?, newPassword }
+//
+// The current password is required, except on the forced first change, where the
+// account is still on the credentials we emailed and the person has nothing else
+// to type. Without this, any moment of token exposure — a borrowed laptop, a
+// stolen phone, one XSS — became permanent ownership of the account, and locked
+// the real user out rather than merely riding along.
 export async function changePassword(req, res, next) {
   try {
-    const { newPassword } = req.body;
-    if (!newPassword || newPassword.length < 8) return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    const { currentPassword, newPassword } = req.body || {};
+    if (!newPassword || newPassword.length < 8) {
+      return res.status(400).json({ error: 'Password must be at least 8 characters' });
+    }
+    const acc = (await query(
+      `SELECT password_hash, must_change_password FROM user_accounts WHERE id=$1`,
+      [req.user.id])).rows[0];
+    if (!acc) return res.status(404).json({ error: 'Account not found' });
+
+    if (!acc.must_change_password) {
+      if (!currentPassword) return res.status(400).json({ error: 'Enter your current password' });
+      if (!(await verifyPassword(currentPassword, acc.password_hash))) {
+        return res.status(403).json({ error: 'That is not your current password' });
+      }
+      if (currentPassword === newPassword) {
+        return res.status(400).json({ error: 'Choose a password you have not used here before' });
+      }
+    }
+
     const hash = await hashPassword(newPassword);
     await query(`UPDATE user_accounts SET password_hash=$1, must_change_password=false WHERE id=$2`, [hash, req.user.id]);
+    await audit(req.user.id, 'PASSWORD_CHANGED', 'user_account', req.user.id, {
+      forced: !!acc.must_change_password,
+    });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }

@@ -1304,3 +1304,39 @@ CREATE TABLE IF NOT EXISTS scheduled_notifications (
   created_at      TIMESTAMPTZ NOT NULL DEFAULT now()
 );
 CREATE INDEX IF NOT EXISTS idx_sched_notif_due ON scheduled_notifications(active, next_run_at);
+
+-- Master tickets (platform support) -----------------------------------------
+-- The one channel that crosses the tenant boundary on purpose: anyone with a
+-- login raises one, and only the platform owner can read them. Not scoped by
+-- organisation on read, because the complaint may be *about* the organisation.
+CREATE TABLE IF NOT EXISTS platform_tickets (
+  id              BIGSERIAL PRIMARY KEY,
+  ticket_code     TEXT UNIQUE,
+  organisation_id BIGINT REFERENCES organisations(id) ON DELETE SET NULL,
+  raised_by       BIGINT REFERENCES user_accounts(id) ON DELETE SET NULL,
+  -- Snapshot of the raiser: the account may be renamed, disabled or its
+  -- organisation suspended, and the ticket must still say who asked.
+  raiser_name     TEXT,
+  raiser_email    TEXT,
+  raiser_role     TEXT,
+  subject         TEXT NOT NULL,
+  description     TEXT NOT NULL,
+  contact_email   TEXT,
+  contact_phone   TEXT,
+  screenshot      TEXT,
+  screenshot_mime TEXT,
+  screenshot_name TEXT,
+  status          TEXT NOT NULL DEFAULT 'OPEN'
+                  CHECK (status IN ('OPEN','IN_PROGRESS','RESOLVED','CLOSED')),
+  reply           TEXT,
+  replied_at      TIMESTAMPTZ,
+  replied_by      BIGINT REFERENCES user_accounts(id),
+  created_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  updated_at      TIMESTAMPTZ NOT NULL DEFAULT now(),
+  -- One of email or phone must be present, enforced at the table so no future
+  -- caller can bypass the controller and leave us with no way to reply.
+  CONSTRAINT platform_tickets_contact_present
+    CHECK (contact_email IS NOT NULL OR contact_phone IS NOT NULL)
+);
+CREATE INDEX IF NOT EXISTS idx_platform_tickets_queue  ON platform_tickets(status, created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_platform_tickets_raiser ON platform_tickets(raised_by, created_at DESC);

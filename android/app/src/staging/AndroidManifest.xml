@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  Staging-only overlay. The staging build talks to http://<host>:4000, so it
+  needs cleartext permission — but prod talks to https://api.truehr.co.in and
+  must keep the platform's refusal to fall back to plaintext. This flag used to
+  live in the main manifest, where it applied to release builds too.
+-->
+<manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <application android:usesCleartextTraffic="true" />
+</manifest>

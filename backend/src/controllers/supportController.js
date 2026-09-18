@@ -1,6 +1,7 @@
 import { query } from '../db/pool.js';
 import { scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
+import { checkUpload, sendAttachment, DOC_KINDS } from '../utils/uploads.js';
 
 // Static issue catalog (mirrors the Support Desk dropdowns). Served to the app so
 // the dropdowns are data-driven; can be moved to a table later if HR needs to edit.
@@ -70,10 +71,18 @@ export async function create(req, res, next) {
     const detailList = CATALOG[cat].details[issueType];
     if (detailList && detailList.length && !issueDetail) return res.status(400).json({ error: 'Please select an issue detail' });
 
+    // The type is ours to decide and the size is capped — an unbounded, freely
+    // typed attachment was both a stored-XSS vector and a way to fill the disk.
+    const file = checkUpload({
+      data: attachment, mime: attachmentMime, name: req.body?.attachmentName,
+      label: 'attachment', maxMb: 5, kinds: DOC_KINDS,
+    });
     const row = (await query(
-      `INSERT INTO support_tickets (employee_id, category, issue_type, issue_detail, description, attachment, attachment_mime)
-       VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
-      [empId, cat, issueType, issueDetail || null, description || null, attachment || null, attachmentMime || null])).rows[0];
+      `INSERT INTO support_tickets (employee_id, category, issue_type, issue_detail, description,
+                                    attachment, attachment_mime, attachment_name)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
+      [empId, cat, issueType, issueDetail || null, description || null,
+       file?.data || null, file?.mime || null, file?.name || null])).rows[0];
     await audit(req.user.id, 'SUPPORT_CREATE', 'support_ticket', row.id, { category: cat, issueType });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }
@@ -159,11 +168,12 @@ export async function adminAttachment(req, res, next) {
   try {
     // Unscoped, this served the document attached to any tenant's ticket.
     const row = await scopedByEmployee(req, 'support_tickets', req.params.id,
-      { cols: 't.attachment, t.attachment_mime' });
+      { cols: 't.attachment, t.attachment_mime, t.attachment_name' });
     if (!row?.attachment) return res.status(404).json({ error: 'No attachment' });
-    res.setHeader('Content-Type', row.attachment_mime || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'private, max-age=86400');
-    res.send(Buffer.from(row.attachment, 'base64'));
+    // Served as a download with a type we chose: HR opening a ticket attachment
+    // must not be able to execute whatever the employee uploaded.
+    sendAttachment(res, { data: row.attachment, mime: row.attachment_mime,
+      name: row.attachment_name, fallbackName: `ticket-${req.params.id}` });
   } catch (e) { next(e); }
 }
 
@@ -171,11 +181,12 @@ export async function adminAttachment(req, res, next) {
 export async function attachment(req, res, next) {
   try {
     const empId = req.user.employeeId;
-    const row = (await query(`SELECT employee_id, attachment, attachment_mime FROM support_tickets WHERE id=$1`, [req.params.id])).rows[0];
+    const row = (await query(
+      `SELECT employee_id, attachment, attachment_mime, attachment_name FROM support_tickets WHERE id=$1`,
+      [req.params.id])).rows[0];
     if (!row?.attachment) return res.status(404).json({ error: 'No attachment' });
-    if (row.employee_id !== empId) return res.status(403).json({ error: 'Not allowed' });
-    res.setHeader('Content-Type', row.attachment_mime || 'application/octet-stream');
-    res.setHeader('Cache-Control', 'private, max-age=86400');
-    res.send(Buffer.from(row.attachment, 'base64'));
+    if (String(row.employee_id) !== String(empId)) return res.status(403).json({ error: 'Not allowed' });
+    sendAttachment(res, { data: row.attachment, mime: row.attachment_mime,
+      name: row.attachment_name, fallbackName: `ticket-${req.params.id}` });
   } catch (e) { next(e); }
 }

@@ -13,7 +13,11 @@ import { startNotificationScheduler } from './services/notificationScheduler.js'
 import { pool } from './db/pool.js';
 
 const app = express();
-app.set('trust proxy', true);
+// One hop only (the host nginx). `true` trusts every hop, which makes req.ip
+// the leftmost X-Forwarded-For entry — a value the client sets. The rate
+// limiters key on it, so rotating the header defeated the login and
+// password-reset limits entirely. Set TRUST_PROXY_HOPS if a CDN is added.
+app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 
 // ── Security headers (API-only service: no CSP needed, keep the rest) ───────
 app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
@@ -45,8 +49,13 @@ app.use('/api/auth/reset-password', authLimiter);
 app.use('/api', apiLimiter);
 
 // ── Health probes ────────────────────────────────────────────────────────────
-app.get('/health', (req, res) => res.json({ ok: true, service: 'truehr-api' }));
-app.get('/health/ready', async (req, res) => {
+// Mounted twice on purpose. nginx only forwards `^~ /api/`, so the bare paths
+// were unreachable from outside and both documented verification commands 404'd
+// — nothing was actually watching the API.
+const health = (req, res) => res.json({ ok: true, service: 'truehr-api' });
+app.get('/health', health);
+app.get('/api/health', health);
+app.get(['/health/ready', '/api/health/ready'], async (req, res) => {
   try { await pool.query('SELECT 1'); res.json({ ok: true, db: 'up' }); }
   catch { res.status(503).json({ ok: false, db: 'down' }); }
 });

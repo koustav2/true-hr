@@ -226,6 +226,101 @@ async function main() {
     console.warn('[migrate] could not create unique official_email index (duplicate emails exist?):', e.message);
   }
 
+  // ── Structure moves from company scope to organisation scope ──────────────
+  // See schema_tenancy.sql §27. Three steps, in this order, because a unique
+  // index cannot exist while the duplicates it forbids are still there:
+  //   1. stamp organisation_id on every row, read through its company
+  //   2. merge rows that are now duplicates within one organisation, keeping
+  //      the lowest id and repointing the people who held the losing rows
+  //   3. add the per-organisation uniqueness
+  // Re-running is a no-op: step 1 only touches NULLs and step 2 finds nothing
+  // left to merge.
+  {
+    const bf = async (table) => (await pool.query(
+      `UPDATE ${table} t SET organisation_id = c.organisation_id
+         FROM companies c
+        WHERE t.company_id = c.id
+          AND t.organisation_id IS NULL
+          AND c.organisation_id IS NOT NULL`)).rowCount;
+    const stamped = {
+      departments: await bf('departments'),
+      designations: await bf('designations'),
+      org_levels: await bf('org_levels'),
+    };
+
+    // Merge duplicates. `holder` is the column on employees that points here;
+    // the winner is the lowest id, which keeps whichever row the org has had
+    // longest and therefore the one most likely referenced elsewhere.
+    const merge = async (table, nameCol, holder) => {
+      const { rows } = await pool.query(
+        `SELECT organisation_id, lower(${nameCol}) AS key,
+                min(id) AS keep, array_agg(id) AS all_ids
+           FROM ${table}
+          WHERE organisation_id IS NOT NULL
+          GROUP BY organisation_id, lower(${nameCol})
+         HAVING count(*) > 1`);
+      let merged = 0, moved = 0;
+      for (const r of rows) {
+        const losers = r.all_ids.map(Number).filter((id) => Number(id) !== Number(r.keep));
+        if (!losers.length) continue;
+        // Levels have no direct holder on employees — people inherit a rung
+        // through their designation — so only the named tables repoint people.
+        if (holder) {
+          moved += (await pool.query(
+            `UPDATE employees SET ${holder} = $1 WHERE ${holder} = ANY($2::bigint[])`,
+            [r.keep, losers])).rowCount;
+        }
+        // Designations also carry the level; keep the winner's rung if it has
+        // one, otherwise inherit a rung from whichever loser was placed.
+        if (table === 'designations') {
+          await pool.query(
+            `UPDATE designations SET level_id = COALESCE(level_id,
+                 (SELECT level_id FROM designations
+                   WHERE id = ANY($2::bigint[]) AND level_id IS NOT NULL LIMIT 1))
+              WHERE id = $1`, [r.keep, losers]);
+        }
+        if (table === 'org_levels') {
+          await pool.query(
+            `UPDATE designations SET level_id = $1 WHERE level_id = ANY($2::bigint[])`,
+            [r.keep, losers]);
+        }
+        await pool.query(`DELETE FROM ${table} WHERE id = ANY($1::bigint[])`, [losers]);
+        merged += losers.length;
+      }
+      return { merged, moved };
+    };
+
+    // Levels merge on the rung number, not a name: two companies both having a
+    // "level 2" is exactly the collision the new uniqueness forbids.
+    const lv = await merge('org_levels', 'level_no::text', null);
+    const dp = await merge('departments', 'name', 'department_id');
+    const dg = await merge('designations', 'title', 'designation_id');
+
+    const totals = stamped.departments + stamped.designations + stamped.org_levels;
+    const mergedTotal = lv.merged + dp.merged + dg.merged;
+    if (totals || mergedTotal) {
+      console.log(`[migrate] structure scoped to organisation — stamped ${totals} row(s)`
+        + `, merged ${mergedTotal} duplicate(s)`
+        + `, repointed ${dp.moved + dg.moved} employee link(s)`);
+    } else {
+      console.log('[migrate] structure already organisation-scoped');
+    }
+
+    for (const [table, cols] of [
+      ['org_levels', '(organisation_id, level_no)'],
+      ['departments', '(organisation_id, lower(name))'],
+      ['designations', '(organisation_id, lower(title))'],
+    ]) {
+      const idx = `uniq_${table}_org`;
+      try {
+        await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS ${idx} ON ${table} ${cols}`);
+      } catch (e) {
+        console.warn(`[migrate] could not add ${idx} (duplicates remain?):`, e.message);
+      }
+    }
+    console.log('[migrate] organisation-wide uniqueness ensured on structure');
+  }
+
   await pool.end();
 }
 main().catch((e) => { console.error(e); process.exit(1); });

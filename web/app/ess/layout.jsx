@@ -27,6 +27,8 @@ const NAV = [
   { href: '/ess/resignation', label: 'Resignation' },
   { href: '/ess/profile', label: 'Profile' },
   { href: '/ess/change-request', label: 'Request a change' },
+  // Goes past this organisation's HR/IT straight to the people who build TrueHR.
+  { href: '/ess/help', label: 'Contact TrueHR' },
 ];
 
 export default function EssLayout({ children }) {

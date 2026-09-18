@@ -3,15 +3,21 @@
 import { query } from '../db/pool.js';
 import { scopedByEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
+import { checkUpload, sendAttachment, ANY_KINDS } from '../utils/uploads.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 const MAX_DOC_BYTES = 5 * 1024 * 1024; // 5MB per attached document
 function docParams(b) {
-  if (!b.document) return { cols: [], vals: [] };
-  if (Math.floor(String(b.document).length * 3 / 4) > MAX_DOC_BYTES) {
-    const err = new Error('Document larger than 5MB'); err.status = 400; throw err;
-  }
-  return { cols: ['document', 'document_mime', 'document_name'], vals: [b.document, b.documentMime || null, b.documentName || null] };
+  // The stored type is decided from an allowlist, never copied from the request:
+  // a statutory document an uploader could label text/html came straight back as
+  // that type when staff opened it. checkUpload also enforces the 5MB cap and
+  // checks the bytes really are what the type claims.
+  const file = checkUpload({
+    data: b.document, mime: b.documentMime, name: b.documentName,
+    label: 'document', maxMb: 5, kinds: ANY_KINDS,
+  });
+  if (!file) return { cols: [], vals: [] };
+  return { cols: ['document', 'document_mime', 'document_name'], vals: [file.data, file.mime, file.name] };
 }
 
 const isStaff = (u) => STAFF.includes(u.role);
@@ -43,7 +49,7 @@ export async function createVendor(req, res, next) {
     const row = (await query(
       `INSERT INTO vendor_registrations (registered_by, association_with, ${[...V_COLS, ...doc.cols].join(', ')})
        VALUES (${params.map((_, i) => `$${i + 1}`).join(',')}) RETURNING *`, params)).rows[0];
-    await audit(req.user.sub, 'VENDOR_REGISTERED', 'vendor_registration', row.id, { companyName: row.company_name });
+    await audit(req.user.id, 'VENDOR_REGISTERED', 'vendor_registration', row.id, { companyName: row.company_name });
     res.status(201).json(shapeVendor(row));
   } catch (e) { next(e); }
 }
@@ -96,7 +102,7 @@ export async function reviewVendor(req, res, next) {
         `INSERT INTO clients_vendors (name, type) VALUES ($1, 'VENDOR')
          ON CONFLICT (lower(name)) DO NOTHING`, [row.company_name]).catch(() => {});
     }
-    await audit(req.user.sub, `VENDOR_${action}`, 'vendor_registration', id, {});
+    await audit(req.user.id, `VENDOR_${action}`, 'vendor_registration', id, {});
     res.json(shapeVendor(row));
   } catch (e) { next(e); }
 }
@@ -142,7 +148,7 @@ export async function createAgreement(req, res, next) {
     const row = (await query(
       `INSERT INTO agreements (uploaded_by, project_id, location_id, client_id, agreement_type, details, start_date, end_date${doc.cols.length ? ', ' + doc.cols.join(', ') : ''})
        VALUES (${base.map((_, i) => `$${i + 1}`).join(',')}) RETURNING id`, base)).rows[0];
-    await audit(req.user.sub, 'AGREEMENT_UPLOADED', 'agreement', row.id, { type: b.agreementType || 'RENT' });
+    await audit(req.user.id, 'AGREEMENT_UPLOADED', 'agreement', row.id, { type: b.agreementType || 'RENT' });
     const full = (await query(`SELECT ${A_COLS} ${A_JOINS} WHERE a.id=$1`, [row.id])).rows[0];
     res.status(201).json(shapeAgreement(full));
   } catch (e) { next(e); }
@@ -181,7 +187,7 @@ export async function reviewAgreement(req, res, next) {
       `UPDATE agreements SET status=$2, reviewed_by=$3, reviewed_at=now() WHERE id=$1 AND status='PENDING' RETURNING id`,
       [mine.id, action, req.user.employeeId])).rows[0];
     if (!row) return res.status(404).json({ error: 'Not found or already reviewed' });
-    await audit(req.user.sub, `AGREEMENT_${action}`, 'agreement', id, {});
+    await audit(req.user.id, `AGREEMENT_${action}`, 'agreement', id, {});
     const full = (await query(`SELECT ${A_COLS} ${A_JOINS} WHERE a.id=$1`, [id])).rows[0];
     res.json(shapeAgreement(full));
   } catch (e) { next(e); }
@@ -200,9 +206,8 @@ async function serveDoc(req, res, next, table, ownerCol) {
     });
     if (!r?.document) return res.status(404).json({ error: 'No document attached' });
     if (!isStaff(req.user) && Number(r.owner) !== Number(req.user.employeeId)) return res.status(403).json({ error: 'Not allowed' });
-    res.setHeader('Content-Type', r.document_mime || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${(r.document_name || 'document').replace(/[^\x20-\x7E]/g, '_')}"`);
-    res.send(Buffer.from(r.document, 'base64'));
+    sendAttachment(res, { data: r.document, mime: r.document_mime,
+      name: r.document_name, fallbackName: 'document' });
   } catch (e) { next(e); }
 }
 export const vendorDocument = (req, res, next) => serveDoc(req, res, next, 'vendor_registrations', 'registered_by');

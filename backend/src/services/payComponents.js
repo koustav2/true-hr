@@ -137,8 +137,14 @@ export function computeFromComponents(components, {
   if (bon > 0) earnings.push({ code: 'BONUS', label: 'Bonus / Incentive', amount: bon, taxable: true });
 
   // ── pass 3: deductions ───────────────────────────────────────────────────
+  // Nothing was earned, so there is nothing to deduct from. Non-prorated
+  // deductions (professional tax, welfare trust) otherwise stayed at their full
+  // monthly value against zero earnings and the slip came out NEGATIVE — a
+  // payslip telling an employee on a full month of unpaid leave that they owe
+  // the company money.
+  const nothingEarned = factor === 0;
   const deductions = [];
-  for (const c of deductionDefs) {
+  for (const c of nothingEarned ? [] : deductionDefs) {
     let amount = 0;
     if (c.calc === 'FLAT') amount = Number(c.value);
     else if (c.calc === 'PCT_CTC') amount = (ctc * Number(c.value)) / 100;
@@ -153,12 +159,35 @@ export function computeFromComponents(components, {
   // component's amount instead, and this line is skipped so it isn't charged twice.
   const hasTdsComponent = deductionDefs.some((c) => c.statutory === 'TDS' || c.code === 'TDS');
   const tdsAmt = r2(tds);
-  if (!hasTdsComponent) deductions.push({ code: 'TDS', label: 'TDS', amount: tdsAmt, statutory: 'TDS' });
+  if (!hasTdsComponent && !nothingEarned) {
+    deductions.push({ code: 'TDS', label: 'TDS', amount: tdsAmt, statutory: 'TDS' });
+  }
 
   const arr = r2(arrears);
   const grossEarnings = earnings.reduce((a, e) => a + e.amount, 0) + arr;
   const totalDeductions = deductions.reduce((a, d) => a + d.amount, 0);
-  return { earnings, deductions, arrears: arr, grossEarnings, totalDeductions, netPay: grossEarnings - totalDeductions };
+
+  // The BALANCE earning clamps at zero, which is right, but nothing then checked
+  // that the named earnings fit inside the CTC. When they don't, the clamp
+  // absorbs nothing and gross simply exceeds the CTC with no error on screen —
+  // 20,000 CTC paying 40,000. Surfaced rather than silently corrected, because
+  // only HR can say which component is wrong.
+  const warnings = [];
+  const fullMonthNamed = r2(namedTotal);
+  if (ctc > 0 && fullMonthNamed > ctc) {
+    warnings.push({
+      code: 'EARNINGS_EXCEED_CTC',
+      message: `Fixed earnings add up to ${fullMonthNamed} against a monthly CTC of ${r2(ctc)}`
+        + ' — the balancing component cannot absorb the difference, so gross pay is above CTC.',
+      excess: r2(fullMonthNamed - ctc),
+    });
+  }
+
+  return {
+    earnings, deductions, arrears: arr, grossEarnings, totalDeductions,
+    netPay: grossEarnings - totalDeductions,
+    warnings,
+  };
 }
 
 /** Sum of a statutory-tagged deduction, for the PF / ESIC / PT registers. */

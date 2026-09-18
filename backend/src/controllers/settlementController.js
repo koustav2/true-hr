@@ -2,6 +2,7 @@
 // (flow 'NFA_SETTLEMENT': RPT_MGR → FUNCTIONAL_HEAD → ADMIN → FINANCE → DIRECTOR → CLOSER).
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { checkUpload, sendAttachment, ANY_KINDS } from '../utils/uploads.js';
 import * as engine from '../services/approvalEngine.js';
 import { scopedByEmployee } from '../utils/scope.js';
 
@@ -57,26 +58,28 @@ export async function submit(req, res, next) {
 
     const docs = Array.isArray(b.documents) ? b.documents : [];
     if (docs.length > 10) return res.status(400).json({ error: 'Max 10 documents per settlement' });
-    for (const [i, d] of docs.entries()) {
-      if (!d?.file) return res.status(400).json({ error: `documents[${i}]: file is required` });
-      if (Math.floor(String(d.file).length * 3 / 4) > 5 * 1024 * 1024)
-        return res.status(400).json({ error: `${d.filename || `documents[${i}]`}: larger than 5MB` });
-    }
+    // Validate every bill up front and keep the safe form: type from an
+    // allowlist, size capped, bytes checked against the claimed type. Finance
+    // opens these, so an uploader must not get to choose what they execute.
+    const files = docs.map((d, i) => checkUpload({
+      data: d?.file, mime: d?.mime, name: d?.filename,
+      label: `documents[${i}]`, maxMb: 5, kinds: ANY_KINDS, required: true,
+    }));
 
     const s = (await query(
       `INSERT INTO nfa_settlements (nfa_id, employee_id, amount, remarks, document_id)
        VALUES ($1,$2,$3,$4,$5) RETURNING *`,
       [nfaId, empId, amount, b.remarks || null, b.documentId || null])).rows[0];
-    for (const d of docs) {
+    for (const f of files) {
       await query(`INSERT INTO nfa_settlement_docs (settlement_id, document, mime, filename) VALUES ($1,$2,$3,$4)`,
-        [s.id, d.file, d.mime || null, d.filename || null]);
+        [s.id, f.data, f.mime, f.name]);
     }
     const inst = await engine.createInstance('NFA_SETTLEMENT', 'nfa_settlement', s.id, empId, {
       projectId: nfa.project_id, expenseCategoryId: nfa.expense_category_id, zoneId: nfa.zone_id,
-    }, req.user.sub);
+    }, req.user.id);
     await query(`UPDATE nfa_settlements SET approval_instance_id=$2 WHERE id=$1`, [s.id, inst.id]);
     await syncNfa(nfaId, 'IN_PROGRESS');
-    await audit(req.user.sub, 'NFA_SETTLEMENT_SUBMITTED', 'nfa_settlement', s.id, { nfaCode: nfa.nfa_code, amount });
+    await audit(req.user.id, 'NFA_SETTLEMENT_SUBMITTED', 'nfa_settlement', s.id, { nfaCode: nfa.nfa_code, amount });
     res.status(201).json(await detailById(s.id));
   } catch (e) { next(e); }
 }
@@ -113,7 +116,7 @@ export async function actOn(req, res, next) {
     if (!s) return res.status(404).json({ error: 'Not found' });
     const { action, remarks } = req.body || {};
     const inst = await engine.act(s.approval_instance_id, req.user.employeeId, action, remarks, {
-      isStaff: isStaff(req.user), actorUserId: req.user.sub, orgId: req.orgId,
+      isStaff: isStaff(req.user), actorUserId: req.user.id, orgId: req.orgId,
     });
     if (inst.status === 'APPROVED') {
       await query(`UPDATE nfa_settlements SET status='CLOSED', closed_at=now() WHERE id=$1`, [id]);
@@ -132,7 +135,7 @@ export async function resubmit(req, res, next) {
     const id = Number(req.params.id);
     const s = (await query(`SELECT * FROM nfa_settlements WHERE id=$1`, [id])).rows[0];
     if (!s) return res.status(404).json({ error: 'Not found' });
-    await engine.resubmit(s.approval_instance_id, req.user.employeeId, (req.body || {}).remarks, req.user.sub);
+    await engine.resubmit(s.approval_instance_id, req.user.employeeId, (req.body || {}).remarks, req.user.id);
     res.json(await detailById(id));
   } catch (e) { next(e); }
 }
@@ -216,8 +219,7 @@ export async function getDoc(req, res, next) {
       `SELECT document, mime, filename FROM nfa_settlement_docs WHERE id=$1 AND settlement_id=$2`,
       [req.params.docId, req.params.id])).rows[0];
     if (!r) return res.status(404).json({ error: 'Document not found' });
-    res.setHeader('Content-Type', r.mime || 'application/octet-stream');
-    res.setHeader('Content-Disposition', `inline; filename="${(r.filename || 'document').replace(/[^\x20-\x7E]/g, '_')}"`);
-    res.send(Buffer.from(r.document, 'base64'));
+    sendAttachment(res, { data: r.document, mime: r.mime,
+      name: r.filename, fallbackName: 'settlement-document' });
   } catch (e) { next(e); }
 }

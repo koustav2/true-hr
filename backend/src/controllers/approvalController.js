@@ -37,6 +37,16 @@ export async function detail(req, res, next) {
     if (!(await instanceInOrg(req, req.params.id))) return res.status(404).json({ error: 'Not found' });
     const inst = await engine.getInstance(Number(req.params.id));
     if (!inst) return res.status(404).json({ error: 'Not found' });
+    // Being in the same tenant is not enough. Ids are sequential, so without
+    // this a colleague could walk them and read every chain in the company —
+    // including resignations, before HR has processed them. Every sibling
+    // endpoint (nfa.detail, pms.detail) already checks this.
+    const me = req.user.employeeId;
+    const isRaiser = me && String(inst.raisedByEmployeeId) === String(me);
+    const inChain = me && inst.chain.some((st) => st.approver && String(st.approver.id) === String(me));
+    if (!isRaiser && !inChain && !STAFF.includes(req.user.role)) {
+      return res.status(403).json({ error: 'This approval is not yours to view.' });
+    }
     res.json(inst);
   } catch (e) { next(e); }
 }
@@ -47,7 +57,7 @@ export async function actOn(req, res, next) {
     const { action, remarks } = req.body || {};
     const result = await engine.act(Number(req.params.id), req.user.employeeId, action, remarks, {
       isStaff: STAFF.includes(req.user.role),
-      actorUserId: req.user.sub,
+      actorUserId: req.user.id,
       // Narrows the engine's staff override to this tenant.
       orgId: req.orgId,
     });
@@ -58,7 +68,7 @@ export async function actOn(req, res, next) {
 // POST /approvals/:id/resubmit { remarks } — raiser answers a query.
 export async function resubmit(req, res, next) {
   try {
-    const result = await engine.resubmit(Number(req.params.id), req.user.employeeId, (req.body || {}).remarks, req.user.sub);
+    const result = await engine.resubmit(Number(req.params.id), req.user.employeeId, (req.body || {}).remarks, req.user.id);
     res.json(result);
   } catch (e) { next(e); }
 }

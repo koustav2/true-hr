@@ -120,7 +120,7 @@ export async function hub(req, res, next) {
       `SELECT id, name FROM companies WHERE organisation_id=$1 AND active IS NOT FALSE ORDER BY id`,
       [orgId])).rows.map((c) => ({ id: Number(c.id), name: c.name }));
     const departments = (await query(
-      `SELECT d.id, d.name, c.name AS company FROM departments d JOIN companies c ON c.id=d.company_id
+      `SELECT d.id, d.name, o.name AS company FROM departments d JOIN organisations o ON o.id=d.organisation_id
         WHERE c.organisation_id=$1 ORDER BY c.name, d.name`, [orgId])).rows
       .map((d) => ({ id: Number(d.id), name: d.name, company: d.company }));
 
@@ -167,7 +167,7 @@ async function validate(kind, b, orgId) {
     const ok = spec.parent === 'company'
       ? (await query(`SELECT 1 FROM companies WHERE id=$1 AND organisation_id=$2`, [parentRef, orgId])).rowCount
       : (await query(
-          `SELECT 1 FROM departments d JOIN companies c ON c.id=d.company_id
+          `SELECT 1 FROM departments d JOIN organisations o ON o.id=d.organisation_id
             WHERE d.id=$1 AND c.organisation_id=$2`, [parentRef, orgId])).rowCount;
     if (!ok) return 'That parent does not belong to your organisation.';
   } else if (parentRef != null) {

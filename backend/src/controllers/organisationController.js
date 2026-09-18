@@ -33,14 +33,19 @@ const shape = (r) => ({
   moduleCount: r.module_count != null ? Number(r.module_count) : undefined,
 });
 
+// The headcount the switcher and the management table both show. Kept as one
+// fragment so the two can never drift apart and report different numbers for
+// the same organisation.
+const HEADCOUNT_SQL = `(SELECT count(*) FROM employees e
+                         WHERE e.organisation_id = o.id
+                           AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees`;
+
 // GET /admin/organisations — every organisation this owner manages, with counts.
 export async function list(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT o.*,
-              (SELECT count(*) FROM employees e
-                WHERE e.organisation_id = o.id
-                  AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees,
+              ${HEADCOUNT_SQL},
               (SELECT count(*) FROM user_accounts u WHERE u.organisation_id = o.id) AS users,
               (SELECT count(*) FROM organisation_modules om
                 WHERE om.organisation_id = o.id AND om.enabled) AS module_count
@@ -55,7 +60,7 @@ export async function mine(req, res, next) {
   try {
     if (!req.auth?.isPlatformAdmin) {
       const { rows } = await query(
-        `SELECT * FROM organisations WHERE id = $1`, [req.orgId]);
+        `SELECT o.*, ${HEADCOUNT_SQL} FROM organisations o WHERE o.id = $1`, [req.orgId]);
       return res.json({
         canSwitch: false,
         activeOrganisationId: req.orgId,
@@ -63,7 +68,7 @@ export async function mine(req, res, next) {
       });
     }
     const { rows } = await query(
-      `SELECT * FROM organisations WHERE status = 'ACTIVE' ORDER BY id`);
+      `SELECT o.*, ${HEADCOUNT_SQL} FROM organisations o WHERE o.status = 'ACTIVE' ORDER BY o.id`);
     res.json({ canSwitch: true, activeOrganisationId: req.orgId, organisations: rows.map(shape) });
   } catch (e) { next(e); }
 }

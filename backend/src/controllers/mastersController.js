@@ -98,7 +98,7 @@ export async function create(req, res, next) {
     cols.push('organisation_id'); params.push(req.orgId || null); vals.push(`$${params.length}`);
     const row = (await query(
       `INSERT INTO ${d.table} (${cols.join(',')}) VALUES (${vals.join(',')}) RETURNING *`, params)).rows[0];
-    await audit(req.user.sub, 'MASTER_CREATED', d.table, row.id, { name: row.name });
+    await audit(req.user.id, 'MASTER_CREATED', d.table, row.id, { name: row.name });
     res.status(201).json(shape(row));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'An entry with this name already exists' });
@@ -130,7 +130,7 @@ export async function update(req, res, next) {
     // 404 for "not yours" as well as "no such row", so a probe cannot map
     // another tenant's master ids.
     if (!row) return res.status(404).json({ error: 'Not found' });
-    await audit(req.user.sub, 'MASTER_UPDATED', d.table, row.id, { name: row.name });
+    await audit(req.user.id, 'MASTER_UPDATED', d.table, row.id, { name: row.name });
     res.json(shape(row));
   } catch (e) {
     if (e.code === '23505') return res.status(409).json({ error: 'An entry with this name already exists' });
@@ -147,7 +147,7 @@ export async function remove(req, res, next) {
         WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id = $2)`,
       [Number(req.params.id), req.orgId || null]);
     if (!r.rowCount) return res.status(404).json({ error: 'Not found' });
-    await audit(req.user.sub, 'MASTER_DELETED', d.table, Number(req.params.id));
+    await audit(req.user.id, 'MASTER_DELETED', d.table, Number(req.params.id));
     res.json({ ok: true });
   } catch (e) {
     if (e.code === '23503') return res.status(409).json({ error: 'In use — deactivate it instead of deleting' });
@@ -198,7 +198,7 @@ export async function importExpenseHierarchy(req, res, next) {
         [hdr.id, subheader, org])).rows[0];
       if (sub.inserted) created.subheaders++;
     }
-    await audit(req.user.sub, 'EXPENSE_HIERARCHY_IMPORTED', 'expense_categories', null, { rows: rows.length, created });
+    await audit(req.user.id, 'EXPENSE_HIERARCHY_IMPORTED', 'expense_categories', null, { rows: rows.length, created });
     res.json({ ok: true, created, skipped });
   } catch (e) { next(e); }
 }

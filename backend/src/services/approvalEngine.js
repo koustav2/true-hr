@@ -15,6 +15,15 @@ import { enqueueEmail } from './emailQueue.js';
 import { approvalActionEmail, approvalPendingEmail } from './emailTemplates.js';
 import { audit } from '../utils/audit.js';
 
+// Errors the caller should read. The engine used to throw
+// `Object.assign(new Error(msg), { status })`, but the error handler only
+// surfaces `publicMessage` — so the status was right and every message came out
+// as "Internal server error". An approver tapping a stale inbox item saw a
+// crash instead of "already actioned".
+const appError = (message, status = 400) =>
+  Object.assign(new Error(message), { status, publicMessage: message });
+
+
 export const ACTIONS = ['APPROVED', 'REJECTED', 'QUERY_HOLD'];
 
 // role_key → employees column used by the manager_chain resolver.
@@ -65,11 +74,19 @@ async function resolveApprover(stage, employeeId, ctx, orgId = undefined) {
     // The manager must be inside the raiser's organisation. updateEmployee and
     // createEmployee now validate that when a manager is assigned, but rows
     // written before that check could still point across tenants.
+    //
+    // IS NOT DISTINCT FROM, not `=`: a plain equality is NULL — never true —
+    // when both sides are NULL, so a pair of employees with no organisation set
+    // (legacy rows, or any created by a script that omits it) silently resolved
+    // to no manager. That left stage 1 of every chain unresolved and mandatory,
+    // which stalls the whole approval until a staff override. NULL still only
+    // matches NULL here, so a genuine cross-tenant manager is refused as before
+    // — and this now matches how sameOrg() already treats an absent tenant.
     const r = await query(
       `SELECT m.id AS mgr
          FROM employees e
          JOIN employees m ON m.id = e.${col}
-        WHERE e.id = $1 AND m.organisation_id = e.organisation_id`, [employeeId]);
+        WHERE e.id = $1 AND m.organisation_id IS NOT DISTINCT FROM e.organisation_id`, [employeeId]);
     return r.rows[0]?.mgr || await fallback();
   }
 
@@ -195,11 +212,11 @@ async function notify(instanceId, { action = null, actorEmployeeId = null, remar
 
 export async function createInstance(flowCode, subjectType, subjectId, raisedByEmployeeId, ctx = {}, actorUserId = null) {
   const flow = (await query(`SELECT id FROM approval_flows WHERE code=$1 AND active`, [flowCode])).rows[0];
-  if (!flow) throw Object.assign(new Error(`Unknown approval flow ${flowCode}`), { status: 400 });
+  if (!flow) throw appError(`Unknown approval flow ${flowCode}`, 400);
 
   const stages = (await query(
     `SELECT * FROM approval_flow_stages WHERE flow_id=$1 ORDER BY seq`, [flow.id])).rows;
-  if (!stages.length) throw Object.assign(new Error(`Flow ${flowCode} has no stages`), { status: 500 });
+  if (!stages.length) throw appError(`Flow ${flowCode} has no stages`, 500);
 
   const inst = (await query(
     `INSERT INTO approval_instances (flow_id, subject_type, subject_id, raised_by_employee_id, context)
@@ -253,10 +270,10 @@ async function advance(instanceId, fromSeq, actorUserId) {
 
 // Approver (or staff override) acts on the current stage.
 export async function act(instanceId, actorEmployeeId, action, remarks = '', { isStaff = false, actorUserId = null, orgId = null } = {}) {
-  if (!ACTIONS.includes(action)) throw Object.assign(new Error('Invalid action'), { status: 400 });
+  if (!ACTIONS.includes(action)) throw appError('Invalid action', 400);
 
   const inst = (await query(`SELECT * FROM approval_instances WHERE id=$1`, [instanceId])).rows[0];
-  if (!inst) throw Object.assign(new Error('Approval instance not found'), { status: 404 });
+  if (!inst) throw appError('Approval instance not found', 404);
 
   // approval_instances carries no organisation_id: an instance reaches a tenant
   // only through the employee who raised it. Unscoped, the `isStaff` override
@@ -268,22 +285,29 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
        LEFT JOIN employees e ON e.id = i.raised_by_employee_id
       WHERE i.id = $1 AND ($2::bigint IS NULL OR e.organisation_id = $2)`,
     [instanceId, orgId || null])).rowCount;
-  if (!inTenant) throw Object.assign(new Error('Approval instance not found'), { status: 404 });
-  if (inst.status !== 'PENDING') throw Object.assign(new Error(`Instance is ${inst.status}, not actionable`), { status: 409 });
+  if (!inTenant) throw appError('Approval instance not found', 404);
+  if (inst.status !== 'PENDING') throw appError(`Instance is ${inst.status}, not actionable`, 409);
 
   const stage = (await query(
     `SELECT * FROM approval_instance_stages WHERE instance_id=$1 AND seq=$2`,
     [instanceId, inst.current_stage_seq])).rows[0];
-  if (!stage || stage.status !== 'PENDING') throw Object.assign(new Error('No pending stage'), { status: 409 });
+  if (!stage || stage.status !== 'PENDING') throw appError('No pending stage', 409);
 
   const isApprover = stage.approver_employee_id && Number(stage.approver_employee_id) === Number(actorEmployeeId);
-  if (!isApprover && !isStaff) throw Object.assign(new Error('You are not the approver for this stage'), { status: 403 });
+  if (!isApprover && !isStaff) throw appError('You are not the approver for this stage', 403);
 
   const stageStatus = action === 'APPROVED' ? 'APPROVED' : action === 'REJECTED' ? 'REJECTED' : 'QUERY';
-  await query(
+  // Claim the stage, and only if it is still pending. The SELECT above is a
+  // read — two approvals arriving together both saw the same PENDING stage and
+  // both went on to advance the chain, which a double-tap on a mobile Approve
+  // button is enough to cause. Making the write itself conditional means
+  // exactly one caller can win, with no transaction or lock needed, and the
+  // loser is told the truth instead of quietly advancing the chain twice.
+  const claimed = await query(
     `UPDATE approval_instance_stages SET status=$2, remarks=$3, acted_at=now(),
             approver_employee_id = COALESCE(approver_employee_id, $4)
-      WHERE id=$1`, [stage.id, stageStatus, remarks || null, actorEmployeeId]);
+      WHERE id=$1 AND status='PENDING'`, [stage.id, stageStatus, remarks || null, actorEmployeeId]);
+  if (!claimed.rowCount) throw appError('This stage has already been actioned', 409);
   await query(
     `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks)
      VALUES ($1,$2,$3,$4,$5)`, [instanceId, stage.seq, actorEmployeeId, action, remarks || null]);
@@ -312,10 +336,10 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
 // Raiser resubmits after a QUERY_HOLD; the chain resumes at the querying stage.
 export async function resubmit(instanceId, raiserEmployeeId, remarks = '', actorUserId = null) {
   const inst = (await query(`SELECT * FROM approval_instances WHERE id=$1`, [instanceId])).rows[0];
-  if (!inst) throw Object.assign(new Error('Approval instance not found'), { status: 404 });
-  if (inst.status !== 'QUERY') throw Object.assign(new Error('Instance has no open query'), { status: 409 });
+  if (!inst) throw appError('Approval instance not found', 404);
+  if (inst.status !== 'QUERY') throw appError('Instance has no open query', 409);
   if (Number(inst.raised_by_employee_id) !== Number(raiserEmployeeId))
-    throw Object.assign(new Error('Only the raiser can resubmit'), { status: 403 });
+    throw appError('Only the raiser can resubmit', 403);
 
   const seq = inst.query_stage_seq || 1;
   await query(

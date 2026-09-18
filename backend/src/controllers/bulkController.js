@@ -339,14 +339,14 @@ async function readRow(kind, row, h, ctx, req, emp) {
     const dep = str(cell('new department'));
     if (dep) {
       const d = (await query(
-        `SELECT id FROM departments WHERE lower(name)=lower($1) AND company_id=$2`, [dep, emp.company_id])).rows[0];
+        `SELECT id FROM departments WHERE lower(name)=lower($1) AND organisation_id=$2`, [dep, req.orgId])).rows[0];
       if (!d) throw new Error(`Department "${dep}" does not exist in this company — create it first`);
       out.push({ field: 'department_id', label: 'Department', value: Number(d.id), display: dep });
     }
     const desig = str(cell('new designation'));
     if (desig) {
       const g = (await query(
-        `SELECT id FROM designations WHERE lower(title)=lower($1) AND company_id=$2`, [desig, emp.company_id])).rows[0];
+        `SELECT id FROM designations WHERE lower(title)=lower($1) AND organisation_id=$2`, [desig, req.orgId])).rows[0];
       if (!g) throw new Error(`Designation "${desig}" does not exist in this company — create it first`);
       out.push({ field: 'designation_id', label: 'Designation', value: Number(g.id), display: desig });
     }

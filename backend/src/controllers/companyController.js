@@ -47,8 +47,10 @@ export async function list(req, res, next) {
               (SELECT count(*) FROM employees e
                 WHERE e.company_id = c.id
                   AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees,
-              (SELECT count(*) FROM departments d  WHERE d.company_id = c.id) AS departments,
-              (SELECT count(*) FROM designations g WHERE g.company_id = c.id) AS designations
+              -- Structure is shared across the group now, so every company in
+              -- one organisation reports the same totals.
+              (SELECT count(*) FROM departments d  WHERE d.organisation_id = c.organisation_id) AS departments,
+              (SELECT count(*) FROM designations g WHERE g.organisation_id = c.organisation_id) AS designations
          FROM companies c
         WHERE c.organisation_id = $1
         ORDER BY c.active DESC, c.id`, [req.orgId]);
@@ -94,11 +96,18 @@ export async function create(req, res, next) {
       // Starter departments/designations unless explicitly declined.
       if (b.seedStructure !== false) {
         for (const d of DEFAULT_DEPARTMENTS) {
-          await c.query(`INSERT INTO departments (company_id, name) VALUES ($1,$2)`, [co.id, d]);
+          await c.query(
+            `INSERT INTO departments (organisation_id, name) SELECT $1,$2
+              WHERE NOT EXISTS (SELECT 1 FROM departments
+                                 WHERE organisation_id=$1 AND lower(name)=lower($2))`,
+            [co.organisation_id, d]);
         }
         for (const [title, grade] of DEFAULT_DESIGNATIONS) {
           await c.query(
-            `INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3)`, [co.id, title, grade]);
+            `INSERT INTO designations (organisation_id, title, grade) SELECT $1,$2,$3
+              WHERE NOT EXISTS (SELECT 1 FROM designations
+                                 WHERE organisation_id=$1 AND lower(title)=lower($2))`,
+            [co.organisation_id, title, grade]);
         }
       }
       return co;
@@ -192,10 +201,12 @@ export async function listStructure(req, res, next) {
     const co = (await query(
       `SELECT id FROM companies WHERE id = $1 AND organisation_id = $2`, [id, req.orgId])).rows[0];
     if (!co) return res.status(404).json({ error: 'Company not found' });
+    // Structure is organisation-wide now (schema_tenancy.sql §27), so a company
+    // shows the group's single list rather than one of its own.
     const departments = (await query(
-      `SELECT id, name FROM departments WHERE company_id = $1 ORDER BY name`, [id])).rows;
+      `SELECT id, name FROM departments WHERE organisation_id = $1 ORDER BY name`, [req.orgId])).rows;
     const designations = (await query(
-      `SELECT id, title, grade FROM designations WHERE company_id = $1 ORDER BY title`, [id])).rows;
+      `SELECT id, title, grade FROM designations WHERE organisation_id = $1 ORDER BY title`, [req.orgId])).rows;
     res.json({ departments, designations });
   } catch (e) { next(e); }
 }
@@ -203,18 +214,16 @@ export async function listStructure(req, res, next) {
 // POST /admin/companies/:id/departments { name }
 export async function addDepartment(req, res, next) {
   try {
-    const id = parseInt(req.params.id, 10);
     const name = String(req.body?.name || '').trim();
     if (!name) return res.status(400).json({ error: 'Department name is required' });
-    const co = (await query(
-      `SELECT id FROM companies WHERE id = $1 AND organisation_id = $2`, [id, req.orgId])).rows[0];
-    if (!co) return res.status(404).json({ error: 'Company not found' });
+    if (!(await scopedCompany(req))) return res.status(404).json({ error: 'Company not found' });
     const dupe = await query(
-      `SELECT 1 FROM departments WHERE company_id = $1 AND lower(name) = lower($2)`, [id, name]);
-    if (dupe.rowCount) return res.status(409).json({ error: 'That department already exists here' });
+      `SELECT 1 FROM departments WHERE organisation_id = $1 AND lower(name) = lower($2)`, [req.orgId, name]);
+    if (dupe.rowCount) return res.status(409).json({ error: 'That department already exists in this organisation' });
     const row = (await query(
-      `INSERT INTO departments (company_id, name) VALUES ($1,$2) RETURNING id, name`, [id, name])).rows[0];
-    await audit(req.user.id, 'CREATE_DEPARTMENT', 'department', row.id, { companyId: id, name });
+      `INSERT INTO departments (organisation_id, name) VALUES ($1,$2) RETURNING id, name`,
+      [req.orgId, name])).rows[0];
+    await audit(req.user.id, 'CREATE_DEPARTMENT', 'department', row.id, { organisationId: req.orgId, name });
     res.status(201).json(row);
   } catch (e) { next(e); }
 }
@@ -222,19 +231,16 @@ export async function addDepartment(req, res, next) {
 // POST /admin/companies/:id/designations { title, grade? }
 export async function addDesignation(req, res, next) {
   try {
-    const id = parseInt(req.params.id, 10);
     const title = String(req.body?.title || '').trim();
     if (!title) return res.status(400).json({ error: 'Designation title is required' });
-    const co = (await query(
-      `SELECT id FROM companies WHERE id = $1 AND organisation_id = $2`, [id, req.orgId])).rows[0];
-    if (!co) return res.status(404).json({ error: 'Company not found' });
+    if (!(await scopedCompany(req))) return res.status(404).json({ error: 'Company not found' });
     const dupe = await query(
-      `SELECT 1 FROM designations WHERE company_id = $1 AND lower(title) = lower($2)`, [id, title]);
-    if (dupe.rowCount) return res.status(409).json({ error: 'That designation already exists here' });
+      `SELECT 1 FROM designations WHERE organisation_id = $1 AND lower(title) = lower($2)`, [req.orgId, title]);
+    if (dupe.rowCount) return res.status(409).json({ error: 'That designation already exists in this organisation' });
     const row = (await query(
-      `INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3) RETURNING id, title, grade`,
-      [id, title, req.body?.grade || null])).rows[0];
-    await audit(req.user.id, 'CREATE_DESIGNATION', 'designation', row.id, { companyId: id, title });
+      `INSERT INTO designations (organisation_id, title, grade) VALUES ($1,$2,$3) RETURNING id, title, grade`,
+      [req.orgId, title, req.body?.grade || null])).rows[0];
+    await audit(req.user.id, 'CREATE_DESIGNATION', 'designation', row.id, { organisationId: req.orgId, title });
     res.status(201).json(row);
   } catch (e) { next(e); }
 }
@@ -242,18 +248,16 @@ export async function addDesignation(req, res, next) {
 // DELETE /admin/companies/:id/departments/:depId — only when unused.
 export async function removeDepartment(req, res, next) {
   try {
-    const id = parseInt(req.params.id, 10);
     const depId = parseInt(req.params.depId, 10);
     const dep = (await query(
-      `SELECT d.id FROM departments d JOIN companies c ON c.id = d.company_id
-        WHERE d.id = $1 AND d.company_id = $2 AND c.organisation_id = $3`,
-      [depId, id, req.orgId])).rows[0];
+      `SELECT id FROM departments WHERE id = $1 AND organisation_id = $2`,
+      [depId, req.orgId])).rows[0];
     if (!dep) return res.status(404).json({ error: 'Department not found' });
     const used = (await query(
       `SELECT count(*)::int AS n FROM employees WHERE department_id = $1`, [depId])).rows[0].n;
     if (used) return res.status(409).json({ error: `${used} employee(s) are in this department.` });
     await query(`DELETE FROM departments WHERE id = $1`, [depId]);
-    await audit(req.user.id, 'DELETE_DEPARTMENT', 'department', depId, { companyId: id });
+    await audit(req.user.id, 'DELETE_DEPARTMENT', 'department', depId, { organisationId: req.orgId });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -261,18 +265,16 @@ export async function removeDepartment(req, res, next) {
 // DELETE /admin/companies/:id/designations/:desId — only when unused.
 export async function removeDesignation(req, res, next) {
   try {
-    const id = parseInt(req.params.id, 10);
     const desId = parseInt(req.params.desId, 10);
     const des = (await query(
-      `SELECT g.id FROM designations g JOIN companies c ON c.id = g.company_id
-        WHERE g.id = $1 AND g.company_id = $2 AND c.organisation_id = $3`,
-      [desId, id, req.orgId])).rows[0];
+      `SELECT id FROM designations WHERE id = $1 AND organisation_id = $2`,
+      [desId, req.orgId])).rows[0];
     if (!des) return res.status(404).json({ error: 'Designation not found' });
     const used = (await query(
       `SELECT count(*)::int AS n FROM employees WHERE designation_id = $1`, [desId])).rows[0].n;
     if (used) return res.status(409).json({ error: `${used} employee(s) hold this designation.` });
     await query(`DELETE FROM designations WHERE id = $1`, [desId]);
-    await audit(req.user.id, 'DELETE_DESIGNATION', 'designation', desId, { companyId: id });
+    await audit(req.user.id, 'DELETE_DESIGNATION', 'designation', desId, { organisationId: req.orgId });
     res.json({ ok: true });
   } catch (e) { next(e); }
 }
@@ -287,7 +289,13 @@ export async function removeDesignation(req, res, next) {
 const MAX_BULK = 200;
 
 /** The company, only if it belongs to the caller's organisation. */
+// Structure now belongs to the organisation, so these handlers are reachable
+// both as /admin/departments (no company in the URL) and as the older
+// /admin/companies/:id/departments. A company id, when given, is still checked
+// to belong to this organisation — an id from another tenant must not pass even
+// though it no longer decides what gets written.
 async function scopedCompany(req) {
+  if (req.params.id === undefined) return { id: null };
   const id = parseInt(req.params.id, 10);
   if (!Number.isFinite(id)) return null;
   return (await query(
@@ -333,7 +341,7 @@ export async function addDepartmentsBulk(req, res, next) {
     if (names.length > MAX_BULK) return res.status(400).json({ error: `Add at most ${MAX_BULK} at a time.` });
 
     const have = new Set((await query(
-      `SELECT lower(name) AS n FROM departments WHERE company_id = $1`, [co.id])).rows.map((r) => r.n));
+      `SELECT lower(name) AS n FROM departments WHERE organisation_id = $1`, [req.orgId])).rows.map((r) => r.n));
 
     const added = [];
     const skipped = [];
@@ -341,14 +349,14 @@ export async function addDepartmentsBulk(req, res, next) {
       for (const { name } of names) {
         if (have.has(name.toLowerCase())) { skipped.push(name); continue; }
         const row = (await c.query(
-          `INSERT INTO departments (company_id, name) VALUES ($1,$2) RETURNING id, name`,
-          [co.id, name])).rows[0];
+          `INSERT INTO departments (organisation_id, name) VALUES ($1,$2) RETURNING id, name`,
+          [req.orgId, name])).rows[0];
         added.push({ id: Number(row.id), name: row.name });
       }
     });
     if (added.length) {
       await audit(req.user.id, 'CREATE_DEPARTMENT_BULK', 'department', null,
-        { companyId: co.id, names: added.map((a) => a.name) });
+        { organisationId: req.orgId, names: added.map((a) => a.name) });
     }
     res.status(added.length ? 201 : 200).json({
       ok: true, added, skipped,
@@ -368,7 +376,7 @@ export async function addDesignationsBulk(req, res, next) {
     if (names.length > MAX_BULK) return res.status(400).json({ error: `Add at most ${MAX_BULK} at a time.` });
 
     const have = new Set((await query(
-      `SELECT lower(title) AS t FROM designations WHERE company_id = $1`, [co.id])).rows.map((r) => r.t));
+      `SELECT lower(title) AS t FROM designations WHERE organisation_id = $1`, [req.orgId])).rows.map((r) => r.t));
 
     const added = [];
     const skipped = [];
@@ -376,14 +384,14 @@ export async function addDesignationsBulk(req, res, next) {
       for (const { name, grade } of names) {
         if (have.has(name.toLowerCase())) { skipped.push(name); continue; }
         const row = (await c.query(
-          `INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3) RETURNING id, title, grade`,
-          [co.id, name, grade])).rows[0];
+          `INSERT INTO designations (organisation_id, title, grade) VALUES ($1,$2,$3) RETURNING id, title, grade`,
+          [req.orgId, name, grade])).rows[0];
         added.push({ id: Number(row.id), title: row.title, grade: row.grade });
       }
     });
     if (added.length) {
       await audit(req.user.id, 'CREATE_DESIGNATION_BULK', 'designation', null,
-        { companyId: co.id, titles: added.map((a) => a.title) });
+        { organisationId: req.orgId, titles: added.map((a) => a.title) });
     }
     res.status(added.length ? 201 : 200).json({
       ok: true, added, skipped,
@@ -407,15 +415,15 @@ export async function removeDepartmentsBulk(req, res, next) {
     const rows = (await query(
       `SELECT d.id, d.name,
               (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id) AS used
-         FROM departments d WHERE d.company_id = $1 AND d.id = ANY($2::bigint[])`,
-      [co.id, ids])).rows;
+         FROM departments d WHERE d.organisation_id = $1 AND d.id = ANY($2::bigint[])`,
+      [req.orgId, ids])).rows;
 
     const blocked = rows.filter((r) => r.used > 0)
       .map((r) => ({ id: Number(r.id), name: r.name, employees: r.used }));
     const free = rows.filter((r) => r.used === 0).map((r) => Number(r.id));
     if (free.length) {
-      await query(`DELETE FROM departments WHERE company_id = $1 AND id = ANY($2::bigint[])`, [co.id, free]);
-      await audit(req.user.id, 'DELETE_DEPARTMENT_BULK', 'department', null, { companyId: co.id, ids: free });
+      await query(`DELETE FROM departments WHERE organisation_id = $1 AND id = ANY($2::bigint[])`, [req.orgId, free]);
+      await audit(req.user.id, 'DELETE_DEPARTMENT_BULK', 'department', null, { organisationId: req.orgId, ids: free });
     }
     res.json({
       ok: true, deleted: free.length, blocked,
@@ -437,15 +445,15 @@ export async function removeDesignationsBulk(req, res, next) {
     const rows = (await query(
       `SELECT g.id, g.title,
               (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id) AS used
-         FROM designations g WHERE g.company_id = $1 AND g.id = ANY($2::bigint[])`,
-      [co.id, ids])).rows;
+         FROM designations g WHERE g.organisation_id = $1 AND g.id = ANY($2::bigint[])`,
+      [req.orgId, ids])).rows;
 
     const blocked = rows.filter((r) => r.used > 0)
       .map((r) => ({ id: Number(r.id), title: r.title, employees: r.used }));
     const free = rows.filter((r) => r.used === 0).map((r) => Number(r.id));
     if (free.length) {
-      await query(`DELETE FROM designations WHERE company_id = $1 AND id = ANY($2::bigint[])`, [co.id, free]);
-      await audit(req.user.id, 'DELETE_DESIGNATION_BULK', 'designation', null, { companyId: co.id, ids: free });
+      await query(`DELETE FROM designations WHERE organisation_id = $1 AND id = ANY($2::bigint[])`, [req.orgId, free]);
+      await audit(req.user.id, 'DELETE_DESIGNATION_BULK', 'designation', null, { organisationId: req.orgId, ids: free });
     }
     res.json({
       ok: true, deleted: free.length, blocked,

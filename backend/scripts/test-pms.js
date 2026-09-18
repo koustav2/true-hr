@@ -51,8 +51,12 @@ async function main() {
   check('KPI: weightages must sum to 100 → 400', r.status === 400);
 
   r = await call(pms.createKpi, { body: { year: 2026, month: 6, kras }, user: asEmp(S.emp) });
-  check('KPI created → RM_PENDING with 4 KRAs + default bands', r.status === 201 && r.data.status === 'RM_PENDING'
-    && r.data.kras.length === 4 && r.data.kras[0].measurementBands[0].rating === 3, JSON.stringify(r.data.kras?.[0] || r.data));
+  const bands0 = r.data.kras?.[0]?.measurementBands || [];
+  check('KPI created → RM_PENDING with 4 KRAs + the default band ladder',
+    r.status === 201 && r.data.status === 'RM_PENDING' && r.data.kras.length === 4
+    && bands0.length === 5 && bands0[0].rating === 1 && bands0[4].rating === 5
+    && bands0.find((b) => b.min === 90)?.rating === 3,
+    JSON.stringify(r.data.kras?.[0] || r.data));
   const kpiId = r.data.id;
 
   r = await call(pms.createKpi, { body: { year: 2026, month: 6, kras }, user: asEmp(S.emp) });

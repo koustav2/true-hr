@@ -1,9 +1,16 @@
 // Smoke test for NFA masters CRUD + cascade meta endpoint (Phase 1).
 // Usage: DATABASE_URL=postgres://... node scripts/test-masters.js
-import { pool } from '../src/db/pool.js';
+import { pool, query as sql } from '../src/db/pool.js';
 import * as m from '../src/controllers/mastersController.js';
 
 const RUN = String(Date.now()).slice(-6);
+
+// Every real request carries a tenant, and the masters' uniqueness is
+// (organisation_id, name) as a PARTIAL index that skips NULL owners — so a
+// harness with no orgId silently loses all deduplication and the 409s, the
+// import's reuse-instead-of-insert, and the parent linkage all stop holding.
+// Run as a tenant, like the app does.
+let ORG_ID = null;
 
 let passed = 0, failed = 0;
 const check = (label, cond, extra = '') => {
@@ -14,7 +21,11 @@ const check = (label, cond, extra = '') => {
 // Minimal express-like mocks.
 function call(fn, { params = {}, query = {}, body = {} } = {}) {
   return new Promise((resolve, reject) => {
-    const req = { params, query, body, user: { sub: null, employeeId: null, role: 'HR_ADMIN' } };
+    const req = {
+      params, query, body, orgId: ORG_ID,
+      user: { id: null, sub: null, employeeId: null, role: 'HR_ADMIN' },
+      auth: { role: 'HR_ADMIN' },
+    };
     const res = {
       _status: 200,
       status(s) { this._status = s; return this; },
@@ -25,6 +36,17 @@ function call(fn, { params = {}, query = {}, body = {} } = {}) {
 }
 
 async function main() {
+  ORG_ID = (await sql(
+    `INSERT INTO organisations (name, code) VALUES ($1,$2) RETURNING id`,
+    [`Masters ${RUN}`, `M${RUN}`])).rows[0].id;
+  // The 13 business operations shipped in schema.sql are ownerless templates,
+  // so a fresh tenant sees none of them until it takes its own copy — which is
+  // what provisioning a new organisation does. Copy them rather than claiming
+  // the shared rows, which other suites also read.
+  await sql(
+    `INSERT INTO business_operations (organisation_id, name, active)
+     SELECT $1, name, TRUE FROM business_operations WHERE organisation_id IS NULL`, [ORG_ID]);
+
   // list seeded operations
   let r = await call(m.list, { params: { type: 'business-operations' } });
   check('seeded business operations present', r.data.length >= 13, `got ${r.data.length}`);

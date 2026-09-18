@@ -223,7 +223,8 @@ async function main() {
 
   // ── Structure vs company: HR maintains departments, Super Admin owns entities ─
   check('HR can manage departments & designations', hasModule(asHr.auth, 'STRUCTURE', 'manage'));
-  check('HR can SEE companies (to hire into one)', hasModule(asHr.auth, 'COMPANIES', 'view'));
+  check('HR cannot open the Companies screen — entities are the Super Admin\'s',
+    !hasModule(asHr.auth, 'COMPANIES', 'view'));
   check('HR cannot create a legal entity', !hasModule(asHr.auth, 'COMPANIES', 'manage'));
   check('Super Admin can do both',
     hasModule(asSuper.auth, 'STRUCTURE', 'manage') && hasModule(asSuper.auth, 'COMPANIES', 'manage'));

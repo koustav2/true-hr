@@ -109,11 +109,13 @@ async function main() {
 
   // ── 3. Approved unpaid leave always reduces pay ──────────────────────────
   const lwpType = (await query(
-    `INSERT INTO leave_types (code, name) VALUES ('LWP','Leave Without Pay')
-     ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name RETURNING id`)).rows[0].id;
+    `INSERT INTO leave_types (organisation_id, code, name) VALUES ($1,'LWP','Leave Without Pay')
+     ON CONFLICT (organisation_id, code) WHERE organisation_id IS NOT NULL
+       DO UPDATE SET name=EXCLUDED.name RETURNING id`, [orgId])).rows[0].id;
   const paidType = (await query(
-    `INSERT INTO leave_types (code, name) VALUES ('CL','Casual Leave')
-     ON CONFLICT (code) DO UPDATE SET name=EXCLUDED.name RETURNING id`)).rows[0].id;
+    `INSERT INTO leave_types (organisation_id, code, name) VALUES ($1,'CL','Casual Leave')
+     ON CONFLICT (organisation_id, code) WHERE organisation_id IS NOT NULL
+       DO UPDATE SET name=EXCLUDED.name RETURNING id`, [orgId])).rows[0].id;
 
   const onLwp = await mkEmp('lwp');
   for (let d = 1; d <= DIM; d++) {

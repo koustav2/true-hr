@@ -158,21 +158,26 @@ async function main() {
 
   // ── Per-company lookups for the hire form ────────────────────────────────
   r = await call(meta.getDepartments, { ...asA, q: { companyId: mfg } });
-  check('departments filter to one company', (r.data || []).length === 5, `${r.data?.length}`);
+  // Structure is organisation-wide now, so ?companyId is accepted and ignored:
+  // naming an entity must give exactly the same list as naming none.
+  const withCo = (r.data || []).length;
   r = await call(meta.getDepartments, asA);
-  check('without a filter, the whole organisation is returned', (r.data || []).length > 5, `${r.data?.length}`);
+  check('companyId no longer narrows the department list',
+    withCo === (r.data || []).length && withCo > 0, `${withCo} vs ${r.data?.length}`);
 
+  const before = (await call(meta.getDepartments, asA)).data.length;
   await call(company.addDepartment, { ...asA, params: { id: mfg }, body: { name: 'Quality Assurance' } });
   r = await call(meta.getDepartments, { ...asA, q: { companyId: mfg } });
-  check('a department added to one company appears only there', (r.data || []).length === 6, `${r.data?.length}`);
+  check('a new department shows up for the group', (r.data || []).length === before + 1, `${r.data?.length}`);
   r = await call(meta.getDepartments, { ...asA, q: { companyId: log } });
-  check('the other company is unaffected', (r.data || []).length === 5, `${r.data?.length}`);
+  check('and the other entity in the group sees it too',
+    (r.data || []).some((d) => d.name === 'Quality Assurance'), JSON.stringify(r.data?.map((d) => d.name)));
 
   r = await call(company.addDepartment, { ...asA, params: { id: mfg }, body: { name: 'quality assurance' } });
   check('a duplicate department name → 409', r.status === 409);
 
   r = await call(company.addDesignation, { ...asA, params: { id: mfg }, body: { title: 'Plant Manager', grade: 'M3' } });
-  check('a designation can be added per company', r.status === 201, JSON.stringify(r.data));
+  check('a designation can be added for the organisation', r.status === 201, JSON.stringify(r.data));
 
   // ── Archiving guards ─────────────────────────────────────────────────────
   r = await call(company.setStatus, { ...asA, params: { id: mfg }, body: { active: false } });
@@ -201,7 +206,8 @@ async function main() {
     check('a department in use cannot be deleted → 409', r.status === 409, JSON.stringify(r.data));
   } else {
     const freeDep = (await query(
-      `SELECT id FROM departments WHERE company_id=$1 ORDER BY id LIMIT 1`, [mfg])).rows[0].id;
+      `SELECT d.id FROM departments d JOIN companies c ON c.organisation_id = d.organisation_id
+        WHERE c.id=$1 ORDER BY d.id LIMIT 1`, [mfg])).rows[0].id;
     r = await call(company.removeDepartment, { ...asA, params: { id: mfg, depId: freeDep } });
     check('an unused department can be deleted', r.status === 200, JSON.stringify(r.data));
   }

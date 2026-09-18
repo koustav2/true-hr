@@ -145,9 +145,9 @@ async function structure(org, company) {
   const desigs = [...new Set(PEOPLE.map((p) => p.desig))];
   for (const name of depts) {
     await pool.query(
-      `INSERT INTO departments (company_id, name) SELECT $1,$2
-        WHERE NOT EXISTS (SELECT 1 FROM departments WHERE company_id=$1 AND lower(name)=lower($2))`,
-      [company.id, name]);
+      `INSERT INTO departments (organisation_id, name) SELECT $1,$2
+        WHERE NOT EXISTS (SELECT 1 FROM departments WHERE organisation_id=$1 AND lower(name)=lower($2))`,
+      [org.id, name]);
   }
   // Grades give the designation table something in its Grade column and feed
   // the increment and salary screens.
@@ -158,9 +158,9 @@ async function structure(org, company) {
   };
   for (const title of desigs) {
     await pool.query(
-      `INSERT INTO designations (company_id, title, grade) SELECT $1,$2,$3
-        WHERE NOT EXISTS (SELECT 1 FROM designations WHERE company_id=$1 AND lower(title)=lower($2))`,
-      [company.id, title, GRADE[title] || null]);
+      `INSERT INTO designations (organisation_id, title, grade) SELECT $1,$2,$3
+        WHERE NOT EXISTS (SELECT 1 FROM designations WHERE organisation_id=$1 AND lower(title)=lower($2))`,
+      [org.id, title, GRADE[title] || null]);
   }
 
   // The ladder, and each designation placed on a rung — otherwise the
@@ -173,10 +173,10 @@ async function structure(org, company) {
   ];
   for (const l of LADDER) {
     await pool.query(
-      `INSERT INTO org_levels (organisation_id, company_id, level_no, name, description)
-       VALUES ($1,$2,$3,$4,$5)
-       ON CONFLICT (company_id, level_no) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description`,
-      [org.id, company.id, l.no, l.name, l.desc]);
+      `INSERT INTO org_levels (organisation_id, level_no, name, description)
+       VALUES ($1,$2,$3,$4)
+       ON CONFLICT (organisation_id, level_no) DO UPDATE SET name=EXCLUDED.name, description=EXCLUDED.description`,
+      [org.id, l.no, l.name, l.desc]);
   }
   const RUNG = {
     'Managing Director': 1, 'Functional Lead': 2, 'HR Manager': 2,
@@ -185,8 +185,8 @@ async function structure(org, company) {
   };
   for (const [title, no] of Object.entries(RUNG)) {
     await pool.query(
-      `UPDATE designations SET level_id = (SELECT id FROM org_levels WHERE company_id=$1 AND level_no=$2)
-        WHERE company_id=$1 AND title=$3`, [company.id, no, title]);
+      `UPDATE designations SET level_id = (SELECT id FROM org_levels WHERE organisation_id=$1 AND level_no=$2)
+        WHERE organisation_id=$1 AND title=$3`, [org.id, no, title]);
   }
   log(`structure: ${depts.length} departments, ${desigs.length} designations, ${LADDER.length} levels`);
 }
@@ -196,8 +196,8 @@ async function people(org, company) {
   const byCode = {};
   for (const p of PEOPLE) {
     const email = `${p.first}.${p.last}`.toLowerCase() + '@truehr.example';
-    const dept = await one(`SELECT id FROM departments WHERE company_id=$1 AND name=$2`, [company.id, p.dept]);
-    const desig = await one(`SELECT id FROM designations WHERE company_id=$1 AND title=$2`, [company.id, p.desig]);
+    const dept = await one(`SELECT id FROM departments WHERE organisation_id=$1 AND name=$2`, [org.id, p.dept]);
+    const desig = await one(`SELECT id FROM designations WHERE organisation_id=$1 AND title=$2`, [org.id, p.desig]);
     const doj = iso(new Date(Date.UTC(today.getUTCFullYear() - 2, (PEOPLE.indexOf(p) % 12), 1 + (PEOPLE.indexOf(p) % 20))));
 
     const existing = await one(
@@ -818,7 +818,7 @@ async function components(org, company) {
 
 // ── 11. Master data hub entries ───────────────────────────────────────────
 async function orgMasters(org, company) {
-  const dept = await one(`SELECT id FROM departments WHERE company_id=$1 ORDER BY id LIMIT 1`, [company.id]);
+  const dept = await one(`SELECT id FROM departments WHERE organisation_id=$1 ORDER BY id LIMIT 1`, [org.id]);
   const ROWS = [
     ['BANK', 'HDFC Bank', 'HDFC0', null], ['BANK', 'ICICI Bank', 'ICIC0', null],
     ['BANK', 'State Bank of India', 'SBIN0', null], ['BANK', 'Axis Bank', 'UTIB0', null],

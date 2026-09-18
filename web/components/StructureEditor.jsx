@@ -1,6 +1,6 @@
 'use client';
 // ============================================================================
-// Departments and designations for one company: add many, delete many.
+// Departments and designations for the organisation: add many, delete many.
 //
 // The old screens took one name per click, which is unusable when a new tenant
 // has thirty departments to type. So the add box is a textarea — paste a column
@@ -15,7 +15,6 @@ import { api } from '@/lib/api.js';
 import { Card, Button, Textarea, Badge, Empty, Spinner } from '@/components/ui.jsx';
 
 export default function StructureEditor({
-  companyId,
   kind,               // 'departments' | 'designations'
   rows = [],
   onChanged,
@@ -60,7 +59,7 @@ export default function StructureEditor({
     setBusy('add'); setErr(''); setMsg('');
     try {
       const body = isDep ? { names: lines } : { titles: lines };
-      const r = await api.post(`/admin/companies/${companyId}/${kind}/bulk`, body);
+      const r = await api.post(`/admin/${kind}/bulk`, body);
       setText('');
       setMsg(r.message || 'Added.');
       onChanged?.();
@@ -72,7 +71,7 @@ export default function StructureEditor({
     if (!pickedFree.length) return;
     setBusy('del'); setErr(''); setMsg('');
     try {
-      const r = await api.post(`/admin/companies/${companyId}/${kind}/delete`, { ids: pickedFree });
+      const r = await api.post(`/admin/${kind}/delete`, { ids: pickedFree });
       setPicked(new Set());
       setMsg(r.message || 'Deleted.');
       onChanged?.();

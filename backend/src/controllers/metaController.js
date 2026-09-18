@@ -43,29 +43,24 @@ export async function getCompanies(req, res, next) {
   } catch (e) { next(e); }
 }
 
-// ?companyId narrows to one legal entity — a group's companies each keep their
-// own departments, so the hire form must show only the chosen company's.
+// Departments and designations are organisation-wide (schema_tenancy.sql §27),
+// so the hire form shows the same list whichever company will pay the person.
+// ?companyId is still accepted and ignored, so older callers keep working.
 export async function getDepartments(req, res, next) {
   try {
-    const companyId = req.query.companyId ? parseInt(req.query.companyId, 10) : null;
     res.json((await query(
-      `SELECT d.id, d.name
-         FROM departments d JOIN companies c ON c.id = d.company_id
-        WHERE ($1::bigint IS NULL OR c.organisation_id = $1)
-          AND ($2::bigint IS NULL OR d.company_id = $2)
-        ORDER BY d.name`, [req.orgId || null, companyId])).rows);
+      `SELECT id, name FROM departments
+        WHERE ($1::bigint IS NULL OR organisation_id = $1)
+        ORDER BY name`, [req.orgId || null])).rows);
   } catch (e) { next(e); }
 }
 
 export async function getDesignations(req, res, next) {
   try {
-    const companyId = req.query.companyId ? parseInt(req.query.companyId, 10) : null;
     res.json((await query(
-      `SELECT dg.id, dg.title, dg.grade
-         FROM designations dg JOIN companies c ON c.id = dg.company_id
-        WHERE ($1::bigint IS NULL OR c.organisation_id = $1)
-          AND ($2::bigint IS NULL OR dg.company_id = $2)
-        ORDER BY dg.title`, [req.orgId || null, companyId])).rows);
+      `SELECT id, title, grade FROM designations
+        WHERE ($1::bigint IS NULL OR organisation_id = $1)
+        ORDER BY title`, [req.orgId || null])).rows);
   } catch (e) { next(e); }
 }
 

@@ -30,13 +30,19 @@ async function main() {
 
   const depts = ['Engineering','Human Resources','Sales','Operations','Finance'];
   for (const d of depts) {
-    const exists = await pool.query(`SELECT 1 FROM departments WHERE company_id=$1 AND name=$2`, [companyId, d]);
-    if (!exists.rowCount) await pool.query(`INSERT INTO departments (company_id, name) VALUES ($1,$2)`, [companyId, d]);
+    const exists = await pool.query(
+      `SELECT 1 FROM departments WHERE organisation_id=$1 AND lower(name)=lower($2)`, [orgId, d]);
+    if (!exists.rowCount) {
+      await pool.query(`INSERT INTO departments (organisation_id, name) VALUES ($1,$2)`, [orgId, d]);
+    }
   }
   const desigs = [['Software Engineer','L2'],['Senior Software Engineer','L3'],['HR Manager','M1'],['Sales Executive','L2'],['Operations Lead','M1'],['Operations Manager','M2'],['Functional Lead','M2']];
   for (const [t,g] of desigs) {
-    const exists = await pool.query(`SELECT 1 FROM designations WHERE company_id=$1 AND title=$2`, [companyId, t]);
-    if (!exists.rowCount) await pool.query(`INSERT INTO designations (company_id, title, grade) VALUES ($1,$2,$3)`, [companyId, t, g]);
+    const exists = await pool.query(
+      `SELECT 1 FROM designations WHERE organisation_id=$1 AND lower(title)=lower($2)`, [orgId, t]);
+    if (!exists.rowCount) {
+      await pool.query(`INSERT INTO designations (organisation_id, title, grade) VALUES ($1,$2,$3)`, [orgId, t, g]);
+    }
   }
 
   // Seed staff accounts, each scoped to the organisation and bound to the
@@ -94,8 +100,8 @@ async function main() {
   ];
   for (const m of demoManagers) {
     const email = `${m.first}.${m.last}`.toLowerCase() + '@truehr.example';
-    const dept = (await pool.query(`SELECT id FROM departments WHERE company_id=$1 AND name=$2`, [companyId, m.dept])).rows[0]?.id;
-    const desig = (await pool.query(`SELECT id FROM designations WHERE company_id=$1 AND title=$2`, [companyId, m.desig])).rows[0]?.id;
+    const dept = (await pool.query(`SELECT id FROM departments WHERE organisation_id=$1 AND name=$2`, [orgId, m.dept])).rows[0]?.id;
+    const desig = (await pool.query(`SELECT id FROM designations WHERE organisation_id=$1 AND title=$2`, [orgId, m.desig])).rows[0]?.id;
     const exists = await pool.query(`SELECT id FROM employees WHERE lower(official_email)=lower($1)`, [email]);
     if (exists.rowCount) {
       await pool.query(`UPDATE employees SET employee_code=$2 WHERE id=$1`, [exists.rows[0].id, m.code]);

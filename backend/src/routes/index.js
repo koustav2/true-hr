@@ -33,6 +33,7 @@ import * as pms from '../controllers/pmsController.js';
 import * as vendor from '../controllers/vendorController.js';
 import * as notif from '../controllers/notificationController.js';
 import * as org from '../controllers/organisationController.js';
+import * as masterTicket from '../controllers/platformTicketController.js';
 import * as roles from '../controllers/roleController.js';
 import * as termination from '../controllers/terminationController.js';
 import * as company from '../controllers/companyController.js';
@@ -293,9 +294,17 @@ r.put('/admin/employees/:id/salary-components', authenticate, requireOrg, requir
 // STRUCTURE is the departments-and-designations module, and a level is the rung
 // a designation sits on, so it belongs to the same permission.
 r.get('/admin/levels', authenticate, requireOrg, requireModule('STRUCTURE'), levels.all);
+// The ladder belongs to the organisation, not to a legal entity inside it.
+r.get('/admin/hierarchy', authenticate, requireOrg, requireModule('STRUCTURE'), levels.overview);
+r.put('/admin/hierarchy', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.replace);
+r.put('/admin/designations/:id/level', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.setDesignationLevel);
+// Placing the whole column in one call is what keeps the screen from being a
+// wall of "not placed" that has to be cleared one dropdown at a time.
+r.put('/admin/designation-levels', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.setDesignationLevelsBulk);
+// Old per-company paths: the company id is ignored and the organisation's
+// single ladder is read or written, so existing bookmarks keep working.
 r.get('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE'), levels.list);
 r.put('/admin/companies/:companyId/levels', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.replace);
-r.put('/admin/designations/:id/level', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), levels.setDesignationLevel);
 
 // --- Document branding (letterhead, logo, signatory, PDF templates) ---
 // Per organisation, overridable per company. Everything the product issues as
@@ -384,6 +393,17 @@ r.delete('/admin/banners/:id', authenticate, requireModule('BANNERS', 'manage'),
 r.get('/me/permissions', authenticate, roles.myPermissions);
 r.get('/me/organisations', authenticate, org.mine);
 
+// --- Master tickets: the one channel that crosses the tenant boundary. -------
+// Raising is open to every authenticated account in every organisation and is
+// deliberately NOT behind requireModule — an org whose subscription is lapsed,
+// or whose roles grant almost nothing, must still be able to reach us.
+r.post('/platform-tickets', authenticate, masterTicket.create);
+r.get('/platform-tickets', authenticate, masterTicket.mine);
+r.get('/platform-tickets/:id/screenshot', authenticate, masterTicket.screenshot);
+// Reading every tenant's tickets is the platform owner's alone.
+r.get('/admin/platform-tickets', authenticate, requirePlatformAdmin, masterTicket.list);
+r.post('/admin/platform-tickets/:id/reply', authenticate, requirePlatformAdmin, masterTicket.reply);
+
 // --- Organisations (platform owner: create tenants & switch between them) ---
 r.get('/admin/organisations', authenticate, requirePlatformAdmin, org.list);
 r.post('/admin/organisations', authenticate, requirePlatformAdmin, org.create);
@@ -422,6 +442,15 @@ r.post('/admin/companies/:id/designations', authenticate, requireOrg, requireMod
 r.delete('/admin/companies/:id/designations/:desId', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDesignation);
 // Add-many / delete-many: a new tenant types its whole structure in one go, and
 // a restructure clears out a dozen titles at once.
+// Departments and designations are organisation-wide; these are the paths the
+// portal uses. The /admin/companies/:id/... forms below stay as aliases.
+r.post('/admin/departments', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDepartment);
+r.post('/admin/designations', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignation);
+r.post('/admin/departments/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDepartmentsBulk);
+r.post('/admin/designations/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignationsBulk);
+r.post('/admin/departments/delete', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDepartmentsBulk);
+r.post('/admin/designations/delete', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDesignationsBulk);
+
 r.post('/admin/companies/:id/departments/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDepartmentsBulk);
 r.post('/admin/companies/:id/designations/bulk', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.addDesignationsBulk);
 r.post('/admin/companies/:id/departments/delete', authenticate, requireOrg, requireModule('STRUCTURE', 'manage'), company.removeDepartmentsBulk);

@@ -623,3 +623,38 @@ CREATE INDEX IF NOT EXISTS idx_expense_subheaders_org ON expense_subheaders (org
 -- no error anywhere. Scoping only needs the index below; making the name
 -- per-organisation as well is a follow-up that must change that handler too.
 CREATE INDEX IF NOT EXISTS idx_clients_vendors_org ON clients_vendors (organisation_id, name);
+
+-- ── 27. Structure is organisation-wide, not per company ────────────────────
+-- Departments, designations and the level ladder used to hang off a company,
+-- on the theory that two companies in one group rarely share a shape. In
+-- practice every client wants one list for the whole organisation: the same
+-- "Finance" department and the same "HR Manager" title, whichever legal entity
+-- pays the person. Keeping them per company meant the same names re-typed per
+-- entity and a ladder that read "not placed" for every title in the group.
+--
+-- Additive and reversible-in-shape: company_id stays on the row as a record of
+-- where it came from, but nothing scopes by it any more. The backfill, the
+-- merge of per-company duplicates and the new uniqueness live in migrate.js,
+-- because a unique index cannot be created until the duplicates are gone.
+ALTER TABLE departments  ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+ALTER TABLE designations ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
+
+-- company_id becomes a breadcrumb rather than the scope, so it must be allowed
+-- to be empty on rows created from the organisation-wide screens.
+ALTER TABLE departments  ALTER COLUMN company_id DROP NOT NULL;
+ALTER TABLE designations ALTER COLUMN company_id DROP NOT NULL;
+ALTER TABLE org_levels   ALTER COLUMN company_id DROP NOT NULL;
+
+-- The rung number is unique per organisation now. Drop the per-company rule
+-- first; the per-organisation one is created in migrate.js after the merge.
+ALTER TABLE org_levels DROP CONSTRAINT IF EXISTS org_levels_company_id_level_no_key;
+
+CREATE INDEX IF NOT EXISTS idx_departments_org  ON departments  (organisation_id, name);
+CREATE INDEX IF NOT EXISTS idx_designations_org ON designations (organisation_id, title);
+CREATE INDEX IF NOT EXISTS idx_org_levels_org   ON org_levels   (organisation_id, level_no);
+
+-- ── 28. Attachment filenames are stored, not echoed ───────────────────────
+-- Support attachments are now served with a name and type this side decides
+-- (utils/uploads.js), so the sanitised filename has to be kept rather than
+-- taken from the download request.
+ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS attachment_name TEXT;

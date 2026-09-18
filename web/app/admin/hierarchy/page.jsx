@@ -5,6 +5,29 @@ import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, 
 import { downloadCsv } from '@/lib/csv.js';
 import StructureEditor from '@/components/StructureEditor.jsx';
 
+// Grades in this product read like M5 > M4 > … > M1 > L3 > L2 > L1: a letter
+// for the track (management above individual contributor) and a number for
+// depth within it. Sorting by that is what lets a ladder be built straight from
+// the grades HR has already typed, rather than asking them to invent rungs and
+// then place every title by hand.
+function gradesBySeniority(designations) {
+  const seen = new Map();
+  for (const d of designations) {
+    const g = String(d.grade || '').trim().toUpperCase();
+    if (g) seen.set(g, (seen.get(g) || 0) + 1);
+  }
+  const rank = (g) => {
+    const m = /^([A-Z]+)\s*(\d+)?$/.exec(g);
+    if (!m) return [99, 0, g];
+    const track = m[1] === 'M' ? 0 : m[1] === 'L' ? 1 : 2;   // M first, then L
+    return [track, -(parseInt(m[2] || '0', 10)), g];          // higher number = more senior
+  };
+  return [...seen.keys()].sort((a, b) => {
+    const [ta, na, sa] = rank(a); const [tb, nb, sb] = rank(b);
+    return ta - tb || na - nb || sa.localeCompare(sb);
+  }).map((g) => ({ grade: g, titles: seen.get(g) }));
+}
+
 const PRESETS = [
   { label: 'Four rungs', names: ['Board', 'Leadership', 'Management', 'Executive'] },
   { label: 'Five rungs', names: ['Board', 'Leadership', 'Senior Management', 'Management', 'Executive'] },
@@ -12,8 +35,6 @@ const PRESETS = [
 ];
 
 export default function HierarchyPage() {
-  const [companies, setCompanies] = useState(null);
-  const [companyId, setCompanyId] = useState('');
   const [data, setData] = useState(null);
   const [rows, setRows] = useState([]);          // the editable ladder
   const [count, setCount] = useState('');
@@ -21,34 +42,20 @@ export default function HierarchyPage() {
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
 
-  // /meta/companies, not /admin/companies: the latter needs the COMPANIES
-  // module, which HR deliberately does not have — asking for it left this page
-  // spinning forever with no company id to load. /meta/companies is the
-  // organisation-scoped lookup every staff role can read.
-  useEffect(() => {
-    api.get('/meta/companies').then((r) => {
-      const list = Array.isArray(r) ? r : [];
-      setCompanies(list);
-      if (list[0]) setCompanyId(String(list[0].id));
-      else setErr('No company is set up for this organisation yet — add one before setting levels.');
-    }).catch((e) => { setCompanies([]); setErr(e.message); });
-  }, []);
-
-  const load = (id) => {
+  // One ladder, one department list, one designation list for the whole
+  // organisation — there is nothing to pick between any more.
+  const load = () => {
     setData(null); setErr(''); setMsg('');
-    api.get(`/admin/companies/${id}/levels`)
+    api.get('/admin/hierarchy')
       .then((d) => { setData(d); setRows(d.levels.map((l) => ({ ...l }))); })
-      .catch((e) => { setErr(e.message); setData({ levels: [], designations: [] }); });
+      .catch((e) => { setErr(e.message); setData({ levels: [], designations: [], departments: [] }); });
   };
-  useEffect(() => { if (companyId) load(companyId); /* eslint-disable-next-line */ }, [companyId]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
 
   // Refresh in place after a structure change — no spinner, because blanking the
   // whole page for a one-row edit reads as a crash.
   const refresh = () => {
-    if (!companyId) return;
-    api.get(`/admin/companies/${companyId}/levels`)
-      .then((d) => setData(d))
-      .catch((e) => setErr(e.message));
+    api.get('/admin/hierarchy').then((d) => setData(d)).catch((e) => setErr(e.message));
   };
 
   const dirty = useMemo(() => {
@@ -79,7 +86,7 @@ export default function HierarchyPage() {
   async function save() {
     setBusy(true); setErr(''); setMsg('');
     try {
-      const d = await api.put(`/admin/companies/${companyId}/levels`, {
+      const d = await api.put('/admin/hierarchy', {
         levels: rows.map((l) => ({ id: l.id, name: l.name, description: l.description || null })),
       });
       setData(d); setRows(d.levels.map((l) => ({ ...l })));
@@ -93,35 +100,56 @@ export default function HierarchyPage() {
     setErr('');
     try {
       await api.put(`/admin/designations/${designationId}/level`, { levelId: levelId || null });
-      load(companyId);
+      refresh();
     } catch (e) { setErr(e.message); }
   }
 
   const unassigned = (data?.designations || []).filter((d) => !d.levelId).length;
+  const gradeLadder = useMemo(() => gradesBySeniority(data?.designations || []), [data]);
+  const ungraded = (data?.designations || []).filter((d) => !String(d.grade || '').trim()).length;
+
+  // One click from "every title says not placed" to a working ladder: make a
+  // rung per grade, most senior first, then put every title on its own grade's
+  // rung. Saved through the same two endpoints the manual path uses, so there
+  // is no second code path to keep honest.
+  async function buildFromGrades() {
+    if (!gradeLadder.length) { setErr('No grades are set on any designation yet.'); return; }
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const saved = await api.put('/admin/hierarchy', {
+        levels: gradeLadder.map((g) => ({
+          name: g.grade,
+          description: `${g.titles} title${g.titles === 1 ? '' : 's'} on grade ${g.grade}`,
+        })),
+      });
+      const rungOf = new Map(saved.levels.map((l) => [l.name.toUpperCase(), l.id]));
+      const placements = (saved.designations || [])
+        .map((d) => ({ designationId: d.id, levelId: rungOf.get(String(d.grade || '').trim().toUpperCase()) ?? null }))
+        .filter((p) => p.levelId != null);
+      const placed = placements.length
+        ? await api.put('/admin/designation-levels', { placements })
+        : saved;
+      setData(placed);
+      setRows(placed.levels.map((l) => ({ ...l })));
+      setMsg(`Built ${saved.levels.length} rung${saved.levels.length === 1 ? '' : 's'} from the grades and placed `
+        + `${placements.length} title${placements.length === 1 ? '' : 's'}.`
+        + (ungraded ? ` ${ungraded} title${ungraded === 1 ? ' has' : 's have'} no grade — place those by hand.` : ''));
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
 
   return (
     <div className="space-y-5">
       <PageHeader
         title="Organisation hierarchy"
-        subtitle="The rungs of the ladder for one company. Designations sit on a rung, so every employee inherits a level from the title they already hold — nothing to maintain per person."
-        action={
-          companies && companies.length > 1 ? (
-            <Field label="Company">
-              <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
-                {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
-              </Select>
-            </Field>
-          ) : null
-        }
+        subtitle={`One ladder for ${data?.organisation || 'the organisation'} — every company in the group shares it. A title sits on a rung, so everybody holding that title inherits the level. Grade is the code on the title itself; level is where it sits here.`}
       />
 
       {err && <p className="text-sm text-neg">{err}</p>}
       {msg && <p className="text-sm text-pos">{msg}</p>}
 
-      {!companyId ? (
-        <Card><Empty title="No company yet"
-          subtitle="Levels belong to a company. Add one on the Companies screen first, then set its ladder here." /></Card>
-      ) : data === null ? <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card> : (
+      {data === null ? (
+        <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card>
+      ) : (
         <>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
             <StatTile label="Levels" value={data.levels.length} tone="neutral" />
@@ -148,6 +176,26 @@ export default function HierarchyPage() {
               ))}
             </div>
           </Card>
+
+          {gradeLadder.length > 0 && unassigned === (data.designations || []).length && (
+            <Card className="p-4 border-warn-line bg-warn-bg/40">
+              <div className="flex flex-wrap items-center justify-between gap-3">
+                <div className="min-w-0">
+                  <div className="text-[13px] font-semibold text-ink">
+                    No title is on a rung yet, but every title already has a grade.
+                  </div>
+                  <p className="mt-0.5 text-[12.5px] text-ink-soft">
+                    Build the ladder from those grades — {gradeLadder.map((g) => g.grade).join(' › ')} — and
+                    place all {(data.designations || []).length - ungraded} graded titles in one go. Rename or
+                    reorder the rungs afterwards if that is not your shape.
+                  </p>
+                </div>
+                <Button onClick={buildFromGrades} disabled={busy} className="shrink-0">
+                  {busy ? <Spinner /> : 'Build ladder from grades'}
+                </Button>
+              </div>
+            </Card>
+          )}
 
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-line bg-canvas">
@@ -220,6 +268,11 @@ export default function HierarchyPage() {
               <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-line bg-canvas">
                 <span className="text-[12.5px] font-semibold text-ink-soft">
                   Set the rung once per title; every holder inherits it
+                  {unassigned > 0 && data.levels.length > 0 && (
+                    <span className="ml-2 font-normal text-warn">
+                      · {unassigned} still unplaced
+                    </span>
+                  )}
                 </span>
                 <Button variant="outline" size="sm" onClick={() => downloadCsv('designation-levels.csv',
                   (data.designations || []).map((d) => ({
@@ -248,10 +301,16 @@ export default function HierarchyPage() {
                           <td className="px-4 text-ink font-medium">{d.title}</td>
                           <td className="px-4 text-ink-faint text-[12.5px]">{d.grade || '—'}</td>
                           <td className="px-4">
-                            <Select value={d.levelId ?? ''} onChange={(e) => assign(d.id, e.target.value)}>
-                              <option value="">— not placed —</option>
-                              {data.levels.map((l) => <option key={l.id} value={l.id}>L{l.levelNo} · {l.name}</option>)}
-                            </Select>
+                            {data.levels.length === 0 ? (
+                              <span className="text-[12.5px] text-ink-faint">
+                                No rungs yet — build the ladder above
+                              </span>
+                            ) : (
+                              <Select value={d.levelId ?? ''} onChange={(e) => assign(d.id, e.target.value)}>
+                                <option value="">— not placed —</option>
+                                {data.levels.map((l) => <option key={l.id} value={l.id}>L{l.levelNo} · {l.name}</option>)}
+                              </Select>
+                            )}
                           </td>
                         </tr>
                       ))}
@@ -265,22 +324,12 @@ export default function HierarchyPage() {
           <section>
             <h2 className="mb-2.5">Structure</h2>
             <p className="mb-2.5 text-[12.5px] text-ink-faint">
-              Departments and designations belong to this company, so each entity in the group keeps its own.
-              Anything somebody currently holds cannot be deleted — move those people first.
+              Departments and designations belong to the organisation, so every company in the group draws on the
+              same two lists. Anything somebody currently holds cannot be deleted — move those people first.
             </p>
             <div className="grid gap-3.5 lg:grid-cols-2">
-              <StructureEditor
-                companyId={companyId}
-                kind="departments"
-                rows={data.departments || []}
-                onChanged={refresh}
-              />
-              <StructureEditor
-                companyId={companyId}
-                kind="designations"
-                rows={data.designations || []}
-                onChanged={refresh}
-              />
+              <StructureEditor kind="departments" rows={data.departments || []} onChanged={refresh} />
+              <StructureEditor kind="designations" rows={data.designations || []} onChanged={refresh} />
             </div>
           </section>
         </>

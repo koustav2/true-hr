@@ -15,13 +15,14 @@ import * as pmsC from '../src/controllers/pmsController.js';
 import * as supC from '../src/controllers/supportController.js';
 import * as taskC from '../src/controllers/taskController.js';
 import * as venC from '../src/controllers/vendorController.js';
+import * as payC from '../src/controllers/payrollController.js';
 
 const q = (sql, params) => pool.query(sql, params);
 
 // Drive a controller like an HTTP call (same trick the test scripts use).
-function call(fn, { params = {}, query = {}, body = {}, user }) {
+function call(fn, { params = {}, query = {}, body = {}, user, orgId }) {
   return new Promise((resolve) => {
-    const req = { params, query, body, user };
+    const req = { params, query, body, user, orgId, auth: { isPlatformAdmin: false } };
     const res = { _s: 200, status(s) { this._s = s; return this; }, json(d) { resolve({ status: this._s, data: d }); }, setHeader() {}, send(d) { resolve({ status: this._s, data: d }); } };
     fn(req, res, (e) => resolve({ status: e.status || 500, data: { error: e.message } }));
   });
@@ -76,29 +77,39 @@ function solidPng(w, h, [r, g, b]) {
 
 async function main() {
   const log = (m) => console.log(`[demo] ${m}`);
-  const companyId = (await q(`SELECT id FROM companies ORDER BY id LIMIT 1`)).rows[0]?.id;
-  if (!companyId) { console.error('Run the base seed first (node src/db/seed.js)'); process.exit(1); }
+  const co = (await q(`SELECT id, organisation_id FROM companies ORDER BY id LIMIT 1`)).rows[0];
+  if (!co) { console.error('Run the base seed first (node src/db/seed.js)'); process.exit(1); }
+  const companyId = co.id;
+  // NFA masters are per organisation, not global — the unique indexes are
+  // (organisation_id, name), so every ON CONFLICT below has to name both
+  // columns or Postgres finds no arbiter index and refuses the insert.
+  const orgId = co.organisation_id;
 
   /* ── 1. Masters ── */
   for (const name of ['True Kind Foundation', 'L R Technology', 'Vision India']) {
-    await q(`INSERT INTO group_companies (name) VALUES ($1) ON CONFLICT (name) DO NOTHING`, [name]);
+    await q(`INSERT INTO group_companies (organisation_id, name) VALUES ($1,$2)
+             ON CONFLICT (organisation_id, name) DO NOTHING`, [orgId, name]);
   }
-  const gc = (await q(`SELECT id FROM group_companies ORDER BY id LIMIT 1`)).rows[0].id;
+  const gc = (await q(
+    `SELECT id FROM group_companies WHERE organisation_id = $1 ORDER BY id LIMIT 1`, [orgId])).rows[0].id;
 
   const ops = (await q(`SELECT id, name FROM business_operations ORDER BY id LIMIT 4`)).rows;
   const projects = ['Skill Development Center — Noida', 'Solar O&M — Odisha', 'Corporate HQ', 'CSR Field Program'];
   for (const [i, name] of projects.entries()) {
-    await q(`INSERT INTO projects (name, business_operation_id, group_company_id)
-             VALUES ($1,$2,$3) ON CONFLICT (name) DO NOTHING`, [name, ops[i % ops.length]?.id || null, gc]);
+    await q(`INSERT INTO projects (organisation_id, name, business_operation_id, group_company_id)
+             VALUES ($1,$2,$3,$4) ON CONFLICT (organisation_id, name) DO NOTHING`,
+      [orgId, name, ops[i % ops.length]?.id || null, gc]);
   }
 
   for (const [name, kind] of [['Noida', 'CITY'], ['New Delhi', 'CITY'], ['Bhubaneswar', 'CITY'], ['Mumbai', 'CITY'], ['Client-Side', 'SPECIAL']]) {
-    await q(`INSERT INTO office_locations (name, kind) VALUES ($1,$2) ON CONFLICT (name) DO NOTHING`, [name, kind]);
+    await q(`INSERT INTO office_locations (organisation_id, name, kind) VALUES ($1,$2,$3)
+             ON CONFLICT (organisation_id, name) DO NOTHING`, [orgId, name, kind]);
   }
 
   for (const [name, type] of [['NTPC Vidyut Vyapar Nigam', 'CLIENT'], ['District Skill Mission', 'CLIENT'], ['Sharma Stationers & Suppliers', 'VENDOR'], ['City Cab Services', 'VENDOR']]) {
-    await q(`INSERT INTO clients_vendors (name, type) SELECT $1,$2
-             WHERE NOT EXISTS (SELECT 1 FROM clients_vendors WHERE lower(name)=lower($1))`, [name, type]);
+    await q(`INSERT INTO clients_vendors (organisation_id, name, type) SELECT $1,$2,$3
+             WHERE NOT EXISTS (SELECT 1 FROM clients_vendors WHERE lower(name)=lower($2))`,
+      [orgId, name, type]);
   }
 
   // Expense hierarchy: headers + sub-headers under the first few seeded categories.
@@ -108,15 +119,19 @@ async function main() {
     ['Office Supplies', ['Stationery', 'Pantry & Housekeeping', 'Printer Consumables']],
     ['Recharge & Bill Payment', ['Mobile Recharge', 'DTH / Data Card']],
   ];
-  const cats = (await q(`SELECT id, name FROM expense_categories ORDER BY id LIMIT ${hierarchy.length}`)).rows;
+  const cats = (await q(
+    `SELECT id, name FROM expense_categories WHERE organisation_id = $1
+      ORDER BY id LIMIT ${hierarchy.length}`, [orgId])).rows;
   for (const [i, [header, subs]] of hierarchy.entries()) {
     const cat = cats[i % cats.length];
     if (!cat) break;
     const h = (await q(
-      `INSERT INTO expense_headers (category_id, name) VALUES ($1,$2)
-       ON CONFLICT (category_id, name) DO UPDATE SET active=true RETURNING id`, [cat.id, header])).rows[0].id;
+      `INSERT INTO expense_headers (organisation_id, category_id, name) VALUES ($1,$2,$3)
+       ON CONFLICT (category_id, name) DO UPDATE SET active=true RETURNING id`,
+      [orgId, cat.id, header])).rows[0].id;
     for (const s of subs) {
-      await q(`INSERT INTO expense_subheaders (header_id, name) VALUES ($1,$2) ON CONFLICT (header_id, name) DO NOTHING`, [h, s]);
+      await q(`INSERT INTO expense_subheaders (organisation_id, header_id, name) VALUES ($1,$2,$3)
+               ON CONFLICT (header_id, name) DO NOTHING`, [orgId, h, s]);
     }
   }
   log('masters: companies, projects, locations, clients/vendors, expense hierarchy');
@@ -125,11 +140,17 @@ async function main() {
   async function ensurePerson({ code, first, last, email, managerId = null, role = 'EMPLOYEE', password }) {
     let emp = (await q(`SELECT id FROM employees WHERE lower(official_email)=lower($1)`, [email])).rows[0];
     if (!emp) {
+      // organisation_id is not optional. Almost every read in the app filters
+      // on it, so a demo person created without one exists in the database and
+      // nowhere in the product: no payroll row, no HRMIS line, and an approval
+      // chain that resolves to no manager.
       emp = (await q(
-        `INSERT INTO employees (company_id, employee_code, first_name, last_name, personal_email, official_email,
-           reporting_manager_id, employment_type, onboarding_status)
-         VALUES ($1,$2,$3,$4,$5,$5,$6,'FULL_TIME','ACTIVE') RETURNING id`,
-        [companyId, code, first, last, email, managerId])).rows[0];
+        `INSERT INTO employees (organisation_id, company_id, employee_code, first_name, last_name,
+           personal_email, official_email, reporting_manager_id, employment_type, onboarding_status)
+         VALUES ($1,$2,$3,$4,$5,$6,$6,$7,'FULL_TIME','ACTIVE') RETURNING id`,
+        [orgId, companyId, code, first, last, email, managerId])).rows[0];
+    } else if (!(await q(`SELECT organisation_id FROM employees WHERE id=$1`, [emp.id])).rows[0].organisation_id) {
+      await q(`UPDATE employees SET organisation_id=$2 WHERE id=$1`, [emp.id, orgId]);
     }
     const acc = await q(`SELECT 1 FROM user_accounts WHERE lower(email)=lower($1)`, [email]);
     if (!acc.rowCount) {
@@ -142,33 +163,139 @@ async function main() {
   const employeeId = await ensurePerson({ code: 'TKF9002', first: 'Demo', last: 'Employee', email: 'demo.employee@truehr.example', managerId, password: 'Demo@12345' });
 
   // Leave balances (create the standard types if leave config was never opened).
-  if (!(await q(`SELECT 1 FROM leave_types LIMIT 1`)).rowCount) {
+  // Scoped to this organisation throughout: leave_types also holds the
+  // organisation-less template rows the migration clones from, and allocating
+  // against those as well gave every demo person two of every balance.
+  if (!(await q(`SELECT 1 FROM leave_types WHERE organisation_id = $1 LIMIT 1`, [orgId])).rowCount) {
     const types = [['EL', 'Earned Leave', 18], ['CL', 'Casual Leave', 7], ['SL', 'Sick Leave', 7], ['LWP', 'Leave Without Pay', 0]];
     for (const [i, [code, name, quota]] of types.entries()) {
-      await q(`INSERT INTO leave_types (code, name, annual_quota, requires_balance, sort_order)
-               VALUES ($1,$2,$3,$4,$5) ON CONFLICT (code) DO NOTHING`, [code, name, quota, quota > 0, i]);
+      await q(`INSERT INTO leave_types (organisation_id, code, name, annual_quota, requires_balance, sort_order)
+               VALUES ($1,$2,$3,$4,$5,$6)
+               ON CONFLICT (organisation_id, code) WHERE organisation_id IS NOT NULL DO NOTHING`,
+        [orgId, code, name, quota, quota > 0, i]);
     }
   }
   for (const emp of [managerId, employeeId]) {
     await q(
       `INSERT INTO leave_balances (employee_id, leave_type_id, allocated)
-       SELECT $1, id, annual_quota FROM leave_types WHERE requires_balance
-       ON CONFLICT (employee_id, leave_type_id) DO NOTHING`, [emp]);
+       SELECT $1, id, annual_quota FROM leave_types
+        WHERE requires_balance AND organisation_id = $2
+       ON CONFLICT (employee_id, leave_type_id) DO NOTHING`, [emp, orgId]);
   }
   log('people: demo manager + employee (leave balances allotted)');
+
+  // Attendance history. Without it the monthly calendar reads "Absent" for
+  // every working day so far, which is what an account looks like when nobody
+  // has ever punched — not a useful demo. Fill the month to date: a normal
+  // 9:32–18:4x day on weekdays, one short day, and no punches on weekends.
+  const workforce = (await q(
+    `SELECT id FROM employees WHERE organisation_id=$1 AND onboarding_status='ACTIVE' ORDER BY id`,
+    [orgId])).rows.map((r) => Number(r.id));
+  for (const emp of workforce) {
+    if ((await q(`SELECT 1 FROM attendance WHERE employee_id=$1 LIMIT 1`, [emp])).rowCount) continue;
+    const today = new Date();
+    // Last month as well as this one, so the payroll run for the month that was
+    // actually paid is not flagged as one long unexplained absence.
+    const first = new Date(today.getFullYear(), today.getMonth() - 1, 1);
+    for (let d = new Date(first); d <= today; d.setDate(d.getDate() + 1)) {
+      const dow = d.getDay();
+      if (dow === 0 || dow === 6) continue;               // week off
+      if ((d.getDate() + emp) % 23 === 0) continue;       // the odd day out, staggered per person
+      const at = (h, m) => new Date(d.getFullYear(), d.getMonth(), d.getDate(), h, m);
+      const late = d.getDate() % 4 === 0;
+      await q(`INSERT INTO attendance (employee_id, type, captured_at, lat, lng, address)
+               VALUES ($1,'IN',$2,28.5355,77.3910,'Sector 62, Noida'),
+                      ($1,'OUT',$3,28.5355,77.3910,'Sector 62, Noida')`,
+        [emp, at(9, late ? 47 : 32), at(18, late ? 12 : 41)]);
+    }
+  }
+  log('attendance: punches filled in for the month to date');
+
+  // Salary structures for everybody on record. Payroll is unusable without
+  // them — every row reads "Set structure", nothing can be generated, and the
+  // HRMIS readiness panel counts all nine people as not payable.
+  {
+    const people = (await q(
+      `SELECT e.id, d.grade FROM employees e
+         LEFT JOIN designations d ON d.id = e.designation_id
+        WHERE e.organisation_id = $1 AND e.onboarding_status = 'ACTIVE'
+          AND NOT EXISTS (SELECT 1 FROM salary_structures s WHERE s.employee_id = e.id)
+        ORDER BY e.id`, [orgId])).rows;
+    // Rough bands by grade, so the list is not nine identical salaries.
+    const band = { M2: 145000, M1: 110000, L3: 78000, L2: 54000, L1: 38000 };
+    for (const [i, p] of people.entries()) {
+      const ctc = band[p.grade] || [62000, 48000, 85000, 41000][i % 4];
+      await q(
+        `INSERT INTO salary_structures (employee_id, grade, monthly_ctc, basic_pct,
+                                        hra_pct_of_basic, employee_pf_pct, professional_tax,
+                                        lta, personal_allowance, city_allowance)
+         VALUES ($1,$2,$3,50,50,12,200,$4,$5,$6)`,
+        [p.id, p.grade || null, ctc, Math.round(ctc * 0.04), Math.round(ctc * 0.06), Math.round(ctc * 0.03)]);
+    }
+    if (people.length) log(`payroll: salary structures set for ${people.length} people`);
+  }
+
+  // Last month's payroll, generated and published, so the payslip screens have
+  // something in them. Last month rather than this one: the current month is
+  // still running, and a mid-month payslip is not what anyone would look at.
+  {
+    const now = new Date();
+    const prev = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const period = { year: prev.getFullYear(), month: prev.getMonth() + 1 };
+    const done = await q(
+      `SELECT count(*)::int n FROM payslips WHERE year=$1 AND month=$2 AND status='PUBLISHED'`,
+      [period.year, period.month]);
+    if (!done.rows[0].n) {
+      // A real HR login: the controllers audit against req.user.id, which is
+      // the user_account row, not the employee.
+      const hr = (await q(
+        `SELECT id, employee_id FROM user_accounts WHERE role='HR_ADMIN' LIMIT 1`)).rows[0];
+      const hrUser = { id: hr.id, sub: hr.id, employeeId: hr.employee_id, role: 'HR_ADMIN' };
+      const g = await call(payC.generateAll, { body: period, user: hrUser, orgId });
+      const p = await call(payC.publishAll, { body: period, user: hrUser, orgId });
+      log(`payslips: ${g.data?.generated ?? 0} generated, ${p.data?.published ?? 0} published for ${period.month}/${period.year}`);
+    }
+  }
 
   /* ── 3. Approver matrix: wildcard Finance + Business Leader stages ── */
   const finance = (await q(`SELECT id FROM employees WHERE lower(official_email) LIKE 'arjun.pillai@%' LIMIT 1`)).rows[0]?.id || managerId;
   const bizLead = (await q(`SELECT id FROM employees WHERE lower(official_email) LIKE 'anil.verma@%' LIMIT 1`)).rows[0]?.id || managerId;
   for (const [roleKey, approver] of [['FINANCE', finance], ['BUSINESS_LEADER', bizLead]]) {
     await q(
-      `INSERT INTO approver_matrix (project_id, expense_category_id, zone_id, role_key, approver_employee_id)
-       SELECT NULL, NULL, NULL, $1, $2
+      // Matrix rows are looked up within the raiser's organisation, so an
+      // org-less row resolves for nobody: every chain then stops dead at the
+      // first matrix stage with no approver, and the NFA never leaves PENDING.
+      `INSERT INTO approver_matrix (organisation_id, project_id, expense_category_id, zone_id, role_key, approver_employee_id)
+       SELECT $3, NULL, NULL, NULL, $1, $2
        WHERE NOT EXISTS (SELECT 1 FROM approver_matrix
-         WHERE project_id IS NULL AND expense_category_id IS NULL AND zone_id IS NULL AND role_key=$1)`,
-      [roleKey, approver]);
+         WHERE organisation_id IS NOT DISTINCT FROM $3
+           AND project_id IS NULL AND expense_category_id IS NULL AND zone_id IS NULL AND role_key=$1)`,
+      [roleKey, approver, orgId]);
   }
   log('approver matrix: FINANCE + BUSINESS_LEADER wildcards (chains now resolve past the RM)');
+
+  /* ── 3b. Master tickets, so the platform inbox is not an empty screen ── */
+  if (!(await q(`SELECT 1 FROM platform_tickets LIMIT 1`)).rowCount) {
+    const raiser = (await q(
+      `SELECT ua.id, ua.email, ua.role FROM user_accounts ua WHERE ua.role='HR_ADMIN' LIMIT 1`)).rows[0];
+    const org = (await q(`SELECT name FROM organisations WHERE id=$1`, [orgId])).rows[0]?.name;
+    const tickets = [
+      ['Payslip PDF shows last month on the app', 'Opening September on the Android app renders the August payslip. The web portal shows the right one.', 'IN_PROGRESS'],
+      ['Add a second reporting manager for shared roles', 'Two of our functional leads report into both Operations and Engineering. Can the chain take a second line?', 'OPEN'],
+      ['Bulk upload rejected 3 rows without saying why', 'The employee import said "3 rows skipped" but the error file was empty.', 'RESOLVED'],
+    ];
+    for (const [i, [subject, description, status]] of tickets.entries()) {
+      await q(
+        `INSERT INTO platform_tickets (ticket_code, organisation_id, raised_by, raiser_name, raiser_email,
+           raiser_role, subject, description, contact_email, contact_phone, status, reply, replied_at, created_at)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$5,'+91 98100 00000',$9,$10,$11, now() - ($12 || ' days')::interval)`,
+        [`MT2026${String(i + 1).padStart(4, '0')}`, orgId, raiser?.id, org, raiser?.email, raiser?.role,
+          subject, description, status,
+          status === 'RESOLVED' ? 'Fixed in the 19 Sep release — the import now writes a reason per skipped row.' : null,
+          status === 'RESOLVED' ? new Date() : null, (i + 1) * 3]);
+    }
+    log('master tickets: 3 raised (one open, one in progress, one resolved)');
+  }
 
   /* ── 4. Dashboard banners ── */
   if (!(await q(`SELECT 1 FROM app_banners LIMIT 1`)).rowCount) {

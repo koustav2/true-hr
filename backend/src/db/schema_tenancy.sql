@@ -547,16 +547,28 @@ UPDATE approver_matrix m SET organisation_id = e.organisation_id
 -- even if it is ever evaluated on a multi-organisation database.
 UPDATE policies            SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+-- business_operations, cost_zones and expense_categories additionally skip a
+-- row whose name the sole organisation already holds. schema.sql ships starter
+-- rows in those three, and each organisation takes a COPY of them rather than
+-- claiming the shared originals (see migrate.js, and leave_types for the same
+-- pattern). Without the guard, the second boot would try to claim a template
+-- whose copy already exists and trip the (organisation_id, name) unique index.
 UPDATE app_banners         SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE approver_matrix     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE business_operations SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
- WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1
+   AND NOT EXISTS (SELECT 1 FROM business_operations mine
+                    WHERE mine.organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+                      AND mine.name = business_operations.name);
 UPDATE group_companies     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE cost_zones          SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
- WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1
+   AND NOT EXISTS (SELECT 1 FROM cost_zones mine
+                    WHERE mine.organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+                      AND mine.name = cost_zones.name);
 UPDATE projects            SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE office_locations    SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
@@ -564,7 +576,10 @@ UPDATE office_locations    SET organisation_id = (SELECT id FROM organisations O
 UPDATE clients_vendors     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE expense_categories  SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
- WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
+ WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1
+   AND NOT EXISTS (SELECT 1 FROM expense_categories mine
+                    WHERE mine.organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+                      AND mine.name = expense_categories.name);
 UPDATE expense_headers     SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
  WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1;
 UPDATE expense_subheaders  SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)

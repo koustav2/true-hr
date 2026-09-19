@@ -39,6 +39,24 @@ async function main() {
   await pool.query(tenancySql);
   await migrateTenancy(pool);
 
+  // The NFA masters again, now that an organisation is certain to exist.
+  //
+  // schema_tenancy.sql backfills these, but on a brand-new database it runs
+  // before migrateTenancy() has created the default organisation, so its
+  // `count(*) = 1` guard sees zero and the UPDATE matches nothing. The rows
+  // then sit at organisation_id IS NULL for ever, and nfaMasters() filters on
+  // `organisation_id = $1` — so a freshly seeded install opens the NFA form
+  // with every dropdown empty. Repeating the backfill here costs one statement
+  // per table and is a no-op on an upgrade, where the first pass already ran.
+  for (const t of ['business_operations', 'group_companies', 'cost_zones', 'projects',
+    'office_locations', 'clients_vendors', 'expense_categories', 'expense_headers',
+    'expense_subheaders']) {
+    await pool.query(
+      `UPDATE ${t} SET organisation_id = (SELECT id FROM organisations ORDER BY id LIMIT 1)
+        WHERE organisation_id IS NULL AND (SELECT count(*) FROM organisations) = 1`);
+  }
+  console.log('[migrate] NFA masters attached to the default organisation');
+
   // Companies belong to Super Admin / platform owner only. Revoke any prior grant
   // to system HR/IT roles (adoptNewModules only adds, so this one-off removes).
   await pool.query(`DELETE FROM org_role_modules WHERE module_key='COMPANIES'

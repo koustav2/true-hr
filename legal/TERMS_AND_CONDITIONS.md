@@ -66,4 +66,4 @@ For questions about these Terms, contact:
 
 **L R Technology**
 Plot No. 361/461, Khata No. 73, Dubagadi, Near Jarka Market, Dubagadia, Dharmashala, District Jajpur, Odisha – 755008, India
-Email: **[contact email]**
+Email: **maitykoustav2911@gmail.com**

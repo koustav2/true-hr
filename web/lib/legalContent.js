@@ -48,7 +48,7 @@ The Service is intended for working professionals and is not directed to individ
 We may update this policy from time to time. We will revise the "Last updated" date above and, where appropriate, provide notice through the Service. Continued use after changes take effect constitutes acknowledgement of the updated policy.
 
 ## 11. Contact us
-L R Technology, Plot No. 361/461, Khata No. 73, Dubagadi, Near Jarka Market, Dubagadia, Dharmashala, District Jajpur, Odisha – 755008, India. Email: [contact email]
+L R Technology, Plot No. 361/461, Khata No. 73, Dubagadi, Near Jarka Market, Dubagadia, Dharmashala, District Jajpur, Odisha – 755008, India. Email: maitykoustav2911@gmail.com
 `;
 
 export const TERMS = `# Terms & Conditions — TrueHR
@@ -96,5 +96,5 @@ These Terms are governed by the laws of India. Subject to applicable law, the co
 We may update these Terms from time to time. We will revise the "Last updated" date above and, where appropriate, provide notice through the Service. Continued use after changes take effect constitutes acceptance of the updated Terms.
 
 ## 13. Contact us
-L R Technology, Plot No. 361/461, Khata No. 73, Dubagadi, Near Jarka Market, Dubagadia, Dharmashala, District Jajpur, Odisha – 755008, India. Email: [contact email]
+L R Technology, Plot No. 361/461, Khata No. 73, Dubagadi, Near Jarka Market, Dubagadia, Dharmashala, District Jajpur, Odisha – 755008, India. Email: maitykoustav2911@gmail.com
 `;

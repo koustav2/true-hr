@@ -3,264 +3,1095 @@
 <head>
 <meta charset="utf-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1"/>
-<title>TRUE HR — People first. Paperwork automated.</title>
-<meta name="description" content="TRUE HR runs the entire employee journey — offer letters, attendance, leave, expenses, performance and payroll — on the web and in your pocket."/>
+<title>TrueHR — The HR platform that runs on real work</title>
+<meta name="description" content="Attendance, leave, approvals, expenses, performance and payroll for multi-company groups. Every screen on this page is the real product, not a mockup."/>
+<meta name="theme-color" content="#0b1e4b"/>
 <link rel="icon" type="image/png" href="/favicon.png"/>
 <link rel="apple-touch-icon" href="/favicon.png"/>
+<meta property="og:title" content="TrueHR — The HR platform that runs on real work"/>
+<meta property="og:description" content="One platform for the entire employee journey, across every company in your group."/>
+<meta property="og:type" content="website"/>
+<meta property="og:url" content="https://truehr.co.in/"/>
+<meta property="og:image" content="https://truehr.co.in/shots/ess-dashboard.webp"/>
 <link rel="preconnect" href="https://fonts.googleapis.com"/>
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin/>
-<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet"/>
+<link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=JetBrains+Mono:wght@500&display=swap" rel="stylesheet"/>
 <style>
-  :root{
-    --blue:#2563eb; --blue-d:#1d4ed8; --green:#16a34a; --navy:#0b1e4b;
-    --ink:#0f172a; --soft:#475569; --faint:#8b95a7; --line:#e7eaf0; --canvas:#f7f8fb;
-    --grad:linear-gradient(135deg,#2563eb 0%,#1d8bd6 45%,#16a34a 100%);
-  }
-  *{margin:0;padding:0;box-sizing:border-box}
-  html{scroll-behavior:smooth}
-  body{font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;-webkit-font-smoothing:antialiased;letter-spacing:-.01em;overflow-x:hidden}
-  a{text-decoration:none;color:inherit}
-  .wrap{max-width:1120px;margin:0 auto;padding:0 20px}
-  .btn{display:inline-flex;align-items:center;justify-content:center;gap:9px;font-weight:700;border-radius:999px;transition:transform .18s ease,box-shadow .18s ease;white-space:nowrap}
-  .btn-primary{color:#fff;background:var(--grad);box-shadow:0 12px 28px -10px rgba(37,99,235,.45)}
-  .btn-primary:hover{transform:translateY(-2px);box-shadow:0 18px 36px -12px rgba(37,99,235,.55)}
-  .btn-outline{color:var(--ink);background:#fff;border:1.5px solid var(--line)}
-  .btn-outline:hover{border-color:#c9d2e0;transform:translateY(-2px)}
+/* ═══════════════════════════════════════════════════════════════════════
+   TrueHR landing page.
 
-  /* ── nav ── */
-  .topbar{position:sticky;top:0;z-index:50;background:rgba(255,255,255,.85);backdrop-filter:blur(16px);border-bottom:1px solid var(--line)}
-  .nav{height:68px;display:flex;align-items:center;justify-content:space-between}
-  .logo{display:flex;align-items:center;gap:10px;font-weight:800;font-size:19px;letter-spacing:-.02em}
-  .logo-mark{width:34px;height:34px;border-radius:10px;background:var(--grad);display:grid;place-items:center;color:#fff;font-weight:900;font-size:15px;box-shadow:0 6px 14px -6px rgba(37,99,235,.5)}
-  .logo .t{color:var(--blue-d)} .logo .k{color:var(--green)}
-  .menu{display:flex;align-items:center;gap:2px}
-  .menu .lnk{font-size:14px;font-weight:600;color:var(--soft);padding:9px 14px;border-radius:10px}
-  .menu .lnk:hover{color:var(--ink);background:var(--canvas)}
-  .menu .btn-primary{padding:10px 24px;font-size:14px;margin-left:10px}
+   Every screenshot under shots/ is a real capture of the running product
+   against a seeded demo tenant — no drawn mockups anywhere on this page.
+   The figures quoted in each lightbox are read off that same screenshot,
+   so the picture and the numbers beside it can never disagree.
+   ═══════════════════════════════════════════════════════════════════════ */
 
-  /* ── hero ── */
-  .hero{position:relative;padding:76px 0 0;text-align:center;overflow:hidden;
-    background:
-      radial-gradient(640px 420px at 12% -8%, rgba(37,99,235,.14), transparent 60%),
-      radial-gradient(640px 420px at 88% -4%, rgba(22,163,74,.13), transparent 60%),
-      linear-gradient(#fff,#f7f9fc)}
-  .badge{display:inline-flex;align-items:center;gap:9px;font-size:12.5px;font-weight:700;color:var(--blue-d);background:#eef4ff;border:1px solid #dbe7ff;border-radius:999px;padding:8px 18px}
-  .badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);box-shadow:0 0 0 4px rgba(22,163,74,.15)}
-  h1{font-size:clamp(38px,6.2vw,64px);line-height:1.06;font-weight:900;letter-spacing:-.035em;margin-top:26px}
-  h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .hero .sub{max-width:600px;margin:22px auto 0;color:var(--soft);font-size:17px;line-height:1.7}
-  .cta{margin-top:34px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
-  .cta .btn{padding:15px 34px;font-size:15.5px}
+:root{
+  --blue:#2563eb; --blue-d:#1d4ed8; --blue-l:#60a5fa;
+  --green:#16a34a; --green-l:#4ade80;
+  --navy:#0b1e4b; --navy-2:#132d63;
+  --ink:#0f172a; --soft:#475569; --faint:#8b95a7;
+  --line:#e7eaf0; --canvas:#f7f8fb;
+  --grad:linear-gradient(135deg,#2563eb 0%,#1d8bd6 45%,#16a34a 100%);
+  --shadow-lg:0 40px 80px -32px rgba(11,30,75,.38), 0 12px 28px -14px rgba(11,30,75,.18);
+  --ease:cubic-bezier(.16,.84,.44,1);
+}
+*{margin:0;padding:0;box-sizing:border-box}
+html{scroll-behavior:smooth;scroll-padding-top:86px}
+body{
+  font-family:'Inter',system-ui,-apple-system,sans-serif;color:var(--ink);background:#fff;
+  -webkit-font-smoothing:antialiased;letter-spacing:-.011em;overflow-x:hidden;
+}
+a{text-decoration:none;color:inherit}
+img{display:block;max-width:100%}
+button{font:inherit;color:inherit;background:none;border:0;cursor:pointer}
+.wrap{max-width:1180px;margin:0 auto;padding:0 24px}
+.mono{font-family:'JetBrains Mono',ui-monospace,monospace;letter-spacing:0}
 
-  /* ── product preview ── */
-  .shot{position:relative;max-width:960px;margin:64px auto -170px;text-align:left}
-  .shot::before{content:'';position:absolute;inset:-40px -60px auto;height:280px;background:radial-gradient(closest-side,rgba(37,99,235,.18),transparent);filter:blur(30px);z-index:0}
-  .browser{position:relative;z-index:1;border-radius:20px;overflow:hidden;background:#fff;border:1px solid var(--line);
-    box-shadow:0 30px 70px -25px rgba(11,30,75,.28), 0 8px 20px -12px rgba(11,30,75,.15)}
-  .b-bar{height:44px;background:#f4f6fa;border-bottom:1px solid var(--line);display:flex;align-items:center;gap:8px;padding:0 18px}
-  .b-bar b{width:12px;height:12px;border-radius:50%}
-  .b-url{margin-left:12px;background:#fff;border:1px solid var(--line);border-radius:9px;font-size:12px;color:var(--faint);padding:6px 16px;display:flex;align-items:center;gap:7px}
-  .b-url svg{flex:none}
-  .b-body{display:grid;grid-template-columns:210px 1fr}
-  .b-side{background:linear-gradient(180deg,#0d2456,#153a8f);padding:18px 12px;display:flex;flex-direction:column;gap:4px}
-  .s-item{font-size:12.5px;font-weight:600;color:rgba(255,255,255,.62);padding:9px 13px;border-radius:10px;display:flex;align-items:center;gap:9px}
-  .s-item.on{background:rgba(255,255,255,.16);color:#fff}
-  .s-dot{width:6px;height:6px;border-radius:50%;background:currentColor;opacity:.6}
-  .b-main{background:var(--canvas);padding:20px}
-  .m-head{display:flex;justify-content:space-between;align-items:center;margin-bottom:14px}
-  .m-head b{font-size:14.5px}
-  .m-btn{font-size:11px;font-weight:700;color:#fff;background:var(--grad);border-radius:999px;padding:6px 14px}
-  .m-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:11px}
-  .m-stat{background:#fff;border:1px solid var(--line);border-radius:14px;padding:14px}
-  .m-stat .v{font-size:20px;font-weight:800;letter-spacing:-.02em;color:var(--ink)}
-  .m-stat .v.g{color:var(--green)}
-  .m-stat .l{font-size:11px;color:var(--faint);margin-top:3px}
-  .m-chart{margin-top:12px;background:#fff;border:1px solid var(--line);border-radius:14px;padding:16px 16px 12px;height:132px;display:flex;align-items:flex-end;gap:8px}
-  .m-chart i{flex:1;border-radius:6px 6px 2px 2px;background:linear-gradient(180deg,#60a5fa,#2563eb)}
-  .m-chart i:nth-child(even){background:linear-gradient(180deg,#4ade80,#16a34a)}
-  .m-rows{margin-top:12px;display:grid;gap:8px}
-  .m-row{background:#fff;border:1px solid var(--line);border-radius:12px;padding:11px 15px;display:flex;justify-content:space-between;align-items:center;gap:10px;font-size:12px;color:var(--soft)}
-  .tag{flex:none;font-size:10.5px;font-weight:700;border-radius:999px;padding:4px 11px}
-  .tag.g{background:#dcfce7;color:#15803d}.tag.a{background:#fef3c7;color:#b45309}.tag.b{background:#dbeafe;color:#1d4ed8}
+/* ── buttons ──────────────────────────────────────────────────────────── */
+.btn{display:inline-flex;align-items:center;justify-content:center;gap:10px;font-weight:700;
+  border-radius:999px;transition:transform .2s var(--ease),box-shadow .2s var(--ease),background .2s;
+  white-space:nowrap;padding:15px 32px;font-size:15.5px}
+.btn-primary{color:#fff;background:var(--grad);box-shadow:0 14px 30px -12px rgba(37,99,235,.55)}
+.btn-primary:hover{transform:translateY(-2px);box-shadow:0 22px 44px -14px rgba(37,99,235,.62)}
+.btn-ghost{color:var(--ink);background:#fff;border:1.5px solid var(--line)}
+.btn-ghost:hover{border-color:#c2cdde;transform:translateY(-2px)}
+.btn-white{background:#fff;color:var(--blue-d);box-shadow:0 18px 40px -16px rgba(0,0,0,.5)}
+.btn-white:hover{transform:translateY(-2px)}
 
-  /* ── stats strip ── */
-  .strip{background:var(--navy);color:#fff;padding:214px 0 48px;margin-top:0;
-    background-image:radial-gradient(700px 300px at 80% 120%,rgba(37,99,235,.35),transparent 60%)}
-  .strip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:26px;text-align:center}
-  .strip b{font-size:30px;font-weight:800;letter-spacing:-.025em;background:linear-gradient(90deg,#7dd3fc,#6ee7a0);-webkit-background-clip:text;background-clip:text;color:transparent}
-  .strip i{display:block;font-style:normal;font-size:13px;color:rgba(255,255,255,.6);margin-top:5px}
+/* ── scroll progress + nav ────────────────────────────────────────────── */
+#progress{position:fixed;top:0;left:0;height:3px;width:0;z-index:70;background:var(--grad);
+  transition:width .08s linear}
+.topbar{position:sticky;top:0;z-index:60;background:rgba(255,255,255,.82);
+  backdrop-filter:blur(18px) saturate(1.4);border-bottom:1px solid transparent;
+  transition:border-color .25s,box-shadow .25s}
+.topbar.stuck{border-bottom-color:var(--line);box-shadow:0 6px 24px -18px rgba(11,30,75,.5)}
+.nav{height:72px;display:flex;align-items:center;justify-content:space-between;gap:18px}
+.logo{display:flex;align-items:center;gap:11px;font-weight:800;font-size:19.5px;letter-spacing:-.025em}
+.logo-mark{width:36px;height:36px;border-radius:11px;background:var(--grad);display:grid;place-items:center;
+  color:#fff;font-weight:900;font-size:13px;box-shadow:0 8px 18px -8px rgba(37,99,235,.6)}
+.logo .t{color:var(--blue-d)} .logo .k{color:var(--green)}
+.menu{display:flex;align-items:center;gap:2px}
+.menu .lnk{font-size:14.5px;font-weight:600;color:var(--soft);padding:10px 15px;border-radius:10px;
+  transition:color .18s,background .18s}
+.menu .lnk:hover{color:var(--ink);background:var(--canvas)}
+.menu .btn{padding:11px 24px;font-size:14.5px;margin-left:8px}
 
-  /* ── features ── */
-  .features{padding:84px 0 90px;background:#fff}
-  .sec-badge{display:block;text-align:center;font-size:12px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-d)}
-  .features h2{text-align:center;font-size:clamp(27px,3.6vw,36px);font-weight:800;letter-spacing:-.025em;margin-top:12px}
-  .features .sub{text-align:center;color:var(--faint);max-width:560px;margin:14px auto 0;line-height:1.65;font-size:15.5px}
-  .grid{margin-top:54px;display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(290px,1fr))}
-  .card{position:relative;border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;transition:transform .22s ease,box-shadow .22s ease,border-color .22s}
-  .card:hover{transform:translateY(-4px);box-shadow:0 18px 44px -20px rgba(15,23,42,.18);border-color:#d7dee9}
-  .ic{width:48px;height:48px;border-radius:14px;display:grid;place-items:center;color:#fff;background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 10px 20px -9px var(--c1)}
-  .card h3{margin-top:18px;font-size:17px;font-weight:800;letter-spacing:-.015em}
-  .card p{margin-top:8px;font-size:14px;color:var(--soft);line-height:1.68}
+/* ── hero ─────────────────────────────────────────────────────────────── */
+.hero{position:relative;padding:92px 0 0;text-align:center;overflow:hidden;background:#fff}
+/* Slow-drifting colour field. Two blobs only — enough to feel alive, cheap
+   enough that a laptop fan never notices. */
+.aurora{position:absolute;inset:-25% -10% auto;height:120%;pointer-events:none;z-index:0;filter:blur(72px);opacity:.62}
+.aurora i{position:absolute;display:block;border-radius:50%}
+.aurora i:nth-child(1){width:46vw;height:46vw;left:4%;top:-6%;background:rgba(37,99,235,.42);
+  animation:drift1 22s var(--ease) infinite alternate}
+.aurora i:nth-child(2){width:40vw;height:40vw;right:2%;top:-12%;background:rgba(22,163,74,.38);
+  animation:drift2 26s var(--ease) infinite alternate}
+.aurora i:nth-child(3){width:32vw;height:32vw;left:38%;top:14%;background:rgba(96,165,250,.34);
+  animation:drift3 30s var(--ease) infinite alternate}
+@keyframes drift1{to{transform:translate3d(9vw,7vh,0) scale(1.14)}}
+@keyframes drift2{to{transform:translate3d(-11vw,10vh,0) scale(1.1)}}
+@keyframes drift3{to{transform:translate3d(6vw,-8vh,0) scale(.88)}}
+.hero .wrap{position:relative;z-index:1}
+.badge{display:inline-flex;align-items:center;gap:10px;font-size:12.5px;font-weight:700;
+  color:var(--blue-d);background:rgba(238,244,255,.9);border:1px solid #dbe7ff;border-radius:999px;padding:9px 20px}
+.badge .dot{width:8px;height:8px;border-radius:50%;background:var(--green);
+  box-shadow:0 0 0 0 rgba(22,163,74,.5);animation:pulse 2.4s infinite}
+@keyframes pulse{70%{box-shadow:0 0 0 9px rgba(22,163,74,0)}100%{box-shadow:0 0 0 0 rgba(22,163,74,0)}}
+h1{font-size:clamp(40px,6.6vw,72px);line-height:1.04;font-weight:900;letter-spacing:-.04em;margin-top:28px}
+h1 .grad{background:var(--grad);-webkit-background-clip:text;background-clip:text;color:transparent}
+.hero .sub{max-width:640px;margin:24px auto 0;color:var(--soft);font-size:17.5px;line-height:1.72}
+.cta{margin-top:36px;display:flex;flex-wrap:wrap;gap:12px;justify-content:center}
+.hero .note{margin-top:20px;font-size:13px;color:var(--faint)}
 
-  /* ── CTA band ── */
-  .band{padding:0 20px 90px;background:#fff}
-  .band-in{max-width:1080px;margin:0 auto;border-radius:26px;color:#fff;text-align:center;padding:62px 28px;position:relative;overflow:hidden;
-    background:radial-gradient(700px 320px at 88% -30%,rgba(110,231,160,.4),transparent 60%),radial-gradient(500px 260px at 8% 130%,rgba(125,211,252,.35),transparent 60%),linear-gradient(135deg,#0b1e4b,#1d4ed8)}
-  .band h2{font-size:clamp(26px,3.4vw,34px);font-weight:800;letter-spacing:-.025em}
-  .band p{color:rgba(255,255,255,.82);margin-top:12px;font-size:15.5px}
-  .band .cta{margin-top:30px}
-  .band .btn-white{background:#fff;color:var(--blue-d);padding:15px 36px;font-size:15.5px;box-shadow:0 16px 36px -14px rgba(0,0,0,.45)}
-  .band .btn-white:hover{transform:translateY(-2px)}
+/* ── browser frame ────────────────────────────────────────────────────── */
+.frame{position:relative;border-radius:16px;overflow:hidden;background:#fff;border:1px solid var(--line);
+  box-shadow:var(--shadow-lg)}
+.frame .bar{height:42px;background:#f4f6fa;border-bottom:1px solid var(--line);
+  display:flex;align-items:center;gap:8px;padding:0 16px}
+.frame .bar b{width:11px;height:11px;border-radius:50%;flex:none}
+.frame .url{margin-left:10px;background:#fff;border:1px solid var(--line);border-radius:8px;font-size:11.5px;
+  color:var(--faint);padding:5px 14px;display:flex;align-items:center;gap:7px;max-width:100%;
+  overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.frame img{width:100%;height:auto}
 
-  /* ── footer ── */
-  footer{border-top:1px solid var(--line);padding:34px 0;background:#fff}
-  .foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:14px;font-size:14px;color:var(--faint)}
-  .foot-links{display:flex;flex-wrap:wrap;gap:22px}
-  .foot a:hover{color:var(--soft)}
+.hero-shot{position:relative;max-width:1060px;margin:62px auto -150px;perspective:1600px}
+.hero-shot .frame{transform-style:preserve-3d;transition:transform .5s var(--ease)}
+.hero-shot .glowline{position:absolute;inset:auto 8% -26px;height:60px;border-radius:50%;
+  background:radial-gradient(closest-side,rgba(37,99,235,.42),transparent);filter:blur(26px);z-index:-1}
 
-  /* ── mobile ── */
-  @media (max-width:760px){
-    .menu .lnk{display:none}
-    .hero{padding-top:56px}
-    .cta .btn{width:100%;max-width:340px}
-    .shot{margin-bottom:-120px}
-    .b-body{grid-template-columns:1fr}
-    .b-side{flex-direction:row;overflow-x:auto;padding:10px 12px}
-    .s-item{white-space:nowrap;padding:7px 12px}
-    .m-stats{grid-template-columns:1fr 1fr}
-    .m-stat:first-child{grid-column:1/-1}
-    .strip{padding-top:170px}
-    .strip-grid{grid-template-columns:1fr 1fr;gap:22px}
-  }
+/* Anything clickable that opens the lightbox. */
+.shot{position:relative;display:block;width:100%;text-align:left;cursor:zoom-in;
+  transition:transform .3s var(--ease)}
+.shot .frame{transition:box-shadow .3s var(--ease),border-color .3s}
+.shot:hover .frame{box-shadow:0 48px 96px -34px rgba(11,30,75,.46),0 14px 32px -14px rgba(11,30,75,.22);
+  border-color:#d3dcea}
+.shot .peek{position:absolute;left:50%;bottom:20px;transform:translate(-50%,10px);opacity:0;
+  display:inline-flex;align-items:center;gap:8px;font-size:13px;font-weight:700;color:#fff;
+  background:rgba(11,30,75,.92);border-radius:999px;padding:10px 20px;backdrop-filter:blur(8px);
+  box-shadow:0 14px 30px -12px rgba(11,30,75,.7);transition:opacity .26s var(--ease),transform .26s var(--ease);
+  pointer-events:none;white-space:nowrap}
+.shot:hover .peek,.shot:focus-visible .peek{opacity:1;transform:translate(-50%,0)}
+.shot:focus-visible{outline:3px solid var(--blue);outline-offset:6px;border-radius:18px}
+
+/* ── stats strip ──────────────────────────────────────────────────────── */
+.strip{position:relative;background:var(--navy);color:#fff;padding:210px 0 56px;overflow:hidden;
+  background-image:radial-gradient(760px 320px at 82% 118%,rgba(37,99,235,.42),transparent 62%),
+                   radial-gradient(620px 280px at 12% -20%,rgba(22,163,74,.26),transparent 62%)}
+.strip::after{content:'';position:absolute;inset:0;opacity:.055;pointer-events:none;
+  background-image:linear-gradient(rgba(255,255,255,.9) 1px,transparent 1px),
+                   linear-gradient(90deg,rgba(255,255,255,.9) 1px,transparent 1px);
+  background-size:52px 52px;mask-image:radial-gradient(70% 60% at 50% 40%,#000,transparent)}
+.strip .wrap{position:relative;z-index:1}
+.strip-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:30px;text-align:center}
+.strip b{display:block;font-size:clamp(28px,3.6vw,38px);font-weight:800;letter-spacing:-.03em;
+  background:linear-gradient(90deg,#9ec9ff,#8df0b4);-webkit-background-clip:text;background-clip:text;color:transparent}
+.strip i{display:block;font-style:normal;font-size:13px;color:rgba(255,255,255,.62);margin-top:7px;line-height:1.5}
+
+/* ── section furniture ────────────────────────────────────────────────── */
+.sec{padding:96px 0}
+.sec.alt{background:var(--canvas)}
+.eyebrow{display:inline-flex;align-items:center;gap:9px;font-size:11.5px;font-weight:800;
+  letter-spacing:.16em;text-transform:uppercase;color:var(--blue-d)}
+.eyebrow::before{content:'';width:22px;height:2px;border-radius:2px;background:var(--grad)}
+h2{font-size:clamp(28px,3.9vw,40px);font-weight:850;letter-spacing:-.032em;line-height:1.14}
+.lede{color:var(--soft);font-size:16.5px;line-height:1.74;margin-top:16px}
+.center{text-align:center}
+.center .eyebrow::before{display:none}
+.center h2{margin-top:14px}
+.center .lede{max-width:620px;margin-left:auto;margin-right:auto}
+
+/* alternating feature rows */
+.row{display:grid;grid-template-columns:minmax(0,.86fr) minmax(0,1.14fr);gap:clamp(36px,5vw,72px);
+  align-items:center}
+.row + .row{margin-top:104px}
+.row.flip .copy{order:2}
+.copy h3{font-size:clamp(23px,2.8vw,30px);font-weight:830;letter-spacing:-.03em;margin-top:14px;line-height:1.2}
+.copy p{color:var(--soft);font-size:16px;line-height:1.75;margin-top:14px}
+.facts{margin-top:24px;display:grid;gap:11px}
+.fact{display:flex;align-items:flex-start;gap:11px;font-size:14.5px;color:var(--soft);line-height:1.6}
+.fact svg{flex:none;margin-top:3px;color:var(--green)}
+.fact b{color:var(--ink);font-weight:700}
+
+/* ── console gallery ──────────────────────────────────────────────────── */
+.gallery{margin-top:52px;display:grid;gap:20px;grid-template-columns:repeat(auto-fit,minmax(300px,1fr))}
+.tile{border-radius:16px;overflow:hidden;background:#fff;border:1px solid var(--line);cursor:zoom-in;
+  text-align:left;transition:transform .28s var(--ease),box-shadow .28s var(--ease),border-color .28s}
+.tile:hover{transform:translateY(-5px);box-shadow:0 28px 56px -26px rgba(11,30,75,.32);border-color:#d3dcea}
+.tile:focus-visible{outline:3px solid var(--blue);outline-offset:4px}
+.tile .thumb{position:relative;aspect-ratio:16/9.4;overflow:hidden;background:var(--canvas)}
+.tile .thumb img{width:100%;height:100%;object-fit:cover;object-position:top left;
+  transition:transform .5s var(--ease)}
+.tile:hover .thumb img{transform:scale(1.035)}
+.tile .cap{padding:16px 18px 18px}
+.tile .cap b{display:block;font-size:15px;font-weight:750;letter-spacing:-.018em}
+.tile .cap span{display:block;font-size:13px;color:var(--faint);margin-top:4px;line-height:1.55}
+
+/* ── features grid ────────────────────────────────────────────────────── */
+.grid{margin-top:52px;display:grid;gap:18px;grid-template-columns:repeat(auto-fit,minmax(288px,1fr))}
+.card{position:relative;border:1px solid var(--line);border-radius:18px;padding:28px;background:#fff;
+  overflow:hidden;transition:transform .24s var(--ease),box-shadow .24s var(--ease),border-color .24s}
+.card::after{content:'';position:absolute;inset:0;border-radius:inherit;opacity:0;pointer-events:none;
+  background:radial-gradient(420px 180px at var(--mx,50%) var(--my,0%),rgba(37,99,235,.09),transparent 70%);
+  transition:opacity .3s}
+.card:hover{transform:translateY(-4px);box-shadow:0 22px 50px -24px rgba(15,23,42,.24);border-color:#d7dee9}
+.card:hover::after{opacity:1}
+.ic{width:46px;height:46px;border-radius:13px;display:grid;place-items:center;color:#fff;
+  background:linear-gradient(135deg,var(--c1),var(--c2));box-shadow:0 10px 20px -10px var(--c1)}
+.card h4{margin-top:18px;font-size:16.5px;font-weight:800;letter-spacing:-.018em}
+.card p{margin-top:8px;font-size:14.2px;color:var(--soft);line-height:1.68}
+
+/* ── security band ────────────────────────────────────────────────────── */
+.sec-dark{background:var(--navy);color:#fff;padding:96px 0;position:relative;overflow:hidden;
+  background-image:radial-gradient(700px 340px at 88% -10%,rgba(37,99,235,.38),transparent 62%)}
+.sec-dark .eyebrow{color:#8df0b4}
+.sec-dark .lede{color:rgba(255,255,255,.72)}
+.sec-dark .sgrid{margin-top:48px;display:grid;gap:16px;grid-template-columns:repeat(auto-fit,minmax(250px,1fr))}
+.sitem{border:1px solid rgba(255,255,255,.14);border-radius:16px;padding:24px;
+  background:rgba(255,255,255,.045);transition:background .24s,border-color .24s,transform .24s var(--ease)}
+.sitem:hover{background:rgba(255,255,255,.08);border-color:rgba(255,255,255,.26);transform:translateY(-3px)}
+.sitem b{display:block;font-size:15.5px;font-weight:750}
+.sitem span{display:block;margin-top:8px;font-size:14px;color:rgba(255,255,255,.66);line-height:1.66}
+
+/* ── CTA + footer ─────────────────────────────────────────────────────── */
+.band{padding:0 24px 96px;background:#fff}
+.band-in{max-width:1080px;margin:0 auto;border-radius:28px;color:#fff;text-align:center;
+  padding:68px 30px;position:relative;overflow:hidden;
+  background:radial-gradient(720px 340px at 88% -30%,rgba(110,231,160,.42),transparent 62%),
+             radial-gradient(520px 280px at 8% 130%,rgba(125,211,252,.38),transparent 62%),
+             linear-gradient(135deg,#0b1e4b,#1d4ed8)}
+.band h2{font-size:clamp(27px,3.6vw,38px)}
+.band p{color:rgba(255,255,255,.84);margin-top:14px;font-size:16px;line-height:1.7;max-width:580px;
+  margin-left:auto;margin-right:auto}
+footer{border-top:1px solid var(--line);padding:38px 0;background:#fff}
+.foot{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:16px;
+  font-size:14px;color:var(--faint)}
+.foot-links{display:flex;flex-wrap:wrap;gap:24px}
+.foot a{transition:color .18s}
+.foot a:hover{color:var(--soft)}
+
+/* ── lightbox ─────────────────────────────────────────────────────────── */
+.lb{position:fixed;inset:0;z-index:100;display:none;padding:clamp(14px,3vw,40px)}
+.lb.open{display:block}
+.lb-scrim{position:absolute;inset:0;background:rgba(6,14,33,.78);backdrop-filter:blur(10px);
+  opacity:0;transition:opacity .3s var(--ease)}
+.lb.in .lb-scrim{opacity:1}
+.lb-box{position:relative;height:100%;max-width:1400px;margin:0 auto;display:grid;
+  grid-template-columns:minmax(0,1fr) 372px;gap:20px;align-items:center;
+  opacity:0;transform:translateY(16px) scale(.985);transition:opacity .34s var(--ease),transform .34s var(--ease)}
+.lb.in .lb-box{opacity:1;transform:none}
+.lb-figure{min-width:0;max-height:100%;overflow:auto;border-radius:16px;background:#fff;
+  box-shadow:0 50px 100px -30px rgba(0,0,0,.6)}
+.lb-figure img{width:100%;height:auto}
+.lb-panel{background:#fff;border-radius:18px;padding:28px;max-height:100%;overflow:auto;
+  box-shadow:0 50px 100px -30px rgba(0,0,0,.6)}
+.lb-panel .where{font-size:11.5px;font-weight:800;letter-spacing:.14em;text-transform:uppercase;color:var(--blue-d)}
+.lb-panel h3{margin-top:10px;font-size:22px;font-weight:830;letter-spacing:-.028em;line-height:1.24}
+.lb-panel .blurb{margin-top:12px;font-size:14.5px;color:var(--soft);line-height:1.72}
+.lb-data{margin-top:22px;border-top:1px solid var(--line);padding-top:18px;display:grid;gap:0}
+.lb-data .k{display:flex;justify-content:space-between;align-items:baseline;gap:16px;
+  padding:11px 0;border-bottom:1px dashed var(--line);font-size:14px}
+.lb-data .k:last-child{border-bottom:0}
+.lb-data .k span{color:var(--soft);line-height:1.5}
+.lb-data .k b{font-weight:750;text-align:right;white-space:nowrap}
+.lb-data .k b.g{color:var(--green)}
+.lb-notes{margin-top:18px;display:grid;gap:10px}
+.lb-notes div{display:flex;gap:10px;font-size:13.8px;color:var(--soft);line-height:1.62}
+.lb-notes svg{flex:none;margin-top:3px;color:var(--blue)}
+.lb-foot{margin-top:22px;font-size:12.5px;color:var(--faint);line-height:1.6;
+  border-top:1px solid var(--line);padding-top:16px}
+.lb-close,.lb-nav{position:absolute;z-index:3;width:44px;height:44px;border-radius:50%;
+  background:rgba(255,255,255,.14);color:#fff;display:grid;place-items:center;
+  backdrop-filter:blur(8px);transition:background .2s,transform .2s}
+.lb-close:hover,.lb-nav:hover{background:rgba(255,255,255,.28);transform:scale(1.06)}
+/* Clear of the data panel (372px + 20px gap), so it never sits on its corner. */
+.lb-close{top:-2px;right:392px}
+.lb-nav.prev{left:-6px;top:50%;margin-top:-22px}
+.lb-nav.next{right:392px;top:50%;margin-top:-22px}
+.lb-count{position:absolute;bottom:-2px;left:0;font-size:12.5px;color:rgba(255,255,255,.6);
+  font-weight:600;letter-spacing:.04em}
+
+/* ── reveal on scroll ─────────────────────────────────────────────────── */
+.rv{opacity:0;transform:translateY(22px);transition:opacity .7s var(--ease),transform .7s var(--ease)}
+.rv.on{opacity:1;transform:none}
+.rv.d1{transition-delay:.07s}.rv.d2{transition-delay:.14s}.rv.d3{transition-delay:.21s}
+.rv.d4{transition-delay:.28s}.rv.d5{transition-delay:.35s}
+
+/* ── responsive ───────────────────────────────────────────────────────── */
+@media (max-width:1040px){
+  .lb-box{grid-template-columns:1fr;align-content:start;overflow:auto;padding:52px 0 24px}
+  .lb-figure,.lb-panel{max-height:none}
+  .lb-nav{display:none}
+  .lb-close{top:4px;right:4px}
+  .lb-count{position:static;display:block;margin-bottom:10px;text-align:center}
+}
+@media (max-width:860px){
+  .row,.row.flip{grid-template-columns:1fr;gap:30px}
+  .row.flip .copy{order:0}
+  .row + .row{margin-top:70px}
+  .sec{padding:72px 0}
+}
+@media (max-width:720px){
+  .menu .lnk{display:none}
+  .hero{padding-top:62px}
+  .hero-shot{margin:44px auto -90px}
+  .cta .btn{width:100%;max-width:340px}
+  .strip{padding-top:150px}
+  .strip-grid{grid-template-columns:1fr 1fr;gap:26px}
+  .lb{padding:10px}
+  .lb-panel{padding:22px}
+}
+@media (prefers-reduced-motion:reduce){
+  html{scroll-behavior:auto}
+  *,*::before,*::after{animation-duration:.001ms!important;animation-iteration-count:1!important;
+    transition-duration:.001ms!important}
+  .rv{opacity:1;transform:none}
+}
 </style>
 </head>
 <body>
 
-<div class="topbar">
+<div id="progress" aria-hidden="true"></div>
+
+<header class="topbar" id="topbar">
   <div class="wrap nav">
-    <a class="logo" href="/"><span class="logo-mark">T</span><span><span class="t">TRUE</span> <span class="k">HR</span></span></a>
+    <a class="logo" href="/"><span class="logo-mark">TK</span><span><span class="t">True</span> <span class="k">HR</span></span></a>
     <nav class="menu">
-      <a class="lnk" href="#features">Features</a>
+      <a class="lnk" href="#day">A day in it</a>
+      <a class="lnk" href="#console">The console</a>
+      <a class="lnk" href="#platform">Platform</a>
+      <a class="lnk" href="#security">Security</a>
+      <a class="btn btn-primary" href="#talk">Talk to us</a>
     </nav>
   </div>
-</div>
+</header>
 
+<!-- ══ hero ═══════════════════════════════════════════════════════════ -->
 <section class="hero">
+  <div class="aurora" aria-hidden="true"><i></i><i></i><i></i></div>
   <div class="wrap">
-    <span class="badge"><span class="dot"></span>TRUE KIND FOUNDATION · HR PLATFORM</span>
-    <h1>People first.<br/><span class="grad">Paperwork automated.</span></h1>
-    <p class="sub">One platform for the entire employee journey — offer letters, attendance, leave, expense approvals, performance and payroll. On the web, and in your pocket.</p>
-    <div class="cta">
-      <a class="btn btn-primary" href="#features">Explore the platform
-        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
+    <span class="badge rv"><span class="dot"></span>MULTI-COMPANY HRMS · WEB &amp; ANDROID</span>
+    <h1 class="rv d1">Every screen here is<br/><span class="grad">the real product.</span></h1>
+    <p class="sub rv d2">
+      TrueHR runs the whole employee journey — attendance, leave, approvals, expenses,
+      performance and payroll — across every company in your group. Nothing below is a
+      drawing. Click any screen to see what is actually on it.
+    </p>
+    <div class="cta rv d3">
+      <a class="btn btn-primary" href="#day">Walk through a real day
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 5v14M6 13l6 6 6-6"/></svg>
       </a>
+      <a class="btn btn-ghost" href="#talk">Book a walkthrough</a>
     </div>
-    <p style="margin-top:18px;font-size:13px;color:var(--faint)">Portal access is provided to employees by the HR team.</p>
+    <p class="note rv d4">Employees receive their portal link and app access from their own HR team.</p>
 
-    <!-- product preview -->
-    <div class="shot" aria-hidden="true">
-      <div class="browser">
-        <div class="b-bar">
-          <b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b>
-          <span class="b-url">
-            <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
-            TRUE HR · Employee Self-Service
+    <div class="hero-shot rv d4">
+      <span class="glowline" aria-hidden="true"></span>
+      <button class="shot" data-shot="ess-dashboard" aria-label="Open the employee dashboard screenshot and its data">
+        <span class="frame">
+          <span class="bar">
+            <b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b>
+            <span class="url">
+              <svg width="11" height="11" viewBox="0 0 24 24" fill="none" stroke="#16a34a" stroke-width="2.6" stroke-linecap="round" stroke-linejoin="round"><rect x="4" y="10" width="16" height="11" rx="2"/><path d="M8 10V7a4 4 0 0 1 8 0v3"/></svg>
+              truehr.co.in/app/ess
+            </span>
           </span>
-        </div>
-        <div class="b-body">
-          <div class="b-side">
-            <div class="s-item on"><span class="s-dot"></span>Dashboard</div>
-            <div class="s-item"><span class="s-dot"></span>Attendance</div>
-            <div class="s-item"><span class="s-dot"></span>Leave</div>
-            <div class="s-item"><span class="s-dot"></span>NFA</div>
-            <div class="s-item"><span class="s-dot"></span>Approvals</div>
-            <div class="s-item"><span class="s-dot"></span>Performance</div>
-            <div class="s-item"><span class="s-dot"></span>Payslips</div>
-          </div>
-          <div class="b-main">
-            <div class="m-head"><b>My Dashboard</b><span class="m-btn">+ Create NFA</span></div>
-            <div class="m-stats">
-              <div class="m-stat"><div class="v g">SAT · 110%</div><div class="l">June performance grade</div></div>
-              <div class="m-stat"><div class="v">₹13,500</div><div class="l">Advances received (FY 26-27)</div></div>
-              <div class="m-stat"><div class="v">18 / 25</div><div class="l">Leave balance</div></div>
-            </div>
-            <div class="m-chart">
-              <i style="height:45%"></i><i style="height:66%"></i><i style="height:52%"></i><i style="height:80%"></i>
-              <i style="height:60%"></i><i style="height:92%"></i><i style="height:70%"></i><i style="height:84%"></i>
-              <i style="height:58%"></i><i style="height:76%"></i><i style="height:64%"></i><i style="height:88%"></i>
-            </div>
-            <div class="m-rows">
-              <div class="m-row"><span>NFA20260002 · Field travel advance</span><span class="tag g">Payment released</span></div>
-              <div class="m-row"><span>NFA20260001 · Team uniforms</span><span class="tag a">Pending — RM</span></div>
-              <div class="m-row"><span>July KPI · 3 KRAs</span><span class="tag b">With manager</span></div>
-            </div>
-          </div>
-        </div>
-      </div>
+          <img src="shots/ess-dashboard.webp" width="1600" height="1000" alt="The TrueHR employee self-service dashboard, showing the monthly performance strip, thirteen module tiles and the NFA ledger." fetchpriority="high"/>
+        </span>
+        <span class="peek">Click to see what is on this screen →</span>
+      </button>
     </div>
   </div>
 </section>
 
+<!-- ══ stats ══════════════════════════════════════════════════════════ -->
 <section class="strip">
   <div class="wrap strip-grid">
-    <div><b>13+</b><i>Self-service modules</i></div>
-    <div><b>6-stage</b><i>Approval chains</i></div>
-    <div><b>Web + App</b><i>One account, every device</i></div>
-    <div><b>AES-256</b><i>PII encrypted at rest</i></div>
+    <div class="rv"><b data-count="19" data-suffix="">0</b><i>Modules in the employee portal and admin console</i></div>
+    <div class="rv d1"><b data-count="6" data-suffix="-stage">0</b><i>Approval chain, resolved per project and category</i></div>
+    <div class="rv d2"><b data-count="7" data-suffix=" sheets">0</b><i>In the HRMIS workbook HR hands to finance</i></div>
+    <div class="rv d3"><b>AES-256</b><i>PII encrypted at rest, read access audited per person</i></div>
   </div>
 </section>
 
-<section id="features" class="features">
+<!-- ══ a day in it ════════════════════════════════════════════════════ -->
+<section class="sec" id="day">
   <div class="wrap">
-    <span class="sec-badge">Capabilities</span>
-    <h2>Everything HR, one platform</h2>
-    <p class="sub">The same engine powers the admin console, the employee portal and the mobile app — so nothing ever falls out of sync.</p>
+    <div class="center rv">
+      <span class="eyebrow">A day in it</span>
+      <h2>Six screens, one working day</h2>
+      <p class="lede">
+        Punch in, apply for leave, raise an advance, approve someone else's, grade the month,
+        run payroll. Each one below is a genuine capture — click it for the numbers behind it.
+      </p>
+    </div>
+
+    <div style="margin-top:70px">
+
+      <!-- 1 attendance -->
+      <div class="row rv">
+        <div class="copy">
+          <span class="eyebrow">01 · Attendance</span>
+          <h3>A month you can read at a glance</h3>
+          <p>
+            Punches come from the Android app with a photo and a GPS fix, because that is the only
+            place a punch can be trusted. Everything else — the monthly calendar, the daily punch
+            list, miss-punch regularisation — lives on the web where HR actually works.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Geo-tagged punches</b> with the captured address stored against each one</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Week offs and leave</b> shaded separately from genuine absence</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Miss-punch</b> raised by the employee and cleared by the manager, in the same place</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="ess-attendance" aria-label="Open the attendance screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/ess/attendance</span></span>
+          <img src="shots/ess-attendance.webp" loading="lazy" width="1600" height="1000" alt="Monthly attendance calendar for September 2026 with present, absent, leave and week-off counts."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+      <!-- 2 leave -->
+      <div class="row flip rv">
+        <div class="copy">
+          <span class="eyebrow">02 · Leave</span>
+          <h3>Nine leave types, balances that are never a guess</h3>
+          <p>
+            Every type your policy actually has — earned, casual, sick, monthly holiday, restricted
+            holiday, maternity, menstrual, work-from-home, leave without pay — each with its own
+            quota, its own approval route and a balance the employee can see before they apply.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Comp-off</b> earned against a worked holiday and consumed like any other type</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Team approvals</b> on the same page a manager applies from</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Leave-without-pay</b> flows straight into the payroll run as a deduction</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="ess-leave" aria-label="Open the leave screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/ess/leave</span></span>
+          <img src="shots/ess-leave.webp" loading="lazy" width="1600" height="1000" alt="Leave management page showing the apply form beside nine leave-type balances."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+      <!-- 3 approvals -->
+      <div class="row rv">
+        <div class="copy">
+          <span class="eyebrow">03 · Approvals</span>
+          <h3>One queue. Everything waiting on you.</h3>
+          <p>
+            Expense notes, advances, settlements, leave, resignations and performance ratings all
+            run through the same approval engine, so a manager has one list rather than six. Each
+            card says why it is with you — and Query&nbsp;/&nbsp;Hold sends it back with a reason
+            instead of killing it.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Six stages</b> — reporting manager, finance initiator, project leader, business leader, finance, final</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Stages that do not apply are bypassed</b>, not left hanging</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>A stage can only be actioned once</b> — two approvers clicking together is a safe race</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="mgr-approvals" aria-label="Open the manager approvals screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/ess/approvals</span></span>
+          <img src="shots/mgr-approvals.webp" loading="lazy" width="1600" height="1000" alt="A manager's approval queue with an NFA for twelve thousand rupees and a settlement for four thousand eight hundred."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+      <!-- 4 payroll -->
+      <div class="row flip rv">
+        <div class="copy">
+          <span class="eyebrow">04 · Payroll</span>
+          <h3>Payroll that has read the attendance register</h3>
+          <p>
+            Generate the whole company in one run. Mid-month joiners and approved exits are prorated
+            by date, approved leave-without-pay is deducted, and days with neither a punch nor
+            approved leave are <em>flagged for a human</em> rather than silently docked.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Published payslips lock</b> — a re-run skips them rather than overwriting</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Per-employee components</b> override the company template where they need to</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Bank sheet export</b> and a PDF payslip in the portal and the app</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="admin-payroll" aria-label="Open the payroll screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/admin/payroll</span></span>
+          <img src="shots/admin-payroll.webp" loading="lazy" width="1600" height="1000" alt="Payroll console showing eleven employees, eleven structures set, eleven payslips published and the net pay total."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+      <!-- 5 performance -->
+      <div class="row rv">
+        <div class="copy">
+          <span class="eyebrow">05 · Performance</span>
+          <h3>A grade the person can see coming</h3>
+          <p>
+            Monthly KPIs with weighted KRAs, a self-rating, then a functional and a business review.
+            The PLI percentage and the letter grade fall out of the numbers rather than out of a
+            conversation, and last month locks once it is signed off.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Grades from OAT to SBT</b>, derived from the weighted score</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Twelve months on one strip</b> on the employee's own dashboard</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>The same approval engine</b>, so a rating cannot skip its reviewer</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="ess-pms" aria-label="Open the performance screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/ess/pms</span></span>
+          <img src="shots/ess-pms.webp" loading="lazy" width="1600" height="1000" alt="Employee performance page with September pending and August locked at a SAT grade and 110 percent PLI."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+      <!-- 6 structure -->
+      <div class="row flip rv">
+        <div class="copy">
+          <span class="eyebrow">06 · Structure</span>
+          <h3>One ladder for the whole group</h3>
+          <p>
+            Departments, designations and levels belong to the organisation, not to each legal
+            entity inside it — so "HR Manager" means the same thing however the person is paid.
+            Grade is the code on the title; level is where that title sits. Both are kept, because
+            they are not the same question.
+          </p>
+          <div class="facts">
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Build the ladder from existing grades</b> in one click, then rename the rungs</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>Removing a rung unhooks its titles</b> rather than blocking the restructure</span></div>
+            <div class="fact"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"><path d="M4 12l6 6L20 6"/></svg><span><b>People inherit their level from their title</b> — nothing to set per person</span></div>
+          </div>
+        </div>
+        <button class="shot" data-shot="admin-hierarchy" aria-label="Open the hierarchy screenshot and its data">
+          <span class="frame"><span class="bar"><b style="background:#fda4af"></b><b style="background:#fcd34d"></b><b style="background:#86efac"></b><span class="url">truehr.co.in/app/admin/hierarchy</span></span>
+          <img src="shots/admin-hierarchy.webp" loading="lazy" width="1600" height="1000" alt="Organisation hierarchy screen with four levels built from grades and nine people placed."/></span>
+          <span class="peek">Click to see what is on this screen →</span>
+        </button>
+      </div>
+
+    </div>
+  </div>
+</section>
+
+<!-- ══ console gallery ════════════════════════════════════════════════ -->
+<section class="sec alt" id="console">
+  <div class="wrap">
+    <div class="center rv">
+      <span class="eyebrow">The admin console</span>
+      <h2>The rest of it, also real</h2>
+      <p class="lede">
+        Nine more screens from the same running system. Every tile opens the full capture
+        alongside the figures that are on it.
+      </p>
+    </div>
+    <div class="gallery" id="gallery"><!-- filled from SHOTS --></div>
+  </div>
+</section>
+
+<!-- ══ platform ═══════════════════════════════════════════════════════ -->
+<section class="sec" id="platform">
+  <div class="wrap">
+    <div class="center rv">
+      <span class="eyebrow">Platform</span>
+      <h2>Built for groups, not for one office</h2>
+      <p class="lede">
+        Several legal entities, one set of people, and a wall between your data and everybody
+        else's that is enforced in the query, not in the user interface.
+      </p>
+    </div>
     <div class="grid">
-      <div class="card" style="--c1:#0ea5e9;--c2:#2563eb">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 3"/></svg></span>
-        <h3>Attendance &amp; Leave</h3><p>Geo-tagged punches, monthly calendars, miss-punch regularisation, comp-off and multi-level leave approvals.</p>
+      <div class="card rv" style="--c1:#0ea5e9;--c2:#2563eb">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="8" width="18" height="13" rx="2"/><path d="M8 8V5a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v3M3 13h18"/></svg></span>
+        <h4>One tenant per organisation</h4>
+        <p>Every read filters on the organisation. A company id from another tenant is refused even when the person guessing it is an admin of their own.</p>
       </div>
-      <div class="card" style="--c1:#10b981;--c2:#16a34a">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 4h12M6 8h12M6 4c6 0 8 2 8 5s-2 5-8 5l8 6"/></svg></span>
-        <h3>NFA &amp; Settlements</h3><p>Raise expense or advance notes with cascading masters, watch the approval chain live, release payments and settle with a full ledger.</p>
+      <div class="card rv d1" style="--c1:#10b981;--c2:#16a34a">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3v18M5 8l7-5 7 5M5 8v8l7 5 7-5V8"/></svg></span>
+        <h4>Several companies inside it</h4>
+        <p>Payroll, statutory registers and cost centres are per legal entity. Structure, policy and people are shared across the group.</p>
       </div>
-      <div class="card" style="--c1:#8b5cf6;--c2:#7c3aed">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M3 17l6-6 4 4 8-8"/><path d="M15 7h6v6"/></svg></span>
-        <h3>Performance (KPI &amp; PMS)</h3><p>Monthly KPIs with weighted KRAs, self-rating, multi-level PLI review and automatic grades — OAT to SBT.</p>
+      <div class="card rv d2" style="--c1:#8b5cf6;--c2:#7c3aed">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 2l8 3v6c0 4.6-3.3 8-8 9-4.7-1-8-4.4-8-9V5z"/><path d="M9 12l2 2 4-4"/></svg></span>
+        <h4>Roles you define</h4>
+        <p>Module-level permissions on custom roles, on top of the system ones. Creating logins and adding companies stay with the owner.</p>
       </div>
-      <div class="card" style="--c1:#f59e0b;--c2:#ea580c">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/><path d="M9 13h6M9 17h6"/></svg></span>
-        <h3>Payroll &amp; Payslips</h3><p>Generate, publish and download payslips as PDFs — on the web or in the app.</p>
+      <div class="card rv" style="--c1:#f59e0b;--c2:#ea580c">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5"/></svg></span>
+        <h4>Subscription modules</h4>
+        <p>Thirty-six modules, enabled per organisation. A module that is off is off in the API as well as in the menu.</p>
       </div>
-      <div class="card" style="--c1:#14b8a6;--c2:#0891b2">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M4 14v-2a8 8 0 0 1 16 0v2"/><rect x="3" y="14" width="4" height="6" rx="1.5"/><rect x="17" y="14" width="4" height="6" rx="1.5"/></svg></span>
-        <h3>Support &amp; Vendors</h3><p>HR / IT / Admin ticketing, vendor registration with approvals, and agreement tracking.</p>
+      <div class="card rv d1" style="--c1:#14b8a6;--c2:#0891b2">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg></span>
+        <h4>A direct line to us</h4>
+        <p>Any login, in any tenant, can raise a master ticket with a screenshot. It reaches us and nobody else — not even their own admins.</p>
       </div>
-      <div class="card" style="--c1:#64748b;--c2:#334155">
-        <span class="ic"><svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><path d="M12 3l8 3v6c0 4.5-3.2 7.8-8 9-4.8-1.2-8-4.5-8-9V6z"/><path d="M9 12l2 2 4-4"/></svg></span>
-        <h3>Enterprise-grade security</h3><p>Encrypted PII at rest, role-based access, audit logging, rate-limited APIs and hardened HTTPS.</p>
+      <div class="card rv d2" style="--c1:#64748b;--c2:#334155">
+        <span class="ic"><svg width="21" height="21" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.9" stroke-linecap="round" stroke-linejoin="round"><rect x="2" y="4" width="14" height="16" rx="2"/><path d="M16 9h4a2 2 0 0 1 2 2v7a2 2 0 0 1-2 2h-4M6 8h6M6 12h6"/></svg></span>
+        <h4>Web and Android, one account</h4>
+        <p>The app handles what needs a phone — punches with a photo and a GPS fix, payslips, approvals on the move. Everything else is the same account on the web.</p>
       </div>
     </div>
   </div>
 </section>
 
-<section class="band">
-  <div class="band-in">
-    <h2>Built for the TRUE KIND family</h2>
-    <p>TRUE HR is the internal HR platform of True Kind Foundation. Employees receive their
-       portal link and app access directly from the HR team during onboarding.</p>
+<!-- ══ security ═══════════════════════════════════════════════════════ -->
+<section class="sec-dark" id="security">
+  <div class="wrap">
+    <div class="center rv">
+      <span class="eyebrow">Security</span>
+      <h2>Boring, on purpose</h2>
+      <p class="lede">
+        The parts of an HR system that must not be interesting: what is stored, who can read it,
+        and what happens when somebody tries something.
+      </p>
+    </div>
+    <div class="sgrid">
+      <div class="sitem rv"><b>PII encrypted at rest</b><span>PAN, Aadhaar and bank details are AES-encrypted in the database and are deliberately not decrypted into any bulk export.</span></div>
+      <div class="sitem rv d1"><b>Reads are recorded</b><span>Opening a sensitive number on somebody's own screen writes an audit entry against the person who looked.</span></div>
+      <div class="sitem rv d2"><b>Uploads are checked, not trusted</b><span>Type comes from an allowlist with a magic-byte check, and every attachment is served as a download so it can never execute on our own domain.</span></div>
+      <div class="sitem rv d3"><b>Rate-limited behind a real proxy</b><span>Limits key off the genuine client address, so a forged forwarding header does not buy anybody extra attempts.</span></div>
+    </div>
+  </div>
+</section>
+
+<!-- ══ CTA ════════════════════════════════════════════════════════════ -->
+<section class="band" id="talk">
+  <div class="band-in rv">
+    <h2>Want to see it against your own structure?</h2>
+    <p>
+      Tell us how many entities you run and where the approvals actually get stuck.
+      We will walk you through the same screens with your shape of organisation in them.
+    </p>
+    <div class="cta">
+      <a class="btn btn-white" href="mailto:maitykoustav2911@gmail.com?subject=TrueHR%20walkthrough">Book a walkthrough</a>
+      <a class="btn btn-ghost" href="/app" style="background:transparent;color:#fff;border-color:rgba(255,255,255,.4)">Sign in to the portal</a>
+    </div>
   </div>
 </section>
 
 <footer>
   <div class="wrap foot">
-    <span><b style="color:var(--ink)">TRUE HR</b> · © <script>document.write(new Date().getFullYear())</script> True HR Pvt Ltd</span>
+    <span><b style="color:var(--ink)">TrueHR</b> · © <span id="yr">2026</span> True HR Pvt Ltd</span>
     <span class="foot-links">
-      <a href="https://truehr.co.in/privacy">Privacy Policy</a>
-      <a href="https://truehr.co.in/terms">Terms &amp; Conditions</a>
+      <a href="/privacy">Privacy Policy</a>
+      <a href="/terms">Terms &amp; Conditions</a>
+      <a href="mailto:maitykoustav2911@gmail.com">Contact</a>
     </span>
   </div>
 </footer>
 
+<!-- ══ lightbox ═══════════════════════════════════════════════════════ -->
+<div class="lb" id="lb" role="dialog" aria-modal="true" aria-labelledby="lb-title" hidden>
+  <div class="lb-scrim" data-close></div>
+  <div class="lb-box">
+    <span class="lb-count" id="lb-count"></span>
+    <button class="lb-nav prev" id="lb-prev" aria-label="Previous screen">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M15 18l-6-6 6-6"/></svg>
+    </button>
+    <button class="lb-nav next" id="lb-next" aria-label="Next screen">
+      <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><path d="M9 18l6-6-6-6"/></svg>
+    </button>
+    <button class="lb-close" id="lb-close" aria-label="Close">
+      <svg width="19" height="19" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round"><path d="M18 6L6 18M6 6l12 12"/></svg>
+    </button>
+    <!-- No src until a screen is chosen: an empty src resolves to the page
+         itself, so the browser would fetch index.html again as an image. -->
+    <figure class="lb-figure"><img id="lb-img" alt=""/></figure>
+    <aside class="lb-panel">
+      <span class="where" id="lb-where"></span>
+      <h3 id="lb-title"></h3>
+      <p class="blurb" id="lb-blurb"></p>
+      <div class="lb-data" id="lb-data"></div>
+      <div class="lb-notes" id="lb-notes"></div>
+      <p class="lb-foot">Captured from a running TrueHR instance against a demo tenant. Every figure above is read off this screenshot.</p>
+    </aside>
+  </div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════════════════════
+   One record per screenshot: the picture, and the numbers that are on it.
+   Keeping them in the same object is what stops the caption drifting away
+   from the image the next time a screen is re-captured.
+   ═══════════════════════════════════════════════════════════════════════ */
+const SHOTS = {
+  'ess-dashboard': {
+    where: 'Employee · Dashboard',
+    title: 'Everything one person needs, on one screen',
+    blurb: 'Where an employee lands. The performance strip runs the whole year, the tiles are the modules their organisation has switched on, and the ledger is their own money.',
+    data: [
+      ['Modules on this employee’s menu', '19'],
+      ['Performance strip', 'Jan → Dec 2026'],
+      ['August grade', 'SAT', 'g'],
+      ['NFAs raised / released / settled', '3 / 2 / 0'],
+      ['Advance received (FY 2026-27)', '₹13,500'],
+      ['Balance to settle', '₹13,500'],
+    ],
+    notes: [
+      'Tiles appear only for modules the organisation subscribes to — the menu is not cosmetic.',
+      'The ledger is per financial year, so an unsettled advance cannot quietly roll over.',
+    ],
+  },
+  'ess-attendance': {
+    where: 'Employee · Attendance',
+    title: 'The month, coloured by what actually happened',
+    blurb: 'A calendar per month, a punch list per day, and miss-punch regularisation — all in the portal. The punch itself stays in the app, where the camera and the GPS are.',
+    data: [
+      ['View', 'September 2026'],
+      ['Tabs', 'Monthly · Daily punches · Miss-Punch'],
+      ['Counters', 'Present · Absent · Leave · Week off'],
+      ['Punch location stored', 'Sector 62, Noida'],
+      ['Today’s status', 'Not punched in (use the app)'],
+    ],
+    notes: [
+      'Week offs are shaded separately, so a Sunday never reads as absence.',
+      'Payroll reads this register directly — see the payroll screen.',
+    ],
+  },
+  'ess-leave': {
+    where: 'Employee · Leave',
+    title: 'Apply on the left, balance on the right',
+    blurb: 'The balance is beside the form on purpose: nobody should have to leave the page to find out whether they have the days.',
+    data: [
+      ['Earned Leave', '18 / 18'],
+      ['Casual Leave', '9 / 9'],
+      ['Sick Leave', '12 / 12'],
+      ['Monthly Holiday', '12 / 12'],
+      ['Menstrual Leave', '12 / 12'],
+      ['Restricted Holiday', '2 / 2'],
+      ['Maternity Leave', '182 / 182'],
+      ['Work From Home / LWP', 'no balance held'],
+    ],
+    notes: [
+      'Leave types are per organisation, cloned from a template the first time you open leave config.',
+      'Comp-off and team approvals are the other two tabs on this page.',
+    ],
+  },
+  'mgr-approvals': {
+    where: 'Manager · Approvals',
+    title: 'Everything waiting on one person',
+    blurb: 'Expense notes and settlements in one queue, each labelled with the role you are being asked to act in. Remarks are mandatory for a query or a rejection and optional for an approval.',
+    data: [
+      ['NFA20260001 — Demo Employee', '₹12,000'],
+      ['Waiting on you as', 'Reporting Manager'],
+      ['Settlement — NFA20260003', '₹4,800'],
+      ['Advance received against it', '₹5,000'],
+      ['Settlement due', '9 Oct 2026'],
+      ['Actions', 'Approve · Query/Hold · Reject'],
+    ],
+    notes: [
+      'Query / Hold returns it to the raiser with your reason instead of ending the request.',
+      'A stage can only be actioned once — if two approvers click together, the second is told so.',
+    ],
+  },
+  'admin-payroll': {
+    where: 'Admin · Payroll',
+    title: 'One run, eleven payslips, nothing silently docked',
+    blurb: 'August, generated and published for the whole company. The amber counter is the point of the screen: days with no punch and no approved leave are raised for a human rather than deducted automatically.',
+    data: [
+      ['Employees', '11'],
+      ['Salary structures set', '11'],
+      ['Generated', '11'],
+      ['Published', '11', 'g'],
+      ['Published net pay', '₹10,72,220.00', 'g'],
+      ['Needs attendance review', '11 people · 63 days'],
+    ],
+    notes: [
+      'Prorates mid-month joiners and approved exits by date; approved LWP is deducted.',
+      'Published payslips lock — a second run skips them instead of overwriting.',
+      'Publishing emails every affected employee that their payslip is ready.',
+    ],
+  },
+  'ess-pms': {
+    where: 'Employee · Performance',
+    title: 'Last month closed, this month open',
+    blurb: 'KPI status and PMS status are tracked separately, because submitting your numbers and having them reviewed are two different things that fail in two different ways.',
+    data: [
+      ['September · KPI', 'RM pending'],
+      ['September · PMS', 'Not submitted'],
+      ['August · KPI', 'Locked'],
+      ['August · PMS', 'Functional approved'],
+      ['August self rating', '4.00'],
+      ['August PLI', '110%'],
+      ['August grade', 'SAT', 'g'],
+    ],
+    notes: [
+      'The grade is derived from the weighted KRA score, not typed in by the reviewer.',
+      'Managers see the same thing for their whole team under Team Approvals.',
+    ],
+  },
+  'admin-hierarchy': {
+    where: 'Admin · Hierarchy & levels',
+    title: 'Built from the grades that already existed',
+    blurb: 'This ladder was created by pressing one button. The screen noticed every title already carried a grade, offered to turn those grades into rungs, and placed all seven titles in one go.',
+    data: [
+      ['Levels', '4'],
+      ['Designations', '7'],
+      ['Departments', '5'],
+      ['Titles without a level', '0', 'g'],
+      ['People placed', '9'],
+      ['Ladder', 'L1 M2 → L2 M1 → L3 L3 → L4 L2'],
+    ],
+    notes: [
+      'Structure is organisation-wide: every company in the group shares one list.',
+      'Grade is the code on the title; level is the rung it sits on. Both are kept.',
+      'Deleting a rung unhooks its titles rather than refusing the restructure.',
+    ],
+  },
+  'admin-dashboard': {
+    where: 'Admin · Overview',
+    title: 'What is moving across the organisation today',
+    blurb: 'The HR landing screen: headcount, the onboarding pipeline stage by stage, what payroll still owes, and every approval sitting with somebody.',
+    data: [
+      ['Headcount', '11'],
+      ['Awaiting review', '0', 'g'],
+      ['Onboarding pipeline', 'Offer sent → Filling details → In review → Active'],
+      ['Open support tickets', '1'],
+      ['Pending approvals', 'Leave · OD · Comp-off'],
+    ],
+    notes: ['Quick actions go straight to onboarding and the review queue.'],
+  },
+  'admin-employees': {
+    where: 'Admin · Employees',
+    title: 'The people register',
+    blurb: 'Everyone on record with their code, company, department, designation and status — and the onboarding state for anybody not yet active.',
+    data: [
+      ['On record', '11'],
+      ['Companies in the group', '1'],
+      ['Departments', '5'],
+      ['Designations', '7'],
+    ],
+    notes: [
+      'Employee codes are unique per organisation, not globally — two tenants can both use TKF1001.',
+      'Official email is unique per organisation for the same reason.',
+    ],
+  },
+  'admin-orgchart': {
+    where: 'Admin · Org chart',
+    title: 'Who reports to whom, as recorded',
+    blurb: 'Drawn from the reporting-manager field rather than from a diagram somebody maintains by hand — so a gap in the chart is a gap in the data, which is the useful version.',
+    data: [
+      ['People in view', '11'],
+      ['People with reports', '1'],
+      ['Chart depth', '2 levels'],
+      ['No manager set', '10'],
+      ['Placed on a level', '9 / 11'],
+    ],
+    notes: [
+      'Switch the line type between the reporting and the functional view.',
+      'Anyone without a manager is shown as a top-level node rather than hidden.',
+    ],
+  },
+  'admin-hrmis': {
+    where: 'Admin · HRMIS reports',
+    title: 'One workbook, for finance or an auditor',
+    blurb: 'Everything HR holds in seven sheets. The panel above it lists what is worth fixing before you send it — counted across active employees only.',
+    data: [
+      ['On record', '11'],
+      ['Active', '11', 'g'],
+      ['Not active', '0'],
+      ['Sheets in the workbook', '7'],
+      ['Flagged: no bank details', '11'],
+      ['Flagged: no reporting manager', '10'],
+    ],
+    notes: [
+      'PAN and Aadhaar are never decrypted into this file — the sheet says only whether each is on file.',
+      'Every export is written to the audit log.',
+    ],
+  },
+  'admin-nfa': {
+    where: 'Admin · NFA queue',
+    title: 'Every expense note in the organisation',
+    blurb: 'Filterable by status, project, entity and payment type. The settlement state is shown under the status, because an approved advance that nobody has settled is the one you care about.',
+    data: [
+      ['NFA20260003', '₹5,000 · payment released'],
+      ['Settlement state', 'In progress'],
+      ['NFA20260002', '₹8,500 · payment released'],
+      ['NFA20260001', '₹12,000 · pending'],
+      ['Filters', 'Status · Project · Entity · Payment type'],
+    ],
+    notes: ['Masters cascade: operation → project → category → header → sub-header.'],
+  },
+  'admin-organisations': {
+    where: 'Platform · Organisations',
+    title: 'Each tenant, and what it is entitled to',
+    blurb: 'The platform owner’s view. One row per organisation with its plan, its headcount and its login count — and the switch that suspends it.',
+    data: [
+      ['Organisations provisioned', '1'],
+      ['Active', '1', 'g'],
+      ['Suspended', '0'],
+      ['Employees across all tenants', '11'],
+      ['Plan', 'Enterprise · 36 modules'],
+      ['Logins', '4'],
+    ],
+    notes: [
+      'The headcount here and the one in the tenant switcher come from the same query, so they cannot disagree.',
+      'Suspending an organisation disables access without deleting anything.',
+    ],
+  },
+  'admin-tickets': {
+    where: 'Platform · Master tickets',
+    title: 'Raised inside a tenant, visible only to us',
+    blurb: 'A person in any organisation can write to the team that builds the product. Their own HR and IT admins never see these — which is the whole point of the channel.',
+    data: [
+      ['Needs a reply', '2'],
+      ['Open', '1'],
+      ['In progress', '1'],
+      ['Resolved', '1', 'g'],
+      ['Each ticket carries', 'Screenshot · email or phone'],
+    ],
+    notes: [
+      'Contact details are mandatory — either an email or a phone number, at least one.',
+      'The raiser sees their own tickets and our replies; nobody else in their tenant does.',
+    ],
+  },
+  'ess-support': {
+    where: 'Employee · Contact TrueHR',
+    title: 'The form behind those tickets',
+    blurb: 'Reachable from every login, employee or admin. Subject, what happened, an optional screenshot, and a way to reach you back.',
+    data: [
+      ['Required', 'Subject · What happened'],
+      ['Screenshot', 'PNG, JPG, WEBP, GIF or PDF · up to 5MB'],
+      ['Contact', 'Email or phone — at least one'],
+      ['Your requests', 'Listed below with our reply'],
+    ],
+    notes: [
+      'Uploads are checked against an allowlist by their actual bytes, not by what the browser claims.',
+      'Attachments always download rather than opening inline.',
+    ],
+  },
+  'ess-profile': {
+    where: 'Employee · Profile & team',
+    title: 'What the employee can see about themselves',
+    blurb: 'Their own record, their team, and the address book — with a change-request route for the fields they are not allowed to edit directly.',
+    data: [
+      ['Tabs', 'Profile · My Team · Address Book'],
+      ['Shown', 'Code · company · official email · reporting manager'],
+      ['Editing', 'Via Request a change, reviewed by HR'],
+    ],
+    notes: ['Sensitive identifiers are shown only on the person’s own screen, and the read is audited.'],
+  },
+};
+
+/* Which of those appear as gallery tiles, in order. */
+const GALLERY = ['admin-dashboard','admin-employees','admin-orgchart','admin-hrmis','admin-nfa',
+                 'admin-organisations','admin-tickets','ess-support','ess-profile'];
+
+/* Order the lightbox arrows step through. */
+const ORDER = ['ess-dashboard','ess-attendance','ess-leave','mgr-approvals','admin-payroll',
+               'ess-pms','admin-hierarchy',...GALLERY];
+
+document.getElementById('yr').textContent = new Date().getFullYear();
+
+/* ── build the gallery ────────────────────────────────────────────────── */
+(() => {
+  const host = document.getElementById('gallery');
+  host.innerHTML = GALLERY.map((id, i) => {
+    const s = SHOTS[id];
+    return `<button class="tile rv ${i % 3 ? 'd' + (i % 3) : ''}" data-shot="${id}"
+              aria-label="Open the ${s.where} screenshot and its data">
+      <span class="thumb"><img src="shots/${id}.webp" loading="lazy" width="1600" height="1000" alt="${s.where}: ${s.title}"/></span>
+      <span class="cap"><b>${s.where}</b><span>${s.title}</span></span>
+    </button>`;
+  }).join('');
+})();
+
+/* ── lightbox ─────────────────────────────────────────────────────────── */
+const lb = {
+  el: document.getElementById('lb'),
+  img: document.getElementById('lb-img'),
+  where: document.getElementById('lb-where'),
+  title: document.getElementById('lb-title'),
+  blurb: document.getElementById('lb-blurb'),
+  data: document.getElementById('lb-data'),
+  notes: document.getElementById('lb-notes'),
+  count: document.getElementById('lb-count'),
+  at: 0,
+  opener: null,
+};
+const TICK = '<svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="12" cy="12" r="9"/><path d="M12 16v-4M12 8h.01"/></svg>';
+const esc = (s) => String(s).replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+
+function render(id) {
+  const s = SHOTS[id];
+  if (!s) return;
+  lb.at = ORDER.indexOf(id);
+  lb.img.src = `shots/${id}.webp`;
+  lb.img.alt = `${s.where}: ${s.title}`;
+  lb.where.textContent = s.where;
+  lb.title.textContent = s.title;
+  lb.blurb.textContent = s.blurb;
+  lb.data.innerHTML = s.data.map(([k, v, tone]) =>
+    `<div class="k"><span>${esc(k)}</span><b class="${tone || ''}">${esc(v)}</b></div>`).join('');
+  lb.notes.innerHTML = (s.notes || []).map((n) => `<div>${TICK}<span>${esc(n)}</span></div>`).join('');
+  lb.count.textContent = `${lb.at + 1} / ${ORDER.length}`;
+  lb.el.querySelector('.lb-figure').scrollTop = 0;
+  lb.el.querySelector('.lb-panel').scrollTop = 0;
+}
+
+function open(id, opener) {
+  lb.opener = opener || null;
+  render(id);
+  lb.el.hidden = false;
+  lb.el.classList.add('open');
+  document.body.style.overflow = 'hidden';
+  requestAnimationFrame(() => lb.el.classList.add('in'));
+  document.getElementById('lb-close').focus({ preventScroll: true });
+}
+function close() {
+  lb.el.classList.remove('in');
+  document.body.style.overflow = '';
+  setTimeout(() => { lb.el.classList.remove('open'); lb.el.hidden = true; }, 260);
+  if (lb.opener) lb.opener.focus({ preventScroll: true });
+}
+const step = (n) => render(ORDER[(lb.at + n + ORDER.length) % ORDER.length]);
+
+document.addEventListener('click', (e) => {
+  const trigger = e.target.closest('[data-shot]');
+  if (trigger) { open(trigger.dataset.shot, trigger); return; }
+  if (e.target.closest('[data-close]')) close();
+});
+document.getElementById('lb-close').addEventListener('click', close);
+document.getElementById('lb-prev').addEventListener('click', () => step(-1));
+document.getElementById('lb-next').addEventListener('click', () => step(1));
+document.addEventListener('keydown', (e) => {
+  if (lb.el.hidden) return;
+  if (e.key === 'Escape') close();
+  if (e.key === 'ArrowLeft') step(-1);
+  if (e.key === 'ArrowRight') step(1);
+  // Keep tab focus inside the dialog while it is open.
+  if (e.key === 'Tab') {
+    const f = lb.el.querySelectorAll('button, [href]');
+    const first = f[0], last = f[f.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  }
+});
+
+/* ── reveal on scroll ─────────────────────────────────────────────────── */
+const io = new IntersectionObserver((entries) => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    en.target.classList.add('on');
+    io.unobserve(en.target);
+  }
+}, { rootMargin: '0px 0px -12% 0px', threshold: .08 });
+document.querySelectorAll('.rv').forEach((el) => io.observe(el));
+
+/* ── counters ─────────────────────────────────────────────────────────── */
+const counters = new IntersectionObserver((entries) => {
+  for (const en of entries) {
+    if (!en.isIntersecting) continue;
+    const el = en.target, to = Number(el.dataset.count), suffix = el.dataset.suffix || '';
+    const reduced = matchMedia('(prefers-reduced-motion: reduce)').matches;
+    if (reduced) { el.textContent = to + suffix; counters.unobserve(el); continue; }
+    const t0 = performance.now(), dur = 1100;
+    const tick = (t) => {
+      const p = Math.min(1, (t - t0) / dur);
+      el.textContent = Math.round(to * (1 - Math.pow(1 - p, 3))) + suffix;
+      if (p < 1) requestAnimationFrame(tick);
+    };
+    requestAnimationFrame(tick);
+    counters.unobserve(el);
+  }
+}, { threshold: .6 });
+document.querySelectorAll('[data-count]').forEach((el) => counters.observe(el));
+
+/* ── scroll progress + sticky nav shadow ──────────────────────────────── */
+const bar = document.getElementById('progress'), topbar = document.getElementById('topbar');
+let ticking = false;
+addEventListener('scroll', () => {
+  if (ticking) return;
+  ticking = true;
+  requestAnimationFrame(() => {
+    const max = document.documentElement.scrollHeight - innerHeight;
+    bar.style.width = `${max > 0 ? (scrollY / max) * 100 : 0}%`;
+    topbar.classList.toggle('stuck', scrollY > 8);
+    ticking = false;
+  });
+}, { passive: true });
+
+/* ── pointer flourishes ───────────────────────────────────────────────── */
+if (!matchMedia('(prefers-reduced-motion: reduce)').matches && matchMedia('(hover: hover)').matches) {
+  // Hero screenshot tilts a little towards the cursor.
+  const heroShot = document.querySelector('.hero-shot');
+  if (heroShot) {
+    const frame = heroShot.querySelector('.frame');
+    heroShot.addEventListener('pointermove', (e) => {
+      const r = heroShot.getBoundingClientRect();
+      const x = (e.clientX - r.left) / r.width - .5, y = (e.clientY - r.top) / r.height - .5;
+      frame.style.transform = `rotateX(${(-y * 4).toFixed(2)}deg) rotateY(${(x * 5).toFixed(2)}deg) translateZ(0)`;
+    });
+    heroShot.addEventListener('pointerleave', () => { frame.style.transform = ''; });
+  }
+  // Feature cards light up under the cursor.
+  document.querySelectorAll('.card').forEach((card) => {
+    card.addEventListener('pointermove', (e) => {
+      const r = card.getBoundingClientRect();
+      card.style.setProperty('--mx', `${e.clientX - r.left}px`);
+      card.style.setProperty('--my', `${e.clientY - r.top}px`);
+    });
+  });
+}
+</script>
 </body>
 </html>

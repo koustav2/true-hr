@@ -218,12 +218,39 @@ async function main() {
     }
   }
 
-  // Unique secondary key on official email (guarded — duplicates won't crash startup).
+  // Official email is unique WITHIN an organisation, not across the whole
+  // deployment. The old global index meant two tenants could never employ the
+  // same address — one client onboarding shared-domain staff would be blocked
+  // by a completely unrelated client's row, with an error naming neither. It
+  // also made the seed and the test fixtures mutually exclusive.
+  //
+  // Backfill first: an employee with no organisation cannot be scoped, and
+  // those rows also break the approval manager lookup (see approvalEngine).
   try {
-    await pool.query(`CREATE UNIQUE INDEX IF NOT EXISTS uniq_employees_official_email ON employees (lower(official_email))`);
-    console.log('[migrate] unique official_email index ensured');
+    const stamped = (await pool.query(
+      `UPDATE employees e SET organisation_id = c.organisation_id
+         FROM companies c
+        WHERE e.company_id = c.id AND e.organisation_id IS NULL
+          AND c.organisation_id IS NOT NULL`)).rowCount;
+    if (stamped) console.log(`[migrate] stamped organisation_id on ${stamped} employee(s)`);
+    const orphans = (await pool.query(
+      `SELECT count(*)::int AS n FROM employees WHERE organisation_id IS NULL`)).rows[0].n;
+    if (orphans) {
+      console.warn(`[migrate] WARNING: ${orphans} employee(s) still have no organisation — `
+        + 'their approval chains cannot resolve a reporting manager and they are '
+        + 'excluded from the per-organisation email uniqueness.');
+    }
+
+    await pool.query(
+      `CREATE UNIQUE INDEX IF NOT EXISTS uniq_employees_official_email_org
+         ON employees (organisation_id, lower(official_email))
+       WHERE organisation_id IS NOT NULL`);
+    // Only drop the global one once its replacement is in place, so there is no
+    // window where duplicates could be written.
+    await pool.query(`DROP INDEX IF EXISTS uniq_employees_official_email`);
+    console.log('[migrate] official_email unique per organisation');
   } catch (e) {
-    console.warn('[migrate] could not create unique official_email index (duplicate emails exist?):', e.message);
+    console.warn('[migrate] could not scope the official_email index (duplicates within one organisation?):', e.message);
   }
 
   // ── Structure moves from company scope to organisation scope ──────────────

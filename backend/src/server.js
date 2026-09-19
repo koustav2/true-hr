@@ -19,8 +19,31 @@ const app = express();
 // password-reset limits entirely. Set TRUST_PROXY_HOPS if a CDN is added.
 app.set('trust proxy', Number(process.env.TRUST_PROXY_HOPS || 1));
 
-// ── Security headers (API-only service: no CSP needed, keep the rest) ───────
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: false }));
+// ── Security headers ───────────────────────────────────────────────────────
+// "API-only, no CSP needed" was the old reasoning, and it was wrong: this API
+// serves files people uploaded, from the same origin as the portal. Uploads are
+// now type-checked and sent as downloads, but a CSP is the layer that holds if
+// any of that is ever bypassed — nothing this API returns should be allowed to
+// execute or to fetch anything.
+//
+// 'none' across the board is safe here precisely because this is an API: no
+// response is a page. Downloads are unaffected — sandbox and frame-ancestors
+// govern rendering, not transfer.
+app.use(helmet({
+  contentSecurityPolicy: {
+    useDefaults: false,
+    directives: {
+      'default-src': ["'none'"],
+      'script-src': ["'none'"],
+      'object-src': ["'none'"],
+      'base-uri': ["'none'"],
+      'form-action': ["'none'"],
+      'frame-ancestors': ["'none'"],
+      'sandbox': [],
+    },
+  },
+  crossOriginResourcePolicy: false,
+}));
 
 // ── CORS: allowlist via CORS_ORIGINS="https://truehr.co.in,https://www.truehr.co.in"
 // (unset = allow all, for local dev and same-origin proxy setups).

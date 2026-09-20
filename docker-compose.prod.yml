@@ -51,6 +51,15 @@ services:
       SMTP_USER: ${SMTP_USER:-}
       SMTP_PASS: ${SMTP_PASS:-}
       LOGIN_OTP: ${LOGIN_OTP:-false}   # two-step login (email OTP after password)
+      # Where master tickets raised inside a tenant are announced. Without this
+      # passed through, config.platformSupportEmail is empty in the container
+      # and the alert is never queued — the ticket only ever appears in the
+      # platform inbox, which nobody is watching.
+      PLATFORM_SUPPORT_EMAIL: ${PLATFORM_SUPPORT_EMAIL:-}
+      # Where "book a demo" enquiries from the public landing page are sent.
+      # Sales, deliberately not support. Defaults to info@lrtechnology.in in
+      # code, so leaving this unset still works.
+      SALES_EMAIL: ${SALES_EMAIL:-}
     ports:
       - "127.0.0.1:4000:4000"   # bound to localhost only; Nginx proxies to it
 

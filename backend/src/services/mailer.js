@@ -22,12 +22,16 @@ function getSmtp() {
 }
 
 // Try SendGrid first, fall back to SMTP. Returns { provider, messageId }.
-export async function sendMail({ to, subject, html }) {
+//
+// `replyTo` matters for anything we send to ourselves about somebody else — a
+// demo enquiry, say. Without it, hitting reply answers our own no-reply
+// address; with it, reply reaches the person who wrote in.
+export async function sendMail({ to, subject, html, replyTo }) {
   const from = config.mail.from;
 
   if (sgReady) {
     try {
-      const [resp] = await sgMail.send({ to, from, subject, html });
+      const [resp] = await sgMail.send({ to, from, subject, html, ...(replyTo ? { replyTo } : {}) });
       return { provider: 'sendgrid', messageId: resp?.headers?.['x-message-id'] || null };
     } catch (e) {
       console.warn('[mailer] SendGrid failed, trying SMTP fallback:', e.message);
@@ -36,7 +40,7 @@ export async function sendMail({ to, subject, html }) {
 
   const smtp = getSmtp();
   if (smtp) {
-    const info = await smtp.sendMail({ from, to, subject, html });
+    const info = await smtp.sendMail({ from, to, subject, html, ...(replyTo ? { replyTo } : {}) });
     return { provider: 'smtp', messageId: info.messageId };
   }
 
@@ -44,6 +48,7 @@ export async function sendMail({ to, subject, html }) {
   if (config.env !== 'production') {
     const links = [...new Set((html.match(/https?:\/\/[^"'\s<>]+/g) || []))];
     let msg = `\n[mailer:DEV] To: ${to}\n[mailer:DEV] Subject: ${subject}`;
+    if (replyTo) msg += `\n[mailer:DEV] Reply-To: ${replyTo}`;
     if (links.length) msg += `\n[mailer:DEV] Link: ${links.join('\n[mailer:DEV] Link: ')}`;
     msg += `\n[mailer:DEV] (no provider configured — logged only)\n`;
     console.log(msg);

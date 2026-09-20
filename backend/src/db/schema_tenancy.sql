@@ -673,3 +673,36 @@ CREATE INDEX IF NOT EXISTS idx_org_levels_org   ON org_levels   (organisation_id
 -- (utils/uploads.js), so the sanitised filename has to be kept rather than
 -- taken from the download request.
 ALTER TABLE support_tickets ADD COLUMN IF NOT EXISTS attachment_name TEXT;
+
+-- ── 29. Demo requests from the public landing page ────────────────────────
+-- The "book a free demo" form on truehr.co.in. Nobody is signed in when this
+-- is written, so it carries no organisation and no employee — it is a lead,
+-- not tenant data, and it is deliberately kept out of every tenant-scoped
+-- read path. Only the platform owner sees these.
+--
+-- ip and user_agent are kept for abuse triage only: a public, unauthenticated
+-- write needs some way to recognise a flood after the fact.
+CREATE TABLE IF NOT EXISTS demo_requests (
+  id             BIGSERIAL PRIMARY KEY,
+  full_name      TEXT NOT NULL,
+  work_email     TEXT NOT NULL,
+  phone          TEXT NOT NULL,
+  company_name   TEXT NOT NULL,
+  employee_band  TEXT NOT NULL,
+  notes          TEXT,
+  status         TEXT NOT NULL DEFAULT 'NEW',
+  handled_by     BIGINT REFERENCES user_accounts(id) ON DELETE SET NULL,
+  handled_at     TIMESTAMPTZ,
+  ip             TEXT,
+  user_agent     TEXT,
+  created_at     TIMESTAMPTZ NOT NULL DEFAULT now()
+);
+CREATE INDEX IF NOT EXISTS idx_demo_requests_new ON demo_requests (created_at DESC);
+-- Recent-duplicate lookup: the same address submitting twice in a few minutes
+-- is one person double-clicking, not two leads.
+CREATE INDEX IF NOT EXISTS idx_demo_requests_email ON demo_requests (lower(work_email), created_at DESC);
+
+-- ── 30. Reply-To on queued mail ───────────────────────────────────────────
+-- A demo enquiry is sent to our own sales inbox but is about somebody else.
+-- Without a Reply-To, hitting reply answers our own no-reply address.
+ALTER TABLE email_queue ADD COLUMN IF NOT EXISTS reply_to TEXT;

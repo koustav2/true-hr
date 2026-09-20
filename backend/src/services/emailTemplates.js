@@ -257,3 +257,27 @@ export function platformTicketRepliedEmail({ code, subject, status, reply, name 
     <p style="margin:16px 0 0;color:#6b7280;font-size:12.5px">Reply to this email if it still isn&rsquo;t right &mdash; quote ${esc(code)}.</p>
   `);
 }
+
+// ---- Demo request from the public landing page ----
+// Every value here was typed by a stranger, so escape it: without this a lead
+// "name" containing a tag is injected straight into the mail we open.
+export function demoRequestEmail({ fullName, workEmail, phone, companyName, employeeBand, notes }) {
+  const esc = (s) => String(s ?? '—').replace(/[&<>"]/g,
+    (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
+  const row = (k, v) => `<tr>
+      <td style="padding:8px 0;color:#6b7280;width:150px;vertical-align:top">${k}</td>
+      <td style="padding:8px 0;font-weight:600">${v}</td></tr>`;
+  return shell('New demo request', `
+    <p style="margin:0 0 4px">Somebody asked for a walkthrough from the website.</p>
+    <table style="width:100%;border-collapse:collapse;font-size:14px;margin-top:14px">
+      ${row('Name', esc(fullName))}
+      ${row('Work email', `<a href="mailto:${esc(workEmail)}" style="color:#1d4ed8">${esc(workEmail)}</a>`)}
+      ${row('Phone', `<a href="tel:${esc(phone).replace(/\s/g, '')}" style="color:#1d4ed8">${esc(phone)}</a>`)}
+      ${row('Company', esc(companyName))}
+      ${row('Headcount', esc(employeeBand))}
+      ${notes ? row('Wants to cover', esc(notes)) : ''}
+    </table>
+    <p style="margin:18px 0 0;color:#6b7280;font-size:13px">
+      The form promises a reply within one business day.</p>
+  `, '#1d4ed8');
+}

@@ -2,11 +2,11 @@ import { query } from '../db/pool.js';
 import { sendMail } from './mailer.js';
 
 // Enqueue an email (async). The worker picks it up and sends via SendGrid/SMTP.
-export async function enqueueEmail({ to, subject, html, template, onboardingId }) {
+export async function enqueueEmail({ to, subject, html, template, onboardingId, replyTo }) {
   await query(
-    `INSERT INTO email_queue (to_email, subject, html, template, onboarding_id)
-     VALUES ($1,$2,$3,$4,$5)`,
-    [to, subject, html, template || null, onboardingId || null]
+    `INSERT INTO email_queue (to_email, subject, html, template, onboarding_id, reply_to)
+     VALUES ($1,$2,$3,$4,$5,$6)`,
+    [to, subject, html, template || null, onboardingId || null, replyTo || null]
   );
 }
 
@@ -22,7 +22,9 @@ async function processBatch() {
   );
   for (const job of rows) {
     try {
-      const res = await sendMail({ to: job.to_email, subject: job.subject, html: job.html });
+      const res = await sendMail({
+        to: job.to_email, subject: job.subject, html: job.html, replyTo: job.reply_to,
+      });
       await query(
         `UPDATE email_queue SET status='SENT', provider=$2, provider_msg_id=$3, sent_at=now(), attempts=attempts+1
          WHERE id=$1`,

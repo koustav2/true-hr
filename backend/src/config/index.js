@@ -36,6 +36,12 @@ export const config = {
   // Where master tickets (raised by any tenant, read only by us) are announced.
   // Unset = the platform inbox is the only place they appear.
   platformSupportEmail: process.env.PLATFORM_SUPPORT_EMAIL || '',
+  // Where "book a demo" enquiries from the public landing page are sent. This
+  // is a sales inbox and deliberately separate from the support address above:
+  // a stranger asking for a walkthrough and a customer reporting a bug should
+  // not have to land in the same place. Falls back to the support address so a
+  // deployment that never sets it still gets its leads.
+  salesEmail: process.env.SALES_EMAIL || 'info@lrtechnology.in',
   // When true, payroll derives Professional Tax from the employee's work state
   // (statutoryRates slabs) instead of the fixed structure value. Default off so
   // existing runs are byte-for-byte unchanged until an org opts in.

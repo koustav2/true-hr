@@ -65,6 +65,15 @@ const apiLimiter = rateLimit({
   standardHeaders: true, legacyHeaders: false,
   message: { error: 'Too many requests — slow down' },
 });
+// The demo form is the only unauthenticated write on the API, so it gets a far
+// tighter ceiling than the rest: a genuine visitor books once, and a handful of
+// attempts an hour is already generous for somebody mistyping their email.
+const publicFormLimiter = rateLimit({
+  windowMs: 60 * 60 * 1000, limit: 8,
+  standardHeaders: true, legacyHeaders: false,
+  message: { error: 'Too many requests — please email us instead' },
+});
+app.use('/api/public/', publicFormLimiter);
 app.use('/api/auth/login', authLimiter);
 app.use('/api/auth/web-sso', authLimiter);
 app.use('/api/auth/forgot-password', authLimiter);

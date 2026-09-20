@@ -34,6 +34,7 @@ import * as vendor from '../controllers/vendorController.js';
 import * as notif from '../controllers/notificationController.js';
 import * as org from '../controllers/organisationController.js';
 import * as masterTicket from '../controllers/platformTicketController.js';
+import * as demo from '../controllers/demoRequestController.js';
 import * as roles from '../controllers/roleController.js';
 import * as termination from '../controllers/terminationController.js';
 import * as company from '../controllers/companyController.js';
@@ -403,6 +404,15 @@ r.get('/platform-tickets/:id/screenshot', authenticate, masterTicket.screenshot)
 // Reading every tenant's tickets is the platform owner's alone.
 r.get('/admin/platform-tickets', authenticate, requirePlatformAdmin, masterTicket.list);
 r.post('/admin/platform-tickets/:id/reply', authenticate, requirePlatformAdmin, masterTicket.reply);
+
+// --- Demo requests from the public landing page ---------------------------
+// The ONE route on this API with no `authenticate`: the person filling it in
+// has no account yet, that being the point. It carries its own much tighter
+// rate limit in server.js, and the controller validates every field before it
+// touches the database. Reading the leads back is the platform owner's alone.
+r.post('/public/demo-request', demo.create);
+r.get('/platform/demo-requests', authenticate, requirePlatformAdmin, demo.list);
+r.patch('/platform/demo-requests/:id', authenticate, requirePlatformAdmin, demo.setStatus);
 
 // --- Organisations (platform owner: create tenants & switch between them) ---
 r.get('/admin/organisations', authenticate, requirePlatformAdmin, org.list);

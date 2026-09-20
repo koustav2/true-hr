@@ -16,6 +16,25 @@ back if anything goes wrong.
 
 ---
 
+## 0. Know where the repo is
+
+Everything below assumes the checkout on the VPS is at `/opt/truehr`. Confirm
+it, because the rest of the guide is wrong if it lives somewhere else:
+
+```bash
+cd /opt/truehr && git rev-parse --show-toplevel
+```
+
+**You should see:** `/opt/truehr`.
+
+If that errors, find it and use that path throughout instead:
+
+```bash
+find / -maxdepth 4 -name docker-compose.prod.yml -not -path '*/node_modules/*' 2>/dev/null
+```
+
+---
+
 ## 1. Push from your Mac
 
 ```bash
@@ -37,9 +56,10 @@ only ever add, never delete, but take the backup anyway. It costs a minute.
 On the VPS:
 
 ```bash
-cd ~/True-HR
+cd /opt/truehr
 docker compose -f docker-compose.prod.yml exec -T db \
-  pg_dump -U truehr truehr | gzip > ~/truehr-backup-$(date +%F-%H%M).sql.gz
+  sh -c 'pg_dump -U "$POSTGRES_USER" "$POSTGRES_DB"' \
+  | gzip > ~/truehr-backup-$(date +%F-%H%M).sql.gz
 ls -lh ~/truehr-backup-*.sql.gz
 ```
 
@@ -51,7 +71,7 @@ the dump failed — stop and tell me before going further.
 ## 3. Get the new code
 
 ```bash
-cd ~/True-HR
+cd /opt/truehr
 git pull origin main
 ```
 
@@ -87,7 +107,7 @@ Save with `Ctrl+O`, `Enter`, then exit with `Ctrl+X`.
 ## 5. Rebuild the API
 
 ```bash
-cd ~/True-HR
+cd /opt/truehr
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build backend
 ```
 
@@ -115,11 +135,17 @@ recursive. Copying `index.html` on its own is what leaves you with a page
 full of blank frames.
 
 ```bash
-rsync -a --delete ~/True-HR/deploy/landing/ /var/www/truehr-landing/
+cd /opt/truehr
+test -d deploy/landing/shots || echo "WRONG PLACE — deploy/landing/shots is not here"
+rsync -a --delete deploy/landing/ /var/www/truehr-landing/
 ls /var/www/truehr-landing/shots/ | wc -l
 ```
 
 **You should see:** `7`.
+
+The `test -d` line is there because rsync's "No such file or directory" is
+easy to skim past, and a mistyped source path with `--delete` on the far side
+is not a mistake you want to make twice.
 
 `--delete` removes the nine screenshots that are no longer used. It is safe
 here because that folder holds nothing but the landing page.
@@ -144,16 +170,22 @@ not to no-reply.
 
 ```bash
 docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U truehr -d truehr -c \
-  "SELECT full_name, work_email, company_name, created_at FROM demo_requests ORDER BY id DESC LIMIT 5;"
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT full_name, work_email, company_name, created_at
+  FROM demo_requests ORDER BY id DESC LIMIT 5;
+SQL
 ```
 
 And check why the mail did not go:
 
 ```bash
 docker compose -f docker-compose.prod.yml exec -T db \
-  psql -U truehr -d truehr -c \
-  "SELECT to_email, status, attempts, error FROM email_queue WHERE template='demo_request' ORDER BY id DESC LIMIT 3;"
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"' <<'SQL'
+SELECT to_email, status, attempts, error
+  FROM email_queue
+ WHERE template = 'demo_request'
+ ORDER BY id DESC LIMIT 3;
+SQL
 ```
 
 A row with `status = FAILED` and an error about SMTP means the mail settings
@@ -166,10 +198,10 @@ need attention, not the form.
 Roll the code back but keep the data:
 
 ```bash
-cd ~/True-HR
+cd /opt/truehr
 git reset --hard HEAD~4
 docker compose -f docker-compose.prod.yml --env-file .env.production up -d --build backend
-rsync -a --delete ~/True-HR/deploy/landing/ /var/www/truehr-landing/
+rsync -a --delete /opt/truehr/deploy/landing/ /var/www/truehr-landing/
 ```
 
 The new database table and column simply sit unused. Nothing else reads them.
@@ -178,7 +210,8 @@ To restore the data as well:
 
 ```bash
 gunzip -c ~/truehr-backup-YYYY-MM-DD-HHMM.sql.gz | \
-  docker compose -f docker-compose.prod.yml exec -T db psql -U truehr -d truehr
+  docker compose -f docker-compose.prod.yml exec -T db \
+  sh -c 'psql -U "$POSTGRES_USER" -d "$POSTGRES_DB"'
 ```
 
 ---

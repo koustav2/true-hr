@@ -74,7 +74,7 @@ fun TeamListScreen(onBack: () -> Unit, vm: TeamListViewModel = hiltViewModel()) 
         } else LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
           grouped.forEach { (state, members) ->
             item(key = "h_$state") { StateHeader(state, members.size) }
-            items(members, key = { it.employeeCode }) { TeamMateCard(it, onClick = { selected = it }) }
+            items(members, key = { it.id }) { TeamMateCard(it, onClick = { selected = it }) }
           }
         }
       }
@@ -110,7 +110,7 @@ private fun TeamMateCard(m: TeamMate, onClick: () -> Unit) {
         Spacer(Modifier.width(12.dp))
         Column(Modifier.weight(1f)) {
           Text(m.name, fontWeight = FontWeight.Bold, color = Ink)
-          Text("${m.employeeCode}  ·  ${m.designation ?: "—"}", color = InkFaint, style = MaterialTheme.typography.bodyMedium)
+          Text("${m.employeeCode?.takeIf { it.isNotBlank() } ?: "—"}  ·  ${m.designation ?: "—"}", color = InkFaint, style = MaterialTheme.typography.bodyMedium)
           if (!m.department.isNullOrBlank()) Text(m.department, color = InkSoft, style = MaterialTheme.typography.labelMedium)
         }
       }

@@ -341,7 +341,8 @@ export async function myTeam(req, res, next) {
        LEFT JOIN departments dep ON dep.id=e.department_id
        LEFT JOIN employees rm ON rm.id=e.reporting_manager_id
        LEFT JOIN employees fm ON fm.id=e.function_manager_id
-       WHERE e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1
+       WHERE (e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1)
+         AND e.onboarding_status='ACTIVE'
        ORDER BY e.first_name, e.last_name`, [empId])).rows;
     const nameOf = (f, l, c) => (f ? `${f} ${l}${c ? ` · ${c}` : ''}`.trim() : null);
     res.json(rows.map((r) => ({

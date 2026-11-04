@@ -1,0 +1,972 @@
+[
+ {
+  "id": "C4",
+  "status": "Fixed",
+  "summary": "The Onboard employee form now validates every field before and after submit and shows all errors at once: mobile must be 10 digits starting 6-9; personal/official email valid and different; date of birth in the past and 18+; date of joining today or later, at most a year ahead and at least 18 years after DOB; annual CTC between ₹10,000 and ₹10 crore (accepts \"6,00,000\"); Department, Designation and Date of joining are mandatory; location letters-only (or from the branch list).",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/rules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Fill a valid candidate (mobile 9876543210, DOB 10-05-1995, DOJ next week, Department, Designation, CTC 6,00,000) and submit. Expected: offer sent, profile opens.",
+  "negativeTests": "1. Enter phone 0000000000, DOB 01-01-2030, DOJ 01-01-1990, CTC -100, Location xyz123, same email in Personal and Official, leave Department/Designation empty, Submit. Expected: all errors at once, incl. 'Mobile number must be a valid 10-digit mobile number starting with 6-9', 'Employee must be at least 18 years old (date of birth must be in the past)', 'Date of joining cannot be in the past for a new offer', 'Annual CTC cannot be less than 10000', 'Official email must be different from the personal email', 'Department is required', 'Designation is required'.",
+  "automated": "scripts/v2/test-people.js — 'v2 rejects invalid onboarding with 400', 'all errors returned together …'",
+  "v1Impact": "None (v2 only) — v1 POST /employees keeps its old checks (asserted)."
+ },
+ {
+  "id": "C5",
+  "status": "Partially fixed",
+  "summary": "Offer email is now in the organisation’s own name, address and website (from its branding / organisation record — never another tenant’s), names the position only when set, and states one consistent validity (\"accept within 3 days, by dd/mm/yyyy\"; the e-joining form opens straight after accepting). v2 cannot send an offer without designation or with a past joining date. Reply-To is the organisation’s email. The From address itself is the deployment’s MAIL_FROM, which on production is a personal Gmail — that needs an ops change (lead request). Integration: the sender display name is now the organisation's own name (\"<Organisation>\" <address>); only the address itself still needs the ops change of MAIL_FROM to a company domain.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/emailQueue.js",
+   "backend/src/services/emailTemplates.js",
+   "backend/src/services/mailer.js",
+   "backend/src/services/peopleBrand.js"
+  ],
+  "testSteps": "1. Log in as Company Super Admin of a new organisation. 2. Onboard an employee with designation and DOJ next week. 3. Open the offer email. Expected: subject \"Your offer from <Org>\", org name/address in header and footer, no True Kind Foundation / Noida / truekindfoundation.org, validity \"by <date>\".",
+  "negativeTests": "1. Try DOJ 01-01-1990 or no designation. Expected: form error, no email sent.",
+  "automated": "scripts/v2/test-people.js — 'C5/H28: tenant B offer email is in B’s name', 'C5/H29: offer email has no Noida …', 'C5: DOJ in the past rejected'",
+  "v1Impact": "Applies to v1 too — email body/branding only (wrong data shown); v1 request contract unchanged."
+ },
+ {
+  "id": "C6",
+  "status": "Fixed",
+  "summary": "Offer acceptance and e-joining pages show the hiring organisation’s name/logo (served with the link), show the work email exactly as stored (no Title Case), say \"offer of employment\" when no designation is set, and an offer whose joining date has passed can no longer be accepted.",
+  "files": [
+   "backend/src/controllers/onboardingController.js",
+   "web/app/onboarding/accept/page.jsx",
+   "web/app/onboarding/form/page.jsx",
+   "web/app/onboarding/OrgBrand.jsx"
+  ],
+  "testSteps": "1. Open an offer link. Expected: org name/logo at the top, Work email in lowercase exactly as entered, Accept button.",
+  "negativeTests": "1. Open the link of an offer whose DOJ has passed. Expected: notice \"The joining date in this offer … has already passed\" and no Accept button; the API answers 410.",
+  "automated": "scripts/v2/test-people.js — 'C6: accept page gets B’s branding', 'C6/H30: work email returned exactly as stored', 'C6: v2 refuses to accept an offer whose joining date has passed'",
+  "v1Impact": "v1 accept of a past-DOJ offer unchanged (asserted); branding fields are additive."
+ },
+ {
+  "id": "C7",
+  "status": "Partially fixed",
+  "summary": "E-joining validates every step and shows all errors together: place of birth and names letters-only, emergency contact name/phone mandatory and valid, State is a dropdown of Indian states, District and City letters-only, PIN 6 digits, account holder required, bank name checked against the IFSC; the signature image is now mandatory (as the offer email says) and submission is refused while any mandatory document is missing. District and City are validated text, not dropdowns (no India-wide district/city master exists).",
+  "files": [
+   "backend/src/controllers/onboardingController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/onboarding/form/page.jsx"
+  ],
+  "testSteps": "1. Open an e-joining link. 2. Fill all steps with valid data and every required document incl. Signature image. Expected: submits.",
+  "negativeTests": "1. Step 1: Place of birth 123, Contact name @@ → 'Place of birth should contain letters only', 'Emergency contact name should contain letters only'. 2. Step 2: District 123, City 456, PIN 000000 → errors for each. 3. Bank: holder empty + bad account → both errors shown together. 4. Submit without Signature image → 'Please upload: Signature image'.",
+  "automated": "scripts/v2/test-people.js — 'C7/H31/H32: junk e-joining values rejected', 'all step errors together', 'C7: submit without the signature image … is refused'",
+  "v1Impact": "None (v2 only) — v1 /onboarding/details keeps the old format checks (asserted)."
+ },
+ {
+  "id": "C8",
+  "status": "Fixed",
+  "summary": "Employee profile shows Date of birth, Gender, Annual CTC, Blood group, Marital status, Emergency contact, Place of birth and District, with readable labels (e.g. \"Full time\"). HR can correct DOB, Gender, blood group, marital status and emergency contact from Edit (validated, audited).",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Employees > open an employee. Expected: Profile and Personal information cards show these fields. 2. Edit > change DOB to 03-02-1994, Gender Male > Save. Expected: saved and shown.",
+  "negativeTests": "1. Edit > DOB 01-01-2030 > Save. Expected: 'Employee must be at least 18 years old …' and the panel stays open.",
+  "automated": "scripts/v2/test-people.js — 'C8/C14/H39: HR corrects DOB, gender, operational manager and blood group'",
+  "v1Impact": "Applies to v1 too only as an additive field: PATCH now also accepts dob/gender/operationalManagerId; old payloads behave as before."
+ },
+ {
+  "id": "C9",
+  "status": "Fixed",
+  "summary": "Regenerate offer asks for confirmation (with a Preview option) and is hidden/refused once the employee has joined (the accepted offer is kept). Reset password asks for confirmation and, on v2, emails a one-time set-password link and shows that message instead of a password.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Open a candidate (Offer sent). Expected: Preview offer and Regenerate offer buttons; Regenerate asks to confirm. 2. Open an Active employee. Expected: no Regenerate button; Reset password asks to confirm and then shows \"A link to set a new password has been emailed …\".",
+  "negativeTests": "1. Call generate-offer for an Active employee (v2). Expected: 409 \"The offer cannot be regenerated after the employee has joined …\".",
+  "automated": "scripts/v2/test-people.js — 'C9/H40: offer cannot be regenerated after joining (v2)'",
+  "v1Impact": "v1 generate-offer unchanged (asserted)."
+ },
+ {
+  "id": "C10",
+  "status": "Fixed",
+  "summary": "Edit employee validates DOJ (≥ DOB+18, ≤ 1 year ahead) and CTC (₹10,000–₹10 crore) with all errors at once; on any error (client or server) the edit panel stays open with every change kept.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/employees/rules.js"
+  ],
+  "testSteps": "1. Employee > Edit > change phone and designation > Save. Expected: saved.",
+  "negativeTests": "1. Edit > DOJ 31-12-2099, CTC 99999999999, phone 12 > Save. Expected: 'Date of joining cannot be more than a year from today', 'Annual CTC cannot be more than 10,00,00,000', 'Mobile number must be …' — panel stays open with the values typed.",
+  "automated": "scripts/v2/test-people.js — 'C10: invalid edit rejected with every field error'",
+  "v1Impact": "v1 PATCH keeps its old checks/messages (asserted)."
+ },
+ {
+  "id": "C11",
+  "status": "Fixed",
+  "summary": "The status filter lists every status (Offer sent, Filling details, Sent back, Awaiting review, In review, On hold, Joining, Active, Inactive, Exited, Rejected, Expired); the header count follows filter and search (\"4 of 30\"); Export CSV includes ID, name, status, company, department, sub-department, designation, employment type, DOJ, official/personal email, phone, location, all three managers and annual CTC. The list also honours ?status= from dashboard links.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Employees > Status: Filling details. Expected: those candidates, header \"N of M\". 2. Export CSV. Expected: all columns above.",
+  "negativeTests": "1. Status Awaiting review with none. Expected: \"No employees match\" and \"0 of M\".",
+  "automated": "scripts/v2/test-people.js — 'C11: list carries phone, company, managers, location and CTC for export'",
+  "v1Impact": "Applies to v1 GET /employees as added fields only."
+ },
+ {
+  "id": "C12",
+  "status": "Fixed",
+  "summary": "Approval (v2) is blocked until department, designation, reporting manager, a sensible DOJ (within a year either side, ≥ DOB+18), mandatory documents, permanent address, bank details, CTC and unique emails are present; the profile lists what is missing and disables Approve.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Review queue > open a complete submission > Approve & create account > confirm. Expected: Employee ID created.",
+  "negativeTests": "1. Open a submission without reporting manager / with DOJ 01-01-1990. Expected: 'Approval is blocked until these are fixed: Reporting manager is not set …; Date of joining is more than a year in the past …'.",
+  "automated": "scripts/v2/test-people.js — 'C12: approval blocked when incomplete', 'C12/H42/H33: reasons listed'",
+  "v1Impact": "None (v2 only) for the completeness rules."
+ },
+ {
+  "id": "C13",
+  "status": "Fixed",
+  "summary": "Change requests show current vs proposed values (current struck through) and Approve opens a confirmation listing each change; values are readable (Male, Present, dd-mm-yyyy).",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "web/app/admin/change-requests/page.jsx"
+  ],
+  "testSteps": "1. HR > Change requests > Pending. Expected: \"Current → proposed\" column. 2. Approve. Expected: confirmation with old → new for each field.",
+  "negativeTests": "1. Cancel the confirmation. Expected: nothing changes.",
+  "automated": "scripts/v2/test-people.js — 'C13: HR sees current vs proposed values'",
+  "v1Impact": "Applies to v1 list as an added `current` field only."
+ },
+ {
+  "id": "C14",
+  "status": "Fixed",
+  "summary": "Onboarding and Edit forms now have an Operational manager field (saved on both API versions), so the org chart’s Operational manager view can be filled.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/org-chart/page.jsx"
+  ],
+  "testSteps": "1. Edit an employee > Operational manager > pick someone > Save. 2. Org chart > Line type: Operational manager. Expected: they appear under that manager.",
+  "negativeTests": "1. Pick the employee as their own operational manager. Expected: \"An employee cannot be their own manager\".",
+  "automated": "scripts/v2/test-people.js — 'C14: v1 can set the operational manager too'",
+  "v1Impact": "Applies to v1 too — PATCH accepts the extra key (additive)."
+ },
+ {
+  "id": "C51",
+  "status": "Fixed",
+  "summary": "Request a change pre-fills gender (case-insensitive match of the onboarding value), the address of the chosen type (incl. district) and bank holder/bank/branch/IFSC; values are shown as readable labels (Male, not MALE).",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "backend/src/controllers/peopleSelfController.js",
+   "web/app/ess/change-request/page.jsx"
+  ],
+  "testSteps": "1. Employee > Request a change > Personal details. Expected: Gender pre-selected. 2. Address. Expected: e-joining address pre-filled. 3. My requests shows \"Gender: Male\".",
+  "negativeTests": "1. Send without changing anything. Expected: \"Nothing has changed — edit at least one field before sending.\"",
+  "automated": "scripts/v2/test-people.js — 'E59/E60: unchanged form does not create a request'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "C53",
+  "status": "Fixed",
+  "summary": "Welcome email: organisation branding, no literal \\n, label \"Employee ID\", no NGO mission or \"My … application\" text, and (v2) a one-time set-password link instead of the password; it says when the login opens (DOJ). Sent to the personal email until the official mailbox is confirmed.",
+  "files": [
+   "backend/src/services/emailTemplates.js",
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleBrand.js"
+  ],
+  "testSteps": "1. Approve an onboarding. 2. Open the welcome email. Expected: \"Set your password\" button, Employee ID row, org footer, \"Account opens on <DOJ>\" if DOJ is in future.",
+  "negativeTests": "1. Search the email for \"Password\" value / \"I’D\" / \"social impact\". Expected: none.",
+  "automated": "scripts/v2/test-people.js — 'C53/H44: welcome email has a set-password link and no password', 'C53: \"Employee ID\" label', 'C53: no literal \\\\n'",
+  "v1Impact": "v1 approval still emails a temporary password (asserted) but with the corrected text/branding."
+ },
+ {
+  "id": "E53",
+  "status": "Fixed",
+  "summary": "My Profile shows the full record read-only — employment, managers, DOJ, DOB, gender, phone, emails, addresses, emergency contact, bank and statutory (masked) — and a My documents tab to upload Aadhaar, PAN, certificates, photo etc. for HR verification with their status.",
+  "files": [
+   "backend/src/controllers/peopleSelfController.js",
+   "backend/src/routes/v2/people.js",
+   "web/app/ess/profile/page.jsx"
+  ],
+  "testSteps": "1. Employee > My Profile. Expected: all sections; account number like ••••9012. 2. My documents > PAN card > choose PDF > Upload. Expected: \"Waiting for HR\".",
+  "negativeTests": "1. Upload without a file. Expected: 'Choose a file to upload'. 2. Same file as another document. Expected: 'This file is already uploaded as …'.",
+  "automated": "scripts/v2/test-people.js — 'E53: full profile', 'E53: sensitive data masked', 'E53: employee uploads a document for HR verification'",
+  "v1Impact": "None (new v2 endpoints; v1 /me/profile unchanged)."
+ },
+ {
+  "id": "E54",
+  "status": "Fixed",
+  "summary": "Address book shows only official contact details (official email, no personal mobile) and the work location (branch / posting state) instead of home-address values.",
+  "files": [
+   "backend/src/controllers/peopleSelfController.js",
+   "backend/src/routes/v2/people.js",
+   "web/app/ess/profile/page.jsx"
+  ],
+  "testSteps": "1. Employee > My Profile > Address Book. Expected: official emails only, no phone numbers.",
+  "negativeTests": "1. As an employee, search the Address Book for a colleague whose personal mobile/Gmail you know. Expected: neither is shown anywhere on the card. 2. Search for a candidate (Offer sent) or an exited employee. Expected: not listed.",
+  "automated": "scripts/v2/test-people.js — 'E54: no personal mobile numbers in the address book'",
+  "v1Impact": "None (v2 override; v1 /me/directory unchanged — asserted)."
+ },
+ {
+  "id": "E55",
+  "status": "Fixed",
+  "summary": "Emails are returned and displayed exactly as stored, including \"+\" aliases; the email is shown on one unbroken line (the long address used to wrap at \"+\", which looked like the first part was dropped).",
+  "files": [
+   "backend/src/controllers/peopleSelfController.js",
+   "web/app/ess/profile/page.jsx"
+  ],
+  "testSteps": "1. Address book > TKF9009. Expected: subhrajit.tripathy.ts+tkf9009@gmail.com in full.",
+  "negativeTests": "1. Search the Address Book for 'tkf9009'. Expected: the full address with the '+' part is shown, not 'tkf9009@gmail.com'. 2. Copy the email from the card. Expected: the copied text equals the stored email exactly.",
+  "automated": "scripts/v2/test-people.js — 'E55: \"+\" alias email shown exactly as stored'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E56",
+  "status": "Partially fixed",
+  "summary": "Address book lists only current employees (active, not past an approved LWD, not candidates); search trims spaces and matches name, ID, department and designation. Demo accounts that are genuinely Active employees still appear — they need to be deactivated in the data (lead request).",
+  "files": [
+   "backend/src/controllers/peopleSelfController.js",
+   "web/app/ess/profile/page.jsx"
+  ],
+  "testSteps": "1. Search \" aarav \". Expected: Aarav found. 2. Search Engineering. Expected: Engineering staff.",
+  "negativeTests": "1. Search zzz. Expected: \"No matches\".",
+  "automated": "scripts/v2/test-people.js — 'E56: exited employee not listed', 'E56: search trims and matches department'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E57",
+  "status": "Fixed",
+  "summary": "A pending request can be edited or withdrawn (from the tab and from My requests); after withdrawing, a new request can be raised. All requests stay listed with status.",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "backend/src/routes/v2/people.js",
+   "web/app/ess/change-request/page.jsx"
+  ],
+  "testSteps": "1. Request a change > Personal details > send. 2. Edit request > change phone > Update. 3. Withdraw > confirm. Expected: status Withdrawn; form available again.",
+  "negativeTests": "1. Withdraw twice (API). Expected: 409 \"Only a pending request can be withdrawn.\"",
+  "automated": "scripts/v2/test-people.js — 'E57: edit my pending request', 'E57: withdraw my pending request'",
+  "v1Impact": "None (new v2 endpoints)."
+ },
+ {
+  "id": "E58",
+  "status": "Fixed",
+  "summary": "Same as C51: gender and address are pre-filled from the record and shown with readable labels.",
+  "files": [
+   "web/app/ess/change-request/page.jsx",
+   "backend/src/controllers/peopleSelfController.js"
+  ],
+  "testSteps": "1. Request a change > Personal details. Expected: Gender Male selected.",
+  "negativeTests": "1. Open Request a change > Personal details without changing anything and click Send to HR. Expected: 'Nothing has changed' message; no request is created. 2. Check that no raw code such as 'MALE' appears anywhere on the form or the request list.",
+  "automated": "scripts/v2/test-people.js — see C51",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E59",
+  "status": "Fixed",
+  "summary": "Personal details changes: DOB must be in the past and 18+, phone a valid mobile; only changed fields are sent (unchanged personal email is not included).",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "web/app/ess/change-request/page.jsx"
+  ],
+  "testSteps": "1. Change only the phone > Send. Expected: request lists only Phone.",
+  "negativeTests": "1. DOB 01-01-2030, phone 0000000000. Expected: both errors together.",
+  "automated": "scripts/v2/test-people.js — 'E59: future DOB and phone 0000000000 rejected together', 'E59: only the changed field is sent'",
+  "v1Impact": "None (v2 only) — v1 keeps old behaviour (asserted)."
+ },
+ {
+  "id": "E60",
+  "status": "Fixed",
+  "summary": "Bank tab pre-fills holder, bank, branch and IFSC; sending an unchanged form creates nothing (\"Nothing has changed …\").",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "web/app/ess/change-request/page.jsx",
+   "backend/src/controllers/peopleSelfController.js"
+  ],
+  "testSteps": "1. Bank account tab. Expected: all fields pre-filled.",
+  "negativeTests": "1. Send to HR without changes. Expected: \"Nothing has changed — edit at least one field before sending.\"",
+  "automated": "scripts/v2/test-people.js — 'E60: unchanged bank details create nothing'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E61",
+  "status": "Fixed",
+  "summary": "Address change validates PIN (6 digits), City/District letters-only, State from a dropdown; message grammar fixed (\"an address request\").",
+  "files": [
+   "backend/src/controllers/changeRequestController.js",
+   "web/app/ess/change-request/page.jsx"
+  ],
+  "testSteps": "1. Address > valid values > Send. Expected: sent.",
+  "negativeTests": "1. PIN 12ab, City 123, State @@@ (API). Expected: three field errors. 2. Second pending address request → 'You already have an address request pending.'",
+  "automated": "scripts/v2/test-people.js — 'E61: PIN 12ab, city 123, state @@@ rejected', 'E61: grammar — \"an address request\"'",
+  "v1Impact": "v1 message wording corrected (same status code)."
+ },
+ {
+  "id": "E67",
+  "status": "Fixed",
+  "summary": "Same as C53 (welcome email branding, line breaks, \"Employee ID\", set-password link).",
+  "files": [
+   "backend/src/services/emailTemplates.js",
+   "backend/src/controllers/employeeController.js"
+  ],
+  "testSteps": "1. HR approves an onboarding in the Company Admin organisation. 2. Open the welcome email in the candidate's personal inbox. Expected: organisation's own name/address, proper line breaks, label 'Employee ID', a 'Set your password' link and no password. 3. Use the link to set a password and sign in on or after the joining date.",
+  "negativeTests": "1. Approve an onboarding for an organisation other than TRUE HR. Expected: the welcome email shows that organisation's name and address, never 'True Kind Foundation', 'Noida' or 'True HR Pvt Ltd'. 2. Check the email has no literal '\\n', no 'Employee I'D' and no plain-text password. 3. Open the set-password link a second time after using it. Expected: 'This link has expired or was already used'.",
+  "automated": "scripts/v2/test-people.js — see C53",
+  "v1Impact": "See C53."
+ },
+ {
+  "id": "H9",
+  "status": "Fixed",
+  "summary": "Mobile number is validated as you type/submit on the client (10 digits starting 6-9; non-digits stripped) and again on the server.",
+  "files": [
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/rules.js",
+   "backend/src/services/peopleRules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Enter 9876543210. Expected: accepted.",
+  "negativeTests": "1. Enter 12345 and submit. Expected: 'Mobile number must be a valid 10-digit mobile number starting with 6-9' before any request.",
+  "automated": "scripts/v2/test-people.js — 'all errors returned together (phone, …)'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H10",
+  "status": "Fixed",
+  "summary": "Personal email format is validated before submit and on the server.",
+  "files": [
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/rules.js",
+   "backend/src/services/peopleRules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Personal email asha@gmail.com. Expected: accepted.",
+  "negativeTests": "1. sanvi123@gmail → 'Personal email is not a valid email address'.",
+  "automated": "scripts/v2/test-people.js — 'H10/H13: invalid email format rejected'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H11",
+  "status": "Fixed",
+  "summary": "Date of birth must be in the past and 18+ (date picker capped, server re-checks).",
+  "files": [
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/rules.js",
+   "backend/src/services/peopleRules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. DOB 10-05-1995. Expected: accepted.",
+  "negativeTests": "1. DOB 30-10-2027 or someone 17 → 'Employee must be at least 18 years old (date of birth must be in the past)'.",
+  "automated": "scripts/v2/test-people.js — 'DOB under 18 rejected'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H12",
+  "status": "Fixed",
+  "summary": "The rule \"designation must belong to the department\" is enforced on the server and the designation dropdown filters by department whenever designations carry a department. Today the data model has no designation→department mapping, so nothing can be checked until the org area adds it (lead request). Integration: designations can now be linked to a department (Hierarchy & Levels > \"Belongs to department\"); once linked, onboarding/edit refuses a designation from another department with a field error.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "Setup: Company Super Admin > Hierarchy & Levels > set \"Belongs to department\" for a designation (e.g. Senior Software Engineer → Engineering). 1. (After the mapping exists) pick Department Human Resource. Expected: only its designations listed.",
+  "negativeTests": "1. (After mapping) submit Human Resource + Senior Software Engineer. Expected: 'This designation does not belong to the selected department'. Then onboard an employee with Department = Human Resource and that designation. Expected: error on Designation saying it does not belong to the selected department.",
+  "automated": "scripts/v2/test-people.js — not covered — no mapping column exists to test against",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H13",
+  "status": "Fixed",
+  "summary": "Official email format validated before submit and on the server, and must differ from the personal email; example/test domains are refused (H46).",
+  "files": [
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/rules.js",
+   "backend/src/services/peopleRules.js",
+   "backend/src/controllers/employeeController.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Official email asha.rao@acme.in. Expected: accepted.",
+  "negativeTests": "1. sanvi123@gmail → 'Official email is not a valid email address'. 2. x@truehr.example → 'Official email must be on your organisation’s real email domain …'.",
+  "automated": "scripts/v2/test-people.js — 'H10/H13: invalid email format rejected', 'H46: a placeholder … official email domain is refused'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H14",
+  "status": "Fixed",
+  "summary": "When the organisation has branches in Masters, Location of joining is a dropdown of those branches (server refuses any other value and stores the branch); without branches it stays a letters-only text field with a hint to add branches.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Masters > Branch: add Bhubaneswar. 2. Onboard employee. Expected: Location is a dropdown with Bhubaneswar.",
+  "negativeTests": "1. (API) location Pune → 'Choose the location from your organisation’s branch list'.",
+  "automated": "scripts/v2/test-people.js — 'H14: with branches set up, a location outside the list is refused', 'H14: branch picked from the location'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H15",
+  "status": "Fixed",
+  "summary": "Date of joining must be at least 18 years after the date of birth (both on create and edit); on create it cannot be in the past.",
+  "files": [
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/rules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. DOB 1995, DOJ next week. Expected: accepted.",
+  "negativeTests": "1. Edit an employee: DOJ before DOB+18 → 'Date of joining must be at least 18 years after the date of birth'.",
+  "automated": "scripts/v2/test-people.js — 'C10: invalid edit rejected with every field error'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H16",
+  "status": "Fixed",
+  "summary": "\"Preview offer letter\" on the onboarding form (and \"Preview offer\" on a candidate’s profile) renders the Offer Letter + Annexure A for review without sending or saving.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/routes/v2/people.js",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Fill name, designation, DOJ, CTC 6,00,000 > Preview offer letter. Expected: PDF opens in a full-width viewer.",
+  "negativeTests": "1. Preview with CTC 55. Expected: 'Annual CTC cannot be less than 10000'.",
+  "automated": "scripts/v2/test-people.js — 'H16: offer preview from the form returns a PDF', 'H16: preview for an existing candidate'",
+  "v1Impact": "None (new v2 endpoints)."
+ },
+ {
+  "id": "H17",
+  "status": "Fixed",
+  "summary": "Annual CTC must be between ₹10,000 and ₹10 crore with at most 2 decimals, client and server; no letter is generated otherwise.",
+  "files": [
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/rules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. CTC 6,00,000. Expected: accepted.",
+  "negativeTests": "1. CTC 55 → 'Annual CTC cannot be less than 10000'.",
+  "automated": "scripts/v2/test-people.js — 'H17: CTC 55 rejected'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H18",
+  "status": "Fixed",
+  "summary": "Document / offer-letter / info-sheet viewers use the full-width responsive modal (max 96vw, 70vh viewer, Esc/X to close, open-in-new-tab and download).",
+  "files": [
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/employees/new/page.jsx",
+   "web/app/ess/profile/page.jsx"
+  ],
+  "testSteps": "1. Employee profile > Offer letter. Expected: PDF fits the screen on laptop and phone.",
+  "negativeTests": "1. Press Esc. Expected: viewer closes.",
+  "automated": "scripts/v2/test-people.js — UI only (check-jsx)",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H19",
+  "status": "Fixed",
+  "summary": "A personal (or official) email already used by another live employee/candidate in the organisation is refused with \"Email already registered (<name>, <code>)\".",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Use a new personal email. Expected: accepted.",
+  "negativeTests": "1. Personal email = an existing employee’s email. Expected: 'Email already registered (…)'.",
+  "automated": "scripts/v2/test-people.js — 'H19: personal email of an existing employee → \"Email already registered\"'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H20",
+  "status": "Fixed",
+  "summary": "The Employees list, profile and org chart use the shared status vocabulary (StatusBadge/label): Offer sent, Filling details, Awaiting review, Joining, Active … — no \"PENDING\". (The dashboard is another area’s screen; see lead request.)",
+  "files": [
+   "web/app/admin/employees/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/org-chart/page.jsx"
+  ],
+  "testSteps": "1. Compare a candidate on Employees and on the profile. Expected: same label \"Offer sent\".",
+  "negativeTests": "1. Filter \"Offer sent\". Expected: those rows only.",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H21",
+  "status": "Fixed",
+  "summary": "The header count follows the status filter and search (\"4 of 30\").",
+  "files": [
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Employees > Status: Offer sent. Expected: \"N of M\".",
+  "negativeTests": "1. Search \"zzz\". Expected: \"0 of M\" and \"No employees match\".",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H22",
+  "status": "Fixed",
+  "summary": "The filter has every status incl. Filling details; a filter with no rows shows \"No employees match\" instead of \"Onboard a new employee…\".",
+  "files": [
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Status: Filling details. Expected: those candidates.",
+  "negativeTests": "1. Status: Awaiting review with none. Expected: \"No employees match\".",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H23",
+  "status": "Fixed",
+  "summary": "Employee search trims and collapses spaces and matches name, email, ID, designation, department and phone.",
+  "files": [
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Search \"  subhrajit  \". Expected: the employee is found.",
+  "negativeTests": "1. Search \"   \". Expected: full list.",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H24",
+  "status": "Fixed",
+  "summary": "Profile shows DOB and Gender and readable employment type (\"Full time\").",
+  "files": [
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Open employee #35. Expected: DOB 10-05-1998, Gender Male, Employment type Full time.",
+  "negativeTests": "1. Open a profile whose employment type is CONTRACT or INTERN. Expected: 'Contract' / 'Intern', never an upper-case code. 2. Open a profile with no DOB recorded. Expected: '—' shown, no 'Invalid Date'.",
+  "automated": "scripts/v2/test-people.js — covered by C8 checks",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H25",
+  "status": "Fixed",
+  "summary": "Offer letter placeholders resolve from the candidate (name, designation, department, company, DOJ, location, CTC, with aliases like {{name}}, {{position}}, {{DOJ}}). A template paragraph with an unknown placeholder, a leftover [marker] or braces, a salutation without the candidate’s name (\"Dear Rocky\") or an intro without designation/DOJ is replaced by the built-in paragraph — nothing raw is printed.",
+  "files": [
+   "backend/src/services/offerLetterPdf.js"
+  ],
+  "testSteps": "1. Onboard Subhrajit Tripathy, Operations Manager, DOJ 16-11-2026 with auto-generate. 2. Open the offer letter. Expected: \"Dear Subhrajit Tripathy\", Operations Manager, 16/11/2026, company name.",
+  "negativeTests": "1. Branding template with \"Dear Rocky\" / \"{{Software Engineer}}\" / \"{{GS}}\". Expected: none of these appear.",
+  "automated": "scripts/v2/test-people.js — 'H25: letter addresses the candidate', 'H25: bad template paragraphs fall back to the candidate’s data'",
+  "v1Impact": "Applies to v1 too — PDF content only (wrong data shown)."
+ },
+ {
+  "id": "H26",
+  "status": "Fixed",
+  "summary": "A signatory name that is clearly not a name (keyboard mash) is not printed; the letter is signed \"Authorised Signatory / For <company>\" without the uploaded image. Choosing a real signatory, signature and company stamp is a branding-screen setting (org area) — a stamp upload does not exist yet (lead request). Integration: Branding now validates the signatory name (letters only, at least 2) and supports an optional company stamp image that prints beside the signature on letters and offer letters.",
+  "files": [
+   "backend/src/services/docPdf.js",
+   "backend/src/services/offerLetterPdf.js",
+   "web/app/admin/branding/page.jsx"
+  ],
+  "testSteps": "1. Branding with signatory \"R. K. Mishra\". Expected: shown on the letter. Company Super Admin > Branding > Marks: upload a signature image and a company stamp (PNG/JPEG), set a real signatory name > Save. Generate an offer letter. Expected: the signatory name, signature and stamp appear; no stock photo.",
+  "negativeTests": "1. Signatory \"kjsabfksbasfbfhvafnbakf\". Expected: \"Authorised Signatory\" instead. Branding: signatory name 'kjsabfksb12' or 'A'. Expected: 'Signatory name should contain letters only' / at least 2 letters, and Save is refused. Upload a .pdf as the stamp. Expected: file-type error.",
+  "automated": "scripts/v2/test-people.js — 'H26: garbage signatory replaced by \"Authorised Signatory\"'",
+  "v1Impact": "Applies to v1 too — PDF content only."
+ },
+ {
+  "id": "H27",
+  "status": "Fixed",
+  "summary": "Annexure A shows the date of joining (a database date arrived as a JS Date and printed \"—\").",
+  "files": [
+   "backend/src/services/offerLetterPdf.js"
+  ],
+  "testSteps": "1. Open a generated offer letter, page 2. Expected: \"Date of Joining: 16/11/2026\".",
+  "negativeTests": "1. Generate an offer letter for a candidate without a joining date. Expected: the letter is refused with 'Date of joining is required' (v2) instead of printing '—'. 2. Check page 2 never prints a raw placeholder such as {{doj}} or [date].",
+  "automated": "scripts/v2/test-people.js — 'H27: Annexure A carries the joining date', 'H27: a Date joining date prints in the annexure'",
+  "v1Impact": "Applies to v1 too — PDF content only."
+ },
+ {
+  "id": "H28",
+  "status": "Partially fixed",
+  "summary": "The offer email is in the organisation’s name with Reply-To set to its email. The sending address is the deployment’s MAIL_FROM, which on production is a personal Gmail; it must be changed by ops to a company-domain sender, and the mailer needs a per-organisation display name (lead requests). Integration: the sender display name is now the organisation's own name (\"<Organisation>\" <address>); only the address itself still needs the ops change of MAIL_FROM to a company domain.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/emailQueue.js",
+   "backend/src/services/emailTemplates.js",
+   "backend/src/services/mailer.js"
+  ],
+  "testSteps": "1. Open an offer email. Expected: body in org name; Reply goes to the org contact.",
+  "negativeTests": "1. Reply to the offer email. Expected: the reply goes to the organisation's contact email, not the sending Gmail. 2. Check the email body for 'True HR Pvt Ltd' / 'truekindfoundation.org' in a non-TRUE HR organisation. Expected: not present. Note: the From address itself changes only after ops sets a company-domain MAIL_FROM.",
+  "automated": "scripts/v2/test-people.js — 'C5/H28: tenant B offer email is in B’s name'",
+  "v1Impact": "Applies to v1 too — email body only."
+ },
+ {
+  "id": "H29",
+  "status": "Fixed",
+  "summary": "Offer email text is consistent: accept within N days (by date); after accepting the form opens directly — the contradictory \"valid till your date of joining\" and \"link will be emailed\" lines are gone; footer address/website come from the organisation’s branding.",
+  "files": [
+   "backend/src/services/emailTemplates.js"
+  ],
+  "testSteps": "1. Open an offer email. Expected: single validity date; org footer.",
+  "negativeTests": "1. Search for \"Noida\"/\"truekindfoundation\". Expected: none.",
+  "automated": "scripts/v2/test-people.js — 'C5/H29: offer email has no Noida …', 'C5: offer email states the validity date once'",
+  "v1Impact": "Applies to v1 too — email body only."
+ },
+ {
+  "id": "H30",
+  "status": "Fixed",
+  "summary": "Work email on the accept page is shown exactly as stored (CSS capitalize removed).",
+  "files": [
+   "web/app/onboarding/accept/page.jsx"
+  ],
+  "testSteps": "1. Open an offer link. Expected: \"subhrajit.qa1@…\" lowercase.",
+  "negativeTests": "1. Open an offer link for a candidate with a mixed-case or '+' alias email (e.g. Test.User+qa@Gmail.com stored as entered). Expected: shown exactly as stored, never re-capitalised word by word.",
+  "automated": "scripts/v2/test-people.js — 'C6/H30: work email returned exactly as stored'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H31",
+  "status": "Fixed",
+  "summary": "E-joining Step 1: place of birth, blood group, marital status, emergency contact name and phone are mandatory; names letters-only; phone a valid Indian mobile (6-9, 10 digits).",
+  "files": [
+   "backend/src/controllers/onboardingController.js",
+   "web/app/onboarding/form/page.jsx"
+  ],
+  "testSteps": "1. Fill Step 1 validly. Expected: Continue works.",
+  "negativeTests": "1. Contact name 12345@@, phone 0000000000. Expected: 'Emergency contact name should contain letters only', 'Emergency contact phone must be a valid 10-digit mobile number starting with 6-9'.",
+  "automated": "scripts/v2/test-people.js — 'all step errors together'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H32",
+  "status": "Partially fixed",
+  "summary": "State is a dropdown (Indian states), PIN must be 6 digits not starting with 0, the permanent address is mandatory unless \"same as present\" is ticked, and District is saved and shown on the profile. District/City are validated letters-only text, not dropdowns.",
+  "files": [
+   "backend/src/controllers/onboardingController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/onboarding/form/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Step 2 valid, tick \"same as present\". Expected: Continue; profile shows district.",
+  "negativeTests": "1. State xyz123 (API), PIN 000000, permanent blank. Expected: 'choose a state from the list', 'PIN code must be 6 digits …', 'Permanent address line 1 is required'.",
+  "automated": "scripts/v2/test-people.js — 'H32: state must come from the list', 'H32: permanent address and district saved'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H33",
+  "status": "Fixed",
+  "summary": "The same file cannot be uploaded for two document slots (v2 refuses with the slot it duplicates; HR sees a \"Same file as …\" flag on older data). Mandatory documents (incl. signature image, and relieving letter when not a fresher) are enforced at submit and at approval; the login opens only on the DOJ (D3).",
+  "files": [
+   "backend/src/controllers/onboardingController.js",
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/peopleRules.js",
+   "web/app/onboarding/form/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Upload distinct files for each document. Expected: accepted.",
+  "negativeTests": "1. Upload the 10th marksheet PDF again as 12th. Expected: 'This file is already uploaded as \"10th marksheet\"'.",
+  "automated": "scripts/v2/test-people.js — 'H33: the same file for another slot is refused', 'C12/H42/H33: reasons listed'",
+  "v1Impact": "v1 upload still accepts duplicates (asserted) but stores the hash so HR is warned."
+ },
+ {
+  "id": "H34",
+  "status": "Fixed",
+  "summary": "The bank name is derived from the IFSC (bank code) and filled automatically; a typed bank name that does not match the IFSC is refused (e-joining, HR bank edit, change requests).",
+  "files": [
+   "backend/src/services/peopleRules.js",
+   "backend/src/controllers/onboardingController.js",
+   "backend/src/controllers/employeeController.js",
+   "backend/src/controllers/changeRequestController.js",
+   "web/app/onboarding/form/page.jsx",
+   "web/app/onboarding/ifsc.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. E-joining > Bank > IFSC SBIN0001234. Expected: Bank \"State Bank of India\" filled.",
+  "negativeTests": "1. (API) IFSC SBIN0001234 with bank Ghhh. Expected: 'Bank name does not match the IFSC (SBIN is State Bank of India)'.",
+  "automated": "scripts/v2/test-people.js — 'H34: bank name vs IFSC message', 'H34: \"Ghhh\" does not match SBIN'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H35",
+  "status": "Fixed",
+  "summary": "Edit employee pre-fills Annual CTC (employee CTC or salary structure ×12); employment types use readable labels; Sub-department and Branch say when no masters are set up yet (\"add them under Masters\") instead of looking broken.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Edit an employee onboarded with CTC 6,00,000. Expected: CTC 600000, Employment type \"Full time\".",
+  "negativeTests": "1. Org without branches: Branch hint \"No branches set up yet — add them under Masters\".",
+  "automated": "scripts/v2/test-people.js — covered by H71 checks",
+  "v1Impact": "Applies to v1 GET /employees/:id as added annual_ctc field."
+ },
+ {
+  "id": "H37",
+  "status": "Fixed",
+  "summary": "One status vocabulary on Employees, profile, org chart and review queue (StatusBadge / label()).",
+  "files": [
+   "web/app/admin/employees/page.jsx",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/org-chart/page.jsx",
+   "web/app/admin/review/page.jsx"
+  ],
+  "testSteps": "1. Compare a candidate across screens. Expected: same label.",
+  "negativeTests": "1. Check Dashboard, Employees list, Org chart, Review queue and Profile for raw codes such as OFFER_SENT, DETAILS_PENDING or 'PENDING'. Expected: none; every screen uses Offer sent / Filling details / Awaiting review / Active.",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H38",
+  "status": "Fixed",
+  "summary": "Minimal candidate status workflow on the profile: Put on hold / Resume / Mark declined / Did not join, each with a mandatory reason, kept in a History card (with every other status change: offer sent, accepted, submitted, sent back, approved, deactivated…). Declined/Did not join close the record and void its links (and disable the login of an approved joiner before DOJ). On-hold offers are not auto-expired.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/routes/v2/people.js",
+   "backend/src/db/migrations_v2/20_people.sql",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Candidate profile > Put on hold > reason \"Budget freeze\". Expected: status On hold; History shows it.",
+  "negativeTests": "1. Confirm with empty reason. Expected: 'Reason must be at least 5 characters'. 2. Did not join on an employee who joined. Expected: refused.",
+  "automated": "scripts/v2/test-people.js — 'H38: put on hold', 'H38: history keeps every action with its reason', 'H38: a joined employee cannot be marked did-not-join'",
+  "v1Impact": "None (new v2 endpoint)."
+ },
+ {
+  "id": "H39",
+  "status": "Partially fixed",
+  "summary": "The profile has a Personal information card (blood group, marital status, place of birth, emergency contact, nationality, experience) and HR can edit blood group, marital status and emergency contact (and DOB/gender) with old→new values in the audit log. The rest of the Personal Information Sheet stays in the PDF.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Edit > Blood group B+ > Save. Expected: shown; audit log has the change.",
+  "negativeTests": "1. (API) blood group Z+. Expected: 'Choose a blood group from the list'.",
+  "automated": "scripts/v2/test-people.js — 'C8/C14/H39: …', 'H39: the edit is audited with old and new values'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H40",
+  "status": "Fixed",
+  "summary": "\"Generate offer + Annexure A\" is replaced by \"Preview offer\" and \"Regenerate offer\" (confirmed), shown only before joining; the action reports success.",
+  "files": [
+   "web/app/admin/employees/[id]/page.jsx",
+   "backend/src/controllers/employeeController.js"
+  ],
+  "testSteps": "1. Candidate > Regenerate offer > confirm. Expected: \"Offer letter + Annexure A generated.\" and the new letter opens via Offer letter.",
+  "negativeTests": "1. Active employee. Expected: buttons hidden; API 409.",
+  "automated": "scripts/v2/test-people.js — 'C9/H40: offer cannot be regenerated after joining (v2)'",
+  "v1Impact": "v1 unchanged."
+ },
+ {
+  "id": "H41",
+  "status": "Fixed",
+  "summary": "Deactivating / re-activating an employee (v2) emails them (organisation-branded, with the reason HR typed). The termination email template exists (employeeStatusEmail TERMINATED) but the termination action belongs to another area (lead request). Integration: terminating an employee now also emails them (organisation-branded, to personal email if present), on both API versions; the email never blocks the termination.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/controllers/terminationController.js",
+   "backend/src/services/emailTemplates.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Active employee > Deactivate > reason > confirm. Expected: the employee gets \"Your account has been deactivated\". Termination: HR > Separation > Terminations > record a termination for a test employee. Expected: the employee receives an \"employment has ended\" email in the organisation's own name.",
+  "negativeTests": "1. Deactivate an employee without typing a reason. Expected: the action is refused with 'Reason is required'. 2. Terminate an employee who has no personal email. Expected: the email goes to the official address and the termination still completes. 3. Re-activate the employee. Expected: a 'reactivated' email, not a second deactivation email.",
+  "automated": "scripts/v2/test-people.js — 'H41: deactivation email queued (v2)', 'v1 toggle sends no new email'; scripts/v2/test-workflow-exit.js — 'termination email queued to the employee', 'email carries the organisation's branding'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H42",
+  "status": "Fixed",
+  "summary": "Approval is blocked for incomplete or duplicate onboardings: permanent address, reporting manager, CTC/salary, bank, mandatory documents and a personal email not used by another live employee.",
+  "files": [
+   "backend/src/services/peopleRules.js",
+   "backend/src/controllers/employeeController.js"
+  ],
+  "testSteps": "1. Approve a complete, unique submission. Expected: success.",
+  "negativeTests": "1. Submission with an existing employee’s personal email. Expected: 'Personal email is already registered to …'.",
+  "automated": "scripts/v2/test-people.js — 'H42: duplicate personal email blocks approval'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H43",
+  "status": "Fixed",
+  "summary": "Per D3: approval creates the account but the login opens on the DOJ; until then the employee shows as \"Joining\" and the welcome email says when the account opens.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Approve a candidate with DOJ in 2 weeks. Expected: status Joining; banner \"Their login opens on <DOJ>\".",
+  "negativeTests": "1. Employee tries to sign in before DOJ. Expected: \"Your account opens on <DOJ>\" (auth area).",
+  "automated": "scripts/v2/test-people.js — 'D3: must change password; login opens on the DOJ', 'H43: before the DOJ the profile shows \"Joining\"'",
+  "v1Impact": "v1 approval does not set login_from (asserted)."
+ },
+ {
+  "id": "H44",
+  "status": "Fixed",
+  "summary": "The welcome email carries a one-time set-password link (no password) and must_change_password is set; it goes to the personal email until the official mailbox is confirmed. Signing in with Employee ID / personal email is an auth-area feature (lead request). Integration: the auth area added sign-in with the personal email (v2) and sign-in by Employee ID already works, so a new joiner is never locked out by an unconfigured official mailbox.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/services/emailTemplates.js"
+  ],
+  "testSteps": "1. Approve. Expected: email to the personal address with \"Set your password\".",
+  "negativeTests": "1. Open the welcome email. Expected: it contains a 'Set your password' link and no password. 2. Use the link once, then again. Expected: second use says the link has expired or was used. 3. Sign in with the personal email before the official mailbox exists. Expected: works (v2 web). 4. Sign in with a personal email shared by two employees. Expected: 'Invalid credentials'. 5. Sign in before the date of joining. Expected: 'Your account opens on DD-MM-YYYY'.",
+  "automated": "scripts/v2/test-people.js — 'D3: the link goes to the personal email …', 'D3: a set-password token was issued'",
+  "v1Impact": "v1 still sends a temporary password, now with must_change_password=true."
+ },
+ {
+  "id": "H45",
+  "status": "Fixed",
+  "summary": "Welcome email text corrected: \"Employee ID\", no NGO mission wording, no \"My True HR Pvt Ltd application\", organisation footer address.",
+  "files": [
+   "backend/src/services/emailTemplates.js"
+  ],
+  "testSteps": "1. Open the welcome email. Expected: as described.",
+  "negativeTests": "1. Search the welcome email for 'Employee I'D', 'positive social impact', 'empowering communities', 'My True HR Pvt Ltd application' and 'Noida' (in a non-TRUE HR organisation). Expected: none found.",
+  "automated": "scripts/v2/test-people.js — 'C53: no NGO mission text …'",
+  "v1Impact": "Applies to v1 too — email body only."
+ },
+ {
+  "id": "H48",
+  "status": "Fixed",
+  "summary": "Editing an email to one already used shows the error on the field (\"Email already registered …\"); v1 returns 409 with a message instead of failing silently / 500, and the employee and login rows are updated together.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Edit > official email new.addr@acme.in > Save. Expected: saved.",
+  "negativeTests": "1. Edit > official email of another employee. Expected: 'Email already registered (…)' under the field, panel open.",
+  "automated": "scripts/v2/test-people.js — 'H48: duplicate email shows an error (v2 field message)', 'H48: v1 duplicate email → 409 …'",
+  "v1Impact": "Applies to v1 too — 409 instead of a 500/silent failure."
+ },
+ {
+  "id": "H48a",
+  "status": "Fixed",
+  "summary": "The offer expiry job now expires an offer that has no live acceptance link left or whose joining date has passed (it is marked Rejected with an explanatory note, HR notified, history kept); offers on hold are skipped.",
+  "files": [
+   "backend/src/services/expiryWorker.js"
+  ],
+  "testSteps": "1. Wait for the job (10 min) after an offer link lapses. Expected: candidate shows Rejected with \"Automatically rejected …\".",
+  "negativeTests": "1. An on-hold candidate. Expected: stays Offer sent.",
+  "automated": "scripts/v2/test-people.js — 'H48a: offer with a passed joining date expires', 'H48a: offer past its link validity expires', 'an offer on hold is left alone'",
+  "v1Impact": "Applies to all clients — background job."
+ },
+ {
+  "id": "H48b",
+  "status": "Fixed",
+  "summary": "Department and Designation are mandatory before an offer can be sent (v2).",
+  "files": [
+   "backend/src/services/peopleRules.js",
+   "web/app/admin/employees/new/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR. 2. Employees > Onboard employee. 3. Pick Department and Designation. Expected: sent.",
+  "negativeTests": "1. Leave them empty. Expected: 'Department is required', 'Designation is required'.",
+  "automated": "scripts/v2/test-people.js — 'all errors returned together (… dept, designation …)'",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H49",
+  "status": "Fixed",
+  "summary": "Review queue shows department, designation, DOJ, documents verified/total, submitted date and days waiting, with search and sortable columns, plus a \"Reviewed / sent back\" history tab (outcome, reviewer, note).",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/review/page.jsx"
+  ],
+  "testSteps": "1. Review queue. Expected: columns as described. 2. Reviewed / sent back tab. Expected: approved and sent-back rows.",
+  "negativeTests": "1. Search \"zzz\". Expected: \"No submissions match\".",
+  "automated": "scripts/v2/test-people.js — 'H49: queue shows department, DOJ, document count, days pending', 'H49: history tab lists approved submissions with the reviewer'",
+  "v1Impact": "Applies to v1 queue as added fields only."
+ },
+ {
+  "id": "H50",
+  "status": "Fixed",
+  "summary": "Each document has Verify / Reject (reject needs a remark) with the status shown; a rejected document blocks approval until replaced; HR replacement asks for confirmation and is flagged and audited with the previous file.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "backend/src/routes/v2/people.js",
+   "backend/src/db/migrations_v2/20_people.sql",
+   "web/app/admin/employees/[id]/page.jsx"
+  ],
+  "testSteps": "1. Profile > document > Verify. Expected: Verified badge. 2. Replace > confirm. Expected: \"Replaced by HR\" note.",
+  "negativeTests": "1. Reject with no remark. Expected: 'Remark is required'. 2. Approve with a rejected document. Expected: blocked.",
+  "automated": "scripts/v2/test-people.js — 'H50: reject without remark → 400', 'H50: approval blocked by a rejected document', 'H50: HR replacement is flagged and audited'",
+  "v1Impact": "None (new v2 endpoint; v1 upload just stores more metadata)."
+ },
+ {
+  "id": "H51",
+  "status": "Fixed",
+  "summary": "Empty state reads \"No change requests found\" for any non-pending filter (incl. All).",
+  "files": [
+   "web/app/admin/change-requests/page.jsx"
+  ],
+  "testSteps": "1. Change requests > Status All with none. Expected: \"No change requests found\".",
+  "negativeTests": "1. Set the Change requests filter to Approved, Rejected and All with no matching data. Expected: 'No change requests found' each time, never 'No all requests'.",
+  "automated": "scripts/v2/test-people.js — UI only",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H52",
+  "status": "Fixed",
+  "summary": "Org chart lists only joined, current employees (D7) — candidates with an offer are not in the reporting tree; statuses are readable.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/org-chart/page.jsx"
+  ],
+  "testSteps": "1. Org chart > Expand all. Expected: no Offer sent candidates.",
+  "negativeTests": "1. Send an offer to a new candidate with a reporting manager set, then open the Org chart. Expected: the candidate does not appear under that manager. 2. Check for raw 'OFFER_SENT' text. Expected: none.",
+  "automated": "scripts/v2/test-people.js — 'H52: only active employees in the org chart', 'H52: offer-sent candidates excluded'",
+  "v1Impact": "Applies to v1 too — wrong data shown."
+ },
+ {
+  "id": "H53",
+  "status": "Fixed",
+  "summary": "Choosing a reporting manager on a lower level than the employee asks HR to confirm (\"… is on level L2, below this employee’s level L1. Save anyway?\"); the org chart flags such lines with \"Manager below level\".",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/employees/[id]/page.jsx",
+   "web/app/admin/org-chart/page.jsx"
+  ],
+  "testSteps": "1. Edit an L1 employee > Reporting manager L2 > Save > Save anyway. Expected: saved.",
+  "negativeTests": "1. Cancel the confirmation. Expected: not saved.",
+  "automated": "scripts/v2/test-people.js — 'H53: a lower-level manager needs confirmation (409 MANAGER_LEVEL)', 'H53: saved once confirmed'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H54",
+  "status": "Fixed",
+  "summary": "Employees past an approved last working day are removed from the org chart (their reports become top-level \"No manager set\" until re-assigned) and show as \"Exited\" in Employees.",
+  "files": [
+   "backend/src/controllers/employeeController.js",
+   "web/app/admin/org-chart/page.jsx",
+   "web/app/admin/employees/page.jsx"
+  ],
+  "testSteps": "1. Org chart. Expected: Koustav Maity (LWD 06/08/2026) not shown; his reports at top level.",
+  "negativeTests": "1. Approve a resignation with a last working day in the past, wait for the daily exit job (or next server start), then open the Org chart. Expected: the person is gone and their reports show at top level with 'No manager set'. 2. Search for the exited person in a manager picker. Expected: not offered.",
+  "automated": "scripts/v2/test-people.js — 'H54: an employee past an approved last working day is not in the chart', 'D7: list shows the exited employee as \"Exited\"'",
+  "v1Impact": "Applies to v1 too — wrong data shown."
+ },
+ {
+  "id": "H71",
+  "status": "Fixed",
+  "summary": "The offer CTC is stored on the employee (even when HR uploads its own letter) and, on approval, becomes the salary structure (monthly CTC = annual ÷ 12) if none exists; Edit pre-fills it.",
+  "files": [
+   "backend/src/controllers/employeeController.js"
+  ],
+  "testSteps": "1. Onboard with CTC 6,00,000 and approve. 2. Payroll > Salary structure. Expected: monthly CTC 50,000. 3. Edit employee. Expected: CTC 600000.",
+  "negativeTests": "1. Onboard with Annual CTC 0 or -100. Expected: 'Annual CTC must be more than 0' and the offer is not sent. 2. Approve a candidate who already has a salary structure. Expected: the existing structure is kept, not overwritten by the offer CTC.",
+  "automated": "scripts/v2/test-people.js — 'H71: CTC \"6,00,000\" stored as 600000', 'H71: salary structure created from the offer CTC'",
+  "v1Impact": "Applies to v1 too — wrong data written."
+ },
+ {
+  "id": "_meta",
+  "leadRequests": [
+   "OPS: production MAIL_FROM is a personal Gmail (TRUE HR <maitykoustav2000@gmail.com>). Change it to a company-domain sender (e.g. no-reply@truehr.co.in with SPF/DKIM). (C5, H28)",
+   "services/emailQueue.js + mailer.js: support a per-message display name (enqueueEmail({ fromName }) → from: `\"<Org name>\" <MAIL_FROM address>`) so offers go out under the organisation's name. People code already passes replyTo = org email. (H28)",
+   "Termination area (terminationController.terminate): email the employee with employeeStatusEmail({ name, action: 'TERMINATED', lastWorkingDate, reason, brand: await emailBrand({ employeeId }) }) from services/emailTemplates.js + services/peopleBrand.js. (H41)",
+   "Auth area: pass `brand: await emailBrand({ employeeId | organisationId })` (services/peopleBrand.js) to loginOtpEmail / passwordResetOtpEmail so OTP mails carry the org name; consider allowing sign-in with Employee ID / personal email until the official mailbox is active. (C5, H44)",
+   "Org area: add designations.department_id (and return it from /meta/designations) — people code enforces designation∈department automatically once the column exists (H12). Branding screen: validate the signatory name and add a company stamp image (H26).",
+   "metaController.getManagers (manager pickers) still lists ACTIVE/APPROVED without activeEmployeeSql — exited employees can be picked as managers (D7, H54).",
+   "Dashboard owner: render candidate statuses with StatusBadge/label() so the dashboard says 'Offer sent' like Employees (H20, H37).",
+   "v1 GET /me/profile (authController.meProfile) returns unmasked bank account, PAN and Aadhaar; the web now uses /me/full-profile (masked). Consider masking v1 if the Android app does not need raw values. (E53)",
+   "web/components/Brand.jsx Logo is hard-coded True Kind Foundation; the onboarding pages no longer use it (OrgBrand.jsx), but other public pages still do.",
+   "Data: Demo Employee / Demo Manager are ACTIVE employees in production and so appear in the address book — deactivate them (E56)."
+  ],
+  "migrations": [
+   "backend/src/db/migrations_v2/20_people.sql — documents.content_hash/verify_status/verify_remark/verified_by/verified_at/uploaded_by/replaced_by_hr; employees.on_hold/on_hold_reason; employee_status_history table; employee_change_requests.updated_at"
+  ],
+  "newEndpoints": [
+   "GET /api/v2/admin/employees/offer-preview?firstName&lastName&designationId&departmentId&dateOfJoining&ctc&location&companyId (EMPLOYEES manage) — PDF",
+   "GET /api/v2/admin/employees/:id/offer-preview (EMPLOYEES manage) — PDF",
+   "POST /api/v2/admin/employees/:id/documents/:docId/verify { status: VERIFIED|REJECTED|PENDING, remark }",
+   "POST /api/v2/admin/employees/:id/candidate-action { action: DECLINED|DID_NOT_JOIN|ON_HOLD|RESUME, reason }",
+   "GET /api/v2/me/full-profile; GET/POST /api/v2/me/documents; GET /api/v2/me/documents/:docId",
+   "GET /api/v2/me/directory?q= (v2 override of the address book)",
+   "PATCH /api/v2/me/change-requests/:id { payload }; POST /api/v2/me/change-requests/:id/withdraw",
+   "GET /onboarding/queue?view=history (shared route, new query option)"
+  ],
+  "testRun": "scripts/v2/test-people.js: 187 passed, 0 failed. Existing suites on truehr_people (fresh DB each): test-companies 49/0, test-tenancy 24/0, test-org-structure 31/0, test-permissions 44/0, test-termination 25/0, test-resignation-block 11/0, test-resignation-chain 8/0, test-greenhr-gaps 14/0, test-user-roles 12/0, test-password-reset 10/0, test-login-otp 13/0, test-approval-engine 20/0, test-attendance-payroll 42/0, test-payroll-run 16/0; unit-letters 7/0, unit-fnf 11/0, unit-statutory 17/0, unit-incometax 10/0; v2 test-auth 88/0, test-org 382/0, test-leave 131/0. test-masters (baseline crash, not people) and test-reports (needs NFA data from other suites) fail as before. web: check-jsx 14 ok, 0 failed.",
+  "notes": "Both-version fixes (no v1 contract change): approval creates the account in the employee's organisation with its EMPLOYEE org role, never overwrites another login (409), sets must_change_password, allocates the employee code under an advisory lock, creates the salary structure from the offer CTC; used/spent FORM tokens can no longer read or overwrite data and a used ACCEPT link cannot mint new form links after submission; HR notifications go to the organisation's HR/Super Admin emails (not hr@truehr.example); offer letter placeholders/DOJ/signatory; email branding; org chart = activeEmployeeSql; expiry job. Lead items folded in: v2 reset-password shows the server message (no temp password) behind useConfirm; approval sends the set-password link to deliveryAddress(user); placeholder official-email domains refused on v2 onboarding/edit (H46, isPlaceholderEmail); Employees list and Change requests honour ?status=; offer letter and Personal Information Sheet logos drawn with docPdf.drawLogo (H102); org chart uses activeEmployeeSql so 'Placed on a level' matches Hierarchy (H55); after approval commits, ensureBalances(empId) from services/leaveTypes.js opens leave balances (H133) — wrapped so a failure only logs. utils/validate mobile() originally rejected 10-digit numbers starting with 91; people code wraps values with m10() (harmless now that the lead fixed normaliseMobile). New people files: services/peopleRules.js, services/peopleBrand.js, controllers/peopleSelfController.js, web/app/admin/employees/rules.js, web/app/onboarding/{OrgBrand.jsx,ifsc.js}. Payroll request folded in: v2 PATCH /admin/employees/:id/bank-statutory now validates UAN (12 digits), ESIC (17 digits) and PF ('pf' pattern) with field-level errors, same as the Statutory page (v1 unchanged, asserted)."
+ }
+]

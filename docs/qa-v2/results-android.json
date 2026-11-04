@@ -1,0 +1,1031 @@
+[
+ {
+  "id": "E1",
+  "status": "Not applicable",
+  "summary": "Web ESS dashboard cards vs header menus. The app has its own tile grid; every app tile opens its screen. Tax, Letters and Assets stay on the web (reached from the app via My ESS).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E2",
+  "status": "Fixed",
+  "summary": "Team features show only to someone with reportees (/me/team not empty): the dashboard \"Team List\" tile, the ⋮ menu items \"Team Tasks\" and \"Team Resignation\", the Attendance tiles \"Team Attendance\", \"Team Miss Punch\", \"Hold Team Attendance\", the Leave tiles \"Team Leave\", \"Team CompOff\", \"Team OD\", and \"Assign Task\". If the team check fails the employee layout is used.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/TeamGateViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardItems.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AttendanceMenuScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveMenuScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AssignTaskScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). 1. Dashboard: no \"Team List\" tile. 2. ⋮ menu: only My Profile, Request a change, Change Password, Sign out. 3. Attendance and Leave Management: no Team tiles. Then Log in as a manager with reportees (e.g. aarav.sharma@truehr.example / Demo@12345). Expected: Team List tile, Team Tasks / Team Resignation in the ⋮ menu, Team tiles in Attendance and Leave.",
+  "negativeTests": "1. Employee opens Team Tasks by any route (e.g. a push notification). Expected: \"No team yet\" screen, no Assign form.",
+  "automated": "on-device smoke: sneha.iyer dashboard/menu/attendance/leave without team items; aarav.sharma menu with Team Tasks + Team Resignation (docs/qa-v2/android-screens/02_dashboard.jpg, 25_manager_menu.jpg).",
+  "v1Impact": "None (app-only UI)."
+ },
+ {
+  "id": "E3",
+  "status": "Fixed",
+  "summary": "Every status the app shows goes through one readable-label helper (core/Labels): Pending, Approved, Cancelled, In progress, \"Pending with reporting manager\" (for Pending-RPT), Full time, Male… Leave, miss-punch, tasks, tickets, resignation approvals and change requests use it. (The Monthly Performance strip itself is PMS, which is off in the app.)",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/Labels.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/components/Common.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveListScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MissPunchListScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/TaskSummaryScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ViewTicketsScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open Leave > View Leave, Attendance > View Miss Punch, Task Summary, Support > View tickets. Expected: statuses read \"Pending\", \"Cancelled\", \"Open\", \"In progress\" — never PENDING/IN_PROGRESS.",
+  "negativeTests": "1. A ticket in IN_PROGRESS. Expected: \"In progress\".",
+  "automated": "DatesLabelsTest.readableStatuses",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E4",
+  "status": "Fixed",
+  "summary": "Monthly attendance renders what v2 sends: days before joining show \"N/A\" (Not joined, grey), week-offs follow the organisation policy (server), the month arrows stop at the joining month (minMonth) and at the current month, and the legend explains every colour.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MonthlyAttendanceScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AttendanceViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/AttendanceRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AttendanceMoreDto.kt",
+   "android/app/src/main/java/com/truehr/app/domain/model/More.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Attendance > Monthly Attendance. 1. Tap ◀ repeatedly. Expected: stops at the joining month (button greys out). 2. Tap ▶ on the current month. Expected: disabled. 3. A new joiner's joining month: days before DOJ show \"N/A\".",
+  "negativeTests": "1. Saturdays: shown as WO only where the org policy says so (server rule).",
+  "automated": "V2DtoDecodingTest.attendance (minMonth, holidays decode)",
+  "v1Impact": "None (v1 server keeps its old calendar; app now on v2)."
+ },
+ {
+  "id": "E5",
+  "status": "Fixed",
+  "summary": "Holidays from the server show as \"Hol\" (purple) with a Holiday count tile and the month's holiday names listed under the calendar.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MonthlyAttendanceScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AttendanceMoreDto.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Attendance > Monthly Attendance > November 2026. Expected: 9 Nov \"Hol\", Holiday tile = 1, \"09 — Diwali\" listed below.",
+  "negativeTests": "1. An employee in another office location: a location-only holiday is not shown (server).",
+  "automated": "V2DtoDecodingTest.attendance",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E6",
+  "status": "Not applicable",
+  "summary": "Cross-tenant holiday leak — fixed on the server for both API versions (leave area); the app simply shows what the server returns.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E7",
+  "status": "Fixed",
+  "summary": "Apply Miss Punch now has In time and Out time (time pickers), Year as a dropdown (this/last year), and checks everything at once before sending: real days of the month, past days only, no day twice, out after in, remarks required. The server re-checks (30-day window, duplicates, joining date) and its field messages appear under the fields. A pending request can be cancelled (with confirmation); the list shows In/Out, \"Pending with\", a Cancelled tab with the cancelled time.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyMissPunchScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MissPunchViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MissPunchListScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/MissPunchRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/ApiService.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AttendanceMoreDto.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Attendance > Apply Miss Punch. Enter day 3, current month, In 09:30, Out 18:30, remarks \"forgot to punch\" > Submit. Expected: \"Your miss-punch request has been submitted.\" View Miss Punch > Pending shows In/Out 09:30 – 18:30 and \"Pending with: <manager>\". Tap Cancel Request > \"Cancel request\". Expected: moves to the Cancelled tab with \"Cancelled on <date, time>\".",
+  "negativeTests": "1. Days '0,32' (November). Expected: '0, 32 are not days of November 2026 (1–30)'. 2. Empty form. Expected: 'Enter at least one day of the month (e.g. 3 or 3,5)', 'In time is required', 'Out time is required', 'Remarks is required'. 3. Tomorrow's day. Expected: 'Miss-punch is only for past days — dd-mm-yyyy is today or later'. 4. '3,3'. Expected: 'Day 3 is entered twice'. 5. Out 09:00, In 18:00. Expected: 'Out time must be after In time'. 6. A day already requested. Expected (server): 'Already requested: dd-mm-yyyy'. 7. A day older than 30 days. Expected (server): 'Miss-punch can only be applied for the last 30 days (from …) — … is too old'.",
+  "automated": "ValidatorsTest.missPunchRules; V2DtoDecodingTest.missPunch; backend scripts/v2/test-android.js \"E7: miss-punch messages\"; on-device smoke: 0,32 + empty times/remarks (android-screens/07_misspunch_negative.jpg)",
+  "v1Impact": "None (v1 unchanged; app now sends v2 with inTime/outTime)."
+ },
+ {
+  "id": "E8",
+  "status": "Fixed",
+  "summary": "The leave type list comes from v2 /leave/types, which only lists types the employee is eligible for (gender); balance chips show the server's prorated balances. If an ineligible type is attempted the server message (\"Maternity Leave is only available to female employees\") is shown under Leave type.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/LeaveRepositoryImpl.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). (male employee) Leave Management > Apply Leave > Leave type. Expected: no Maternity / Menstrual leave. A mid-year joiner sees prorated numbers on the chips.",
+  "negativeTests": "1. (API) ML for a male employee. Expected under Leave type: \"Maternity Leave is only available to female employees\".",
+  "automated": "V2DtoDecodingTest.leave",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E9",
+  "status": "Fixed",
+  "summary": "After applying, the confirmation says who it waits with (\"Pending with Meera Krishnan\" or \"HR (no reporting manager assigned)\"), and View Leave shows \"Pending with\" on each pending request and \"Approved by / Rejected by\" after review.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveListScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/LeaveDto.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply a leave. Expected toast/line: \"Your leave request has been submitted. Pending with <name>.\" Leave > View Leave > Pending: \"Pending with: <name>\".",
+  "negativeTests": "1. Employee without a reporting manager. Expected: \"Pending with: HR (no reporting manager assigned)\".",
+  "automated": "V2DtoDecodingTest.leave (pendingWith); on-device smoke: View Leave shows \"Pending with: Meera Krishnan\" (05_leave_list.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E10",
+  "status": "Fixed",
+  "summary": "The app no longer blocks anything itself; on v2 adjacent leave is allowed and only overlaps are refused — the server message (\"These dates overlap your Casual Leave (…)\") appears under From date.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveViewModel.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply CL on Monday, then SL on Tuesday. Expected: both accepted (sandwich rule decides the day count).",
+  "negativeTests": "1. Apply on a date already on leave. Expected: \"Overlaps your Casual Leave (dd-mm-yyyy to dd-mm-yyyy)\".",
+  "automated": "backend leave suite (v2); app shows server fields",
+  "v1Impact": "v1 keeps the old one-day-gap rule for old installs."
+ },
+ {
+  "id": "E11",
+  "status": "Fixed",
+  "summary": "Restricted Holiday is picked from a dropdown of the listed RH dates (not a free calendar); the client and server refuse other dates. Back-dated leave beyond the policy window is refused by the server with its message under From date.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply Leave > Restricted Holiday. Expected: a \"Restricted holiday\" dropdown listing only RH dates with names.",
+  "negativeTests": "1. (no RH listed) Expected placeholder 'No restricted holidays listed'. 2. RH on a normal day (client rule). Expected: 'dd-mm-yyyy is not a restricted holiday. Pick a date from the restricted holiday list.' 3. SL 40 days back. Expected (server): 'Leave can be applied at most 30 days back (from dd-mm-yyyy)'.",
+  "automated": "ValidatorsTest.restrictedHolidayOnlyOnListedDays",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E12",
+  "status": "Fixed",
+  "summary": "Half day is offered only for types that allow it; choosing Half day switches to a single \"Leave date\" with First half / Second half. The app sends halfDaySession; a range with half day is impossible in the UI and refused by both client and server.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/LeaveDto.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply Leave > Casual Leave > Half day > Second half > pick a date > Reason \"Doctor appointment\" > Submit. Expected: submitted; View Leave shows \"(0.5 days) · Second half\".",
+  "negativeTests": "1. Half day, no session, no date, no reason > Submit. Expected: 'Choose First half or Second half', 'From date is required', 'Reason is required'. 2. (API) half day over 07-12 to 09-12. Expected: 'Half day is allowed only when From and To are the same date'.",
+  "automated": "ValidatorsTest.halfDayOnlyOnOneDateWithASession; ApiErrorTest.v2FieldsAreParsed; test-android.js \"E12/E14\"; on-device smoke: negative + positive half day (03_leave_negative.jpg, 05_leave_list.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E13",
+  "status": "Fixed",
+  "summary": "Balance chips and the \"Available\" line show what can be applied now (allocated − used − pending), plus \"· N pending\".",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/LeaveRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/domain/model/Leave.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). with a pending 2-day CL. Apply Leave. Expected: CL chip 5, \"Available: 5 day(s) · 2 pending\".",
+  "negativeTests": "1. Apply for more than available. Expected (server): \"Insufficient Casual Leave balance — 5 day(s) available after pending requests, N needed\".",
+  "automated": "V2DtoDecodingTest.leave (pending/available); on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E14",
+  "status": "Fixed",
+  "summary": "Reason is mandatory (3–500 characters, counter shown). Work From Home shows \"Not allocated to you (0 days) — ask HR to set a quota\" or \"Allowance left this year: N day(s)\"; LWP shows \"No limit (unpaid)\" / ∞; applying WFH with 0 allowance is refused before sending.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply Leave > Work From Home. Expected: \"Not allocated to you (0 days) — ask HR to set a quota\".",
+  "negativeTests": "1. WFH with 0 allowance > Submit. Expected: 'Work From Home is not allocated to you (0 days)'. 2. EL with blank reason. Expected: 'Reason is required'.",
+  "automated": "ValidatorsTest.wfhWithZeroAllowance, reasonMandatory; test-android.js",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E15",
+  "status": "Fixed",
+  "summary": "Cancel asks \"Cancel this leave?\" (Cancel leave / Keep it). A Cancelled tab lists cancelled requests with \"Cancelled on <date, time>\" and \"Cancelled by <name>\".",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveListScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/LeaveRepositoryImpl.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Leave > View Leave > Pending > Cancel Request > Cancel leave. Cancelled tab. Expected: \"Cancelled on 04-11-2026, 10:25 AM\", \"Cancelled by Sneha Iyer\".",
+  "negativeTests": "1. Tap Keep it. Expected: still pending. 2. Cancel an approved one (API). Expected: \"Only pending requests can be cancelled\".",
+  "automated": "on-device smoke (06_leave_cancel_confirm.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E16",
+  "status": "Fixed",
+  "summary": "Certificate upload (PDF/PNG/JPG/WEBP/GIF, max 5MB, read off the main thread) for types that take one, with \"A certificate is required for Sick Leave of more than 2 day(s)\" from the type's threshold; the server message appears under the upload when missing. New Holidays tile in Leave Management (and \"Holiday list\" link in Apply Leave) lists the year's holidays and restricted holidays.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyLeaveScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/HolidaysScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LeaveMenuScreen.kt",
+   "android/app/src/main/java/com/truehr/app/core/MediaUtils.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/ApiService.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Leave Management > Holidays. Expected: list with Holiday / Restricted (RH) chips. Apply Leave > Sick Leave: upload box with the rule text.",
+  "negativeTests": "1. SL for 3 days without a file. Expected (server): 'A certificate is required for Sick Leave of more than 2 day(s)'. 2. Attach a .docx. Expected: 'The file must be a PDF, PNG, JPG, WEBP or GIF'. 3. 6MB file. Expected: 'The file is larger than 5MB'.",
+  "automated": "V2DtoDecodingTest.leave (holidays, certificateAfterDays)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E17",
+  "status": "Fixed",
+  "summary": "Server-side (quota source + proration). The app shows the server balances as they are.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Apply Leave: chips equal the web \"My balances\".",
+  "negativeTests": "1. Log in as an employee of the Company Admin organisation (TH5001) who joined on 02-11-2026 > Leave > My Balances. Expected: balances are prorated (not the full yearly quota) and are not the Odisha state-entitlement figures (EL 6 / CL 5 / SL 7). 2. As a male employee, check the balance list. Expected: no Maternity or Menstrual leave row.",
+  "automated": "backend leave suite",
+  "v1Impact": "Server fix applies to both."
+ },
+ {
+  "id": "E18",
+  "status": "Fixed",
+  "summary": "Comp-off is applied per available credit (so an \"empty Apply\" cannot happen); with no credits the screen says \"No comp-off credits available. Get an OD approved first to earn one.\"; the apply dialog shows the server's field messages (e.g. \"Leave date cannot be in the past\"). Apply OD now asks for Place of duty and Purpose (required on v2).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/CompOffScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyOdScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/OnDutyViewModel.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Leave > Avail CompOff. Expected: the no-credit message. Attendance > Apply OD: Place of duty * and Purpose * fields.",
+  "negativeTests": "1. Apply OD with blank place/purpose. Expected: 'Place of duty is required', 'Purpose is required' (before the camera opens).",
+  "automated": "n/a (UI); on-device: not exercised end-to-end (needs an approved OD)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E19",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E20",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E21",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E22",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E23",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E24",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E25",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E26",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E27",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E28",
+  "status": "Not applicable",
+  "summary": "NFA (Note For Approval) is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E29",
+  "status": "Not applicable",
+  "summary": "PMS / KPI is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E30",
+  "status": "Not applicable",
+  "summary": "PMS / KPI is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E31",
+  "status": "Not applicable",
+  "summary": "PMS / KPI is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E32",
+  "status": "Fixed",
+  "summary": "Assign Task is shown only to someone with active team members (others see \"No team yet\"). The form shows every problem at once (Assign to, Title 3–150, Due date not in the past, Due time HH:MM), the label is \"Due time\" with a time picker, and server field errors appear under the fields. Statuses and due dates are readable (IST day).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AssignTaskScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/TaskViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/TaskSummaryScreen.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in as a manager with reportees (e.g. aarav.sharma@truehr.example / Demo@12345). ⋮ > Team Tasks > Assign. Pick a member, title \"Prepare report\", today, due time 17:30 > Assign Task. Expected: \"Task assigned\".",
+  "negativeTests": "1. Empty form > Assign Task. Expected: 'Assign to is required', 'Title is required'. 2. Title 'ab'. Expected: 'Title must be at least 3 characters'. 3. (API) someone outside the team. Expected: 'Select one of your team members'.",
+  "automated": "ValidatorsTest.taskRules",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E33",
+  "status": "Partially fixed",
+  "summary": "Salary Slip has Year and Month filters with \"No payslips found for this filter.\" when empty. The CTC card and Form 16 download are not in the app yet (web My ESS has them via /me/salary-structure and /me/form16).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SalarySlipScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Salary Slip. Expected: Year/Month filters; payslips listed; Download opens the PDF.",
+  "negativeTests": "1. Month: July. Expected: \"No payslips found for this filter.\"",
+  "automated": "on-device smoke: list, PDF opened in the viewer, July filter (13_payslips.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E34",
+  "status": "Not applicable",
+  "summary": "Investment declaration / tax is not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E35",
+  "status": "Not applicable",
+  "summary": "Investment declaration / tax is not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E36",
+  "status": "Not applicable",
+  "summary": "Investment declaration / tax is not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E37",
+  "status": "Not applicable",
+  "summary": "Investment declaration / tax is not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E38",
+  "status": "Not applicable",
+  "summary": "Letters are not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E39",
+  "status": "Not applicable",
+  "summary": "Assets are not in the app (web My ESS only).",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E40",
+  "status": "Fixed",
+  "summary": "Create Ticket now has Subject * and Description * (10–2000 characters, live counter), an attachment (PDF/image, 5MB), and shows every missing field at once: \"Please select an issue type\", \"Please select an issue detail\", \"Subject is required\", \"Description is required\". Issue types come from v2 (consistent \"Other\" on every desk).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/CreateTicketScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SupportViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/SupportRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/SupportDto.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Support Desk > IT Support > Issue type Other, Subject \"Laptop slow\", Description \"My laptop takes five minutes to boot\" > Submit. Expected: \"Ticket #N created\".",
+  "negativeTests": "1. Submit empty. Expected: 'Please select an issue type', 'Subject is required', 'Description is required'. 2. Description 'hi'. Expected: 'Description must be at least 10 characters'. 3. Admin > Hygiene Issues without a detail. Expected: 'Please select an issue detail'.",
+  "automated": "ValidatorsTest.supportRules; V2DtoDecodingTest.supportAndPolicies; test-android.js \"E40\"; on-device smoke (18_support_negative.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E41",
+  "status": "Not applicable",
+  "summary": "Per-organisation issue types — server side; the app shows whatever catalogue the server returns.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E42",
+  "status": "Fixed",
+  "summary": "Each ticket shows \"Ticket #<number>\", \"Raised on <date, time>\", status, subject; long text wraps inside the card. Tapping a ticket opens it with its updates, a reply box, \"Cancel ticket\" (while open, with confirmation) and \"Reopen\" with a reason (after resolved).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ViewTicketsScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SupportViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/ApiService.kt",
+   "android/app/src/main/java/com/truehr/app/domain/model/Support.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Support Desk > View IT Ticket Details > tap a ticket > type \"Still slow today\" > Send reply. Expected: reply appears under Updates with your name and time.",
+  "negativeTests": "1. Send an empty reply. Expected: 'Reply is required'. 2. Cancel ticket > Keep it. Expected: still open. 3. Reopen without reason. Expected: 'Reason for reopening is required'.",
+  "automated": "V2DtoDecodingTest.supportAndPolicies; on-device smoke: ticket list + reply (20_ticket_detail.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E43",
+  "status": "Not applicable",
+  "summary": "Upload of filled formats lives on the web (policy submissions); not in the app.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E44",
+  "status": "Partially fixed",
+  "summary": "Policies screen is split into Policies and Formats tabs (v2 kind) and shows category, version and effective date when HR entered them; files open in the phone's viewer. The \"I have read and accept\" acknowledgement is web-only for now.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/PoliciesScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/PolicyRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/PolicyDto.kt",
+   "android/app/src/main/java/com/truehr/app/domain/model/Policy.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Policies. Expected: Policies / Formats tabs; \"Not uploaded yet\" for empty slots.",
+  "negativeTests": "1. A slot with no file. Expected: not clickable, \"Not uploaded yet\".",
+  "automated": "V2DtoDecodingTest.supportAndPolicies (id null, kind FORMAT); on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E45",
+  "status": "Fixed",
+  "summary": "Server fix (own organisation only, both versions); the app lists only what the server returns.",
+  "files": [],
+  "testSteps": "Log in as TH5001 (other org). Policies. Expected: only that organisation's documents.",
+  "negativeTests": "1. Log in as an employee of an organisation that has uploaded no policies (e.g. TH5001) > Policies. Expected: empty state, no TRUE HR documents. 2. Try to open a TRUE HR policy file link from another organisation (e.g. a shared link). Expected: 'Not found', no download.",
+  "automated": "backend org suite",
+  "v1Impact": "Server fix applies to both."
+ },
+ {
+  "id": "E46",
+  "status": "Not applicable",
+  "summary": "Vendor registration is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E47",
+  "status": "Not applicable",
+  "summary": "Agreements is switched off in the Android app (core/FeatureFlags.NFA_SUITE = false); employees use it on the web portal (My ESS), where the web fix applies.",
+  "files": [],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Open the dashboard and the ⋮ menu. Expected: no NFA / Performance / Vendor entries in the app.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E48",
+  "status": "Fixed",
+  "summary": "Per D2 the app now uses v2: submitting no longer blocks the account. All \"your account will be BLOCKED\" texts are gone; the confirm says you keep access during the notice period and can withdraw until final approval. Withdraw asks for confirmation.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationViewModel.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). (with a full approver chain) Resignation > reason \"Relocating to another city\" > Submit > Submit. Expected: status Pending, app still works. Withdraw resignation > Withdraw. Expected: form is back.",
+  "negativeTests": "1. Withdraw after final approval (API). Expected: 'Your resignation has already been approved, so it can no longer be withdrawn. Please contact HR.'",
+  "automated": "on-device smoke: confirm text, submit, account stays ACTIVE (DB check), withdraw (09_resignation_confirm.jpg)",
+  "v1Impact": "Old installs on v1 keep the old block-on-apply behaviour until they update."
+ },
+ {
+  "id": "E49",
+  "status": "Fixed",
+  "summary": "Employee Details shows Employee code, name, Vertical, Department, Designation, Office location, Date of joining, Reporting manager and Notice period from the master.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/ResignationDto.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/ResignationRepositoryImpl.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Resignation. Expected: DOJ 06-06-2024, Department Engineering, Reporting Manager TKF1008 - Meera Krishnan.",
+  "negativeTests": "1. No location on record. Expected: \"—\".",
+  "automated": "V2DtoDecodingTest.resignationContext; on-device smoke (08_resignation.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E50",
+  "status": "Fixed",
+  "summary": "Approvals show \"Not assigned — will be skipped\" for optional stages and \"Not assigned (required)\" for required ones; when a required stage is missing the form is replaced by \"Your resignation cannot be submitted yet: no Human Resource approver is set up for you. Please ask HR to assign one.\"",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). (no HR approver set) Resignation. Expected: the \"cannot be submitted yet\" message instead of the form.",
+  "negativeTests": "1. (API) submit anyway. Expected 409 with the same message.",
+  "automated": "V2DtoDecodingTest.resignationContext (canSubmit/missingStages); on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E51",
+  "status": "Fixed",
+  "summary": "Resignation date defaults to today with the picker limited to the server window (min/max); Last working date defaults to today + notice period and cannot be before the resignation date; Reason is mandatory (5+); an optional resignation letter (PDF/image) can be attached. Checked before the confirm dialog.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ResignationViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Resignation. Expected: dates pre-filled (today / today+30).",
+  "negativeTests": "1. Submit with empty reason. Expected: 'Reason is required' (no confirm dialog). 2. Reason 'bad'. Expected: 'Reason must be at least 5 characters'. 3. LWD before resignation date. Expected: 'Last working date cannot be before the resignation date'.",
+  "automated": "ValidatorsTest.resignationRules; on-device smoke (reason required)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E52",
+  "status": "Not applicable",
+  "summary": "Approver matrix scoped per organisation — server fix for both versions; the app shows the server chain.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E53",
+  "status": "Partially fixed",
+  "summary": "My Profile now shows the full read-only record from v2 /me/full-profile: employment (code, company, department, designation, type, DOJ, office, managers), personal (DOB, gender, blood group, phone, emails), current/permanent address, bank and statutory — masked by the server. A \"Request a change\" button opens the new change-request screen. Document upload stays on the web (noted on the screen).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ProfileScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/ProfileDto.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/ApiService.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). tap your name on the dashboard. Expected: all sections; account number \"••••••9595\", PAN \"••••••005F\".",
+  "negativeTests": "1. Verify no full account/PAN/Aadhaar number appears anywhere.",
+  "automated": "V2DtoDecodingTest.fullProfileIsMasked; test-android.js \"E53\"; on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E54",
+  "status": "Fixed",
+  "summary": "Address Book shows official email and work location only; personal mobile numbers are not shown (v2 no longer sends them). Groups by work location.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AddressBookScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/ProfileRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/domain/model/More.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AttendanceMoreDto.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Address Book > search \"engineering\". Expected: cards with name, code · designation, department, official email; no phone.",
+  "negativeTests": "1. Search a colleague whose mobile you know. Expected: not shown.",
+  "automated": "V2DtoDecodingTest.directoryHasNoPhone; test-android.js \"E54/E55\"; on-device smoke (15_address_book.jpg)",
+  "v1Impact": "None (v1 directory unchanged)."
+ },
+ {
+  "id": "E55",
+  "status": "Fixed",
+  "summary": "Emails are shown exactly as the server sends them, on one unbroken line (no wrap at \"+\").",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AddressBookScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). search TKF9009. Expected: full address with \"+tkf9009\".",
+  "negativeTests": "1. Address book > search an employee whose email has a '+' alias. Expected: the full address is shown, not just the part after '+'. 2. Long-press/copy the email. Expected: the copied text matches the stored email exactly, with no line break inserted.",
+  "automated": "on-device (visual)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E56",
+  "status": "Fixed",
+  "summary": "Search trims spaces and matches name, employee ID, department and designation; \"No matches.\" when nothing fits. Only current employees are listed (server). Demo accounts that are really Active remain (data clean-up, as on web).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AddressBookScreen.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Address Book > \" engineering \". Expected: Engineering staff.",
+  "negativeTests": "1. 'zzz'. Expected: 'No matches.'",
+  "automated": "ValidatorsTest.directorySearch; on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E57",
+  "status": "Fixed",
+  "summary": "NEW screen \"Request a change\" (⋮ menu and My Profile) on the same v2 endpoints as web: Personal details / Address / Bank account tabs; a pending request can be Edited (PATCH) or Withdrawn (confirm); all requests are listed under \"My requests\" with readable statuses.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/navigation/AppNavGraph.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/navigation/Routes.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardItems.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/ApiService.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). ⋮ > Request a change > Address > change PIN to 560001 > Send to HR. Expected: \"Sent to HR…\", listed as Pending; the tab now shows Edit / Withdraw.",
+  "negativeTests": "1. Withdraw twice (API). Expected: 'Only a pending request can be withdrawn.'",
+  "automated": "ChangeRequestFormTest; on-device smoke (screen, unchanged + invalid PIN)",
+  "v1Impact": "None (new app screen)."
+ },
+ {
+  "id": "E58",
+  "status": "Fixed",
+  "summary": "Forms are pre-filled from /me/full-profile (gender, address of the chosen type, every bank field); values show as \"Male\", \"Current address\", never raw codes.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Request a change > Bank account. Expected: holder, bank, branch, IFSC pre-filled.",
+  "negativeTests": "1. Check no \"MALE\" or \"CURRENT\" appears.",
+  "automated": "ChangeRequestFormTest.prefilledFromTheRecord, readableValues",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E59",
+  "status": "Fixed",
+  "summary": "DOB must be 18+ (picker capped), phone a valid Indian mobile; only changed fields are sent.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestViewModel.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Personal details > change phone only > Send. Expected: request lists only Phone.",
+  "negativeTests": "1. Phone 0000000000. Expected: 'Phone must be a valid 10-digit mobile number starting with 6-9'. 2. (typed via API) DOB 2030-01-01. Expected: 'Date of birth must be in the past and you must be at least 18'.",
+  "automated": "ValidatorsTest.changeRequestRules, onlyChangedFieldsAreSent",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E60",
+  "status": "Fixed",
+  "summary": "An unchanged form creates nothing: \"Nothing has changed — edit at least one field before sending.\"",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestViewModel.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Bank account > Send to HR without changes.",
+  "negativeTests": "1. Expected: 'Nothing has changed — edit at least one field before sending.'",
+  "automated": "ChangeRequestFormTest.unchangedFormCreatesNoRequest; test-android.js \"E60\"; on-device smoke (21_change_request_unchanged.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E61",
+  "status": "Fixed",
+  "summary": "PIN 6 digits, City/District letters only, State from a dropdown of Indian states; \"an address request\" grammar comes from the server.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ChangeRequestScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Address > PIN 12ab > Send.",
+  "negativeTests": "1. PIN 12ab. Expected: 'PIN code is not valid (6 digits)'. 2. City 123. Expected: 'City should contain letters only'.",
+  "automated": "ValidatorsTest.changeRequestRules; on-device smoke (PIN 12ab)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E62",
+  "status": "Not applicable",
+  "summary": "Contact TrueHR form is web-only.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E63",
+  "status": "Fixed",
+  "summary": "The dashboard header shows the employee name and initials from the name (e.g. \"Sneha Iyer\", \"SI\"); if the profile cannot load it falls back to the name from /me, never the email.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AuthDto.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Expected header: \"Sneha Iyer\", \"TKF1004 · Senior Software Engineer\", avatar \"SI\".",
+  "negativeTests": "1. Profile call fails. Expected: name from /me and a \"Couldn't load your profile — Retry\" line.",
+  "automated": "V2DtoDecodingTest.me; on-device smoke (02_dashboard.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E64",
+  "status": "Fixed",
+  "summary": "Sign out asks \"Are you sure you want to sign out?\" (Cancel / Sign out).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). ⋮ > Sign out. Expected: the confirmation; Sign out → login screen.",
+  "negativeTests": "1. Cancel. Expected: still signed in.",
+  "automated": "on-device smoke (16_signout_confirm.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E65",
+  "status": "Not applicable",
+  "summary": "Web 404 page; the app has no URLs.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E66",
+  "status": "Not applicable",
+  "summary": "Web landing route.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "E67",
+  "status": "Not applicable",
+  "summary": "Welcome email — server side.",
+  "files": [],
+  "testSteps": "n/a — web only.",
+  "negativeTests": "n/a",
+  "automated": "n/a",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A1",
+  "bug": "Dashboard Change Password always failed: the app sent only newPassword, but the server requires currentPassword for a voluntary change.",
+  "status": "Fixed",
+  "summary": "Change Password (from the ⋮ menu) has Current password, New password, Confirm. Rules shown under each field (8+ characters, a letter and a digit, not the same as current); a wrong current password shows \"That is not your current password\" under that field.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/auth/ChangePasswordScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/auth/ChangePasswordViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/AuthRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/AuthDto.kt",
+   "android/app/src/main/java/com/truehr/app/domain/repository/AuthRepository.kt",
+   "android/app/src/main/java/com/truehr/app/core/Validators.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). ⋮ > Change Password > current Demo@12345, new Fresh@2026x twice > Update Password. Expected: \"Password updated successfully\"; sign out and sign in with the new password.",
+  "negativeTests": "1. Wrong current password. Expected: 'That is not your current password'. 2. New 'abcdefgh'. Expected: 'Password must contain at least one letter and one digit'. 3. Confirm differs. Expected: 'Passwords do not match'.",
+  "automated": "ValidatorsTest.passwordRules; test-android.js \"A1\"; on-device smoke: wrong current (403 shown) then success (12_changepw_wrong.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A2",
+  "bug": "Forced password change could be skipped: the token was saved before the change screen; killing the app opened the Dashboard; onDone popped back to Login.",
+  "status": "Fixed",
+  "summary": "mustChangePassword is stored with the session. Splash routes a session with the flag to \"Set a new password\" (no current password needed); Back offers \"Sign out?\" instead of skipping; success clears the flag and opens the Dashboard.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/data/local/TokenStore.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/splash/SplashScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/splash/SplashViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/navigation/AppNavGraph.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/navigation/Routes.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/auth/ChangePasswordScreen.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/AuthRepositoryImpl.kt"
+  ],
+  "testSteps": "1. HR resets a user's password (must change). 2. Log in with it. Expected: \"Set a new password\". 3. Force-stop the app and reopen. Expected: the same screen again, not the Dashboard. 4. Set a new password. Expected: Dashboard.",
+  "negativeTests": "1. Press Back on the forced screen. Expected: \"Sign out?\" dialog (Stay / Sign out).",
+  "automated": "on-device smoke: must_change_password=true → login → force-stop → relaunch lands on \"Set a new password\" → change → Dashboard, DB flag false (17_forced_change_after_restart.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A3",
+  "bug": "Payslip/policy downloads read a @Streaming body with .bytes() on the main thread → NetworkOnMainThreadException.",
+  "status": "Fixed",
+  "summary": "Both downloads read the body on Dispatchers.IO (and close it); the cache file is written on IO too.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/data/repository/PayrollRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/PolicyRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SalarySlipScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/PoliciesScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Salary Slip > Download on any month. Expected: the PDF opens in the phone's viewer.",
+  "negativeTests": "1. No PDF viewer installed. Expected: \"No PDF viewer is installed on this phone. Install one to open payslips.\" (no crash).",
+  "automated": "on-device smoke: Download opened the PDF viewer, no FATAL in logcat (14_payslip_pdf)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A4",
+  "bug": "Location: only ACCESS_FINE_LOCATION requested; GPS off punched with null lat/lng; pending punch type/location lost on process death.",
+  "status": "Fixed",
+  "summary": "Mark Attendance, Apply OD, Geo-tag and Live Tour ask for precise + approximate together and accept approximate. With Location off or no fix the app says \"Location is turned off. Turn on Location (GPS) and try again.\" / \"We couldn't get your location…\" and does not punch. Punch type and the fix are kept with rememberSaveable across the camera round-trip. Ending a tour without a fix uses the last recorded point.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/DeviceUtils.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MarkAttendanceScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyOdScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/GeoTagScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/LiveTourScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Attendance > Mark Attendance > PUNCH IN > choose \"Approximate\" > Only this time > take photo > Done. Expected: \"Punched in successfully.\" with an address.",
+  "negativeTests": "1. Turn Location off > PUNCH OUT. Expected: 'Location is turned off. Turn on Location (GPS) and try again.' and no punch. 2. Deny location. Expected: 'Location permission is needed. Allow location (precise or approximate) for TrueHR in Settings.'",
+  "automated": "on-device smoke: approximate permission punch-in succeeded; GPS-off message (24_gps_off.jpg)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A5",
+  "bug": "Logout did not clear Room (another user's buffered tours/geotags uploaded under the next login); one failing item stalled the whole sync; geotags lost their capture time.",
+  "status": "Fixed",
+  "summary": "Sign-out (SessionCleaner) uploads what it can (8s cap), unregisters the push token, wipes the Room buffer, then clears the session — each step isolated. Tours and geo-tags now record the owner (Room v2 migration keeps existing rows); sync only sends the signed-in user's rows and a new login deletes other users' rows. A 4xx (other than 401/408/429) parks that item with its error and the queue continues; network/5xx retry later. Geo-tags send capturedAt; v2 backend stores it (within 7 days, not future).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/data/SessionCleaner.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/TourRepositoryImpl.kt",
+   "android/app/src/main/java/com/truehr/app/data/local/db/Entities.kt",
+   "android/app/src/main/java/com/truehr/app/data/local/db/TourDao.kt",
+   "android/app/src/main/java/com/truehr/app/data/local/db/TrueHrDatabase.kt",
+   "android/app/src/main/java/com/truehr/app/di/DatabaseModule.kt",
+   "android/app/src/main/java/com/truehr/app/data/remote/dto/TourDto.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/AuthRepositoryImpl.kt",
+   "backend/src/controllers/tourController.js",
+   "backend/scripts/v2/test-android.js"
+  ],
+  "testSteps": "1. User A: Tour Management > take a geo-tag in airplane mode. 2. Sign out, sign in as user B, go online. Expected: A's geo-tag is never uploaded as B. 3. As A (online) take a geo-tag; it shows in the geo-tag list with the time it was taken.",
+  "negativeTests": "1. A tour the server rejects with 404 does not block later geo-tags.",
+  "automated": "SessionCleanerTest (order, failures, adopt, SyncPolicy); test-android.js \"A5: geo-tag capturedAt (v2 only)\" (6 checks incl. v1 unchanged)",
+  "v1Impact": "capturedAt is honoured on v2 only; v1 ignores it exactly as before."
+ },
+ {
+  "id": "A6",
+  "bug": "Tracking service restarted by START_STICKY with a null intent ignored every fix forever.",
+  "status": "Fixed",
+  "summary": "On a null-intent restart the service reads the ACTIVE tour from Room and resumes tracking it, or stops itself when there is none.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/tracking/TourTrackingService.kt",
+   "android/app/src/main/java/com/truehr/app/domain/repository/TourRepository.kt",
+   "android/app/src/main/java/com/truehr/app/data/repository/TourRepositoryImpl.kt"
+  ],
+  "testSteps": "1. Start a tour. 2. Kill the app process (Settings > Force stop is NOT this case; use low-memory or `adb shell am kill`). Expected: when the system restarts the service, points keep being recorded on the same tour.",
+  "negativeTests": "1. No active tour on restart. Expected: the service stops (no stuck notification).",
+  "automated": "not covered (needs a process kill during a live tour; not exercised on device)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A7",
+  "bug": "Password was trimmed before sending.",
+  "status": "Fixed",
+  "summary": "The username is trimmed; the password is sent exactly as typed (login). Reset/change were already untrimmed.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/data/repository/AuthRepositoryImpl.kt"
+  ],
+  "testSteps": "Log in with a password that ends in a space. Expected: works only when the space is typed.",
+  "negativeTests": "1. Correct password with an extra space. Expected: \"Invalid username or password\".",
+  "automated": "ValidatorsTest.passwordRules (spaces kept); test-android.js \"A7\"",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A8",
+  "bug": "Crash risks: ActivityNotFoundException for browser/camera/PDF intents; JSON explicit nulls for non-null defaulted fields.",
+  "status": "Fixed",
+  "summary": "All external intents/launchers go through startActivitySafely / launchSafely with a readable toast (browser for My ESS and the login links, camera for attendance/OD/geo-tag, file pickers, PDF/doc viewers). Json now uses coerceInputValues = true (and explicitNulls = false).",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/DeviceUtils.kt",
+   "android/app/src/main/java/com/truehr/app/di/NetworkModule.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/EssWebScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/auth/LoginScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SalarySlipScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/PoliciesScreen.kt"
+  ],
+  "testSteps": "On a phone without a PDF viewer: Salary Slip > Download. Expected: toast, no crash.",
+  "negativeTests": "1. A response with \"noticePeriodDays\": null. Expected: decodes with 30.",
+  "automated": "V2DtoDecodingTest.explicitNullForDefaultedFieldUsesDefault",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A9",
+  "bug": "Attendance screen clock frozen (remember{Date()}); hard-coded \"General Shift 9:30–6:30\".",
+  "status": "Fixed",
+  "summary": "The clock ticks every second. The hard-coded shift line is replaced by today's state (\"not punched in yet\" / \"punched in — remember to punch out\" / \"punched in and out\") — the API has no shift model yet, so no shift time is invented.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MarkAttendanceScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/ApplyOdScreen.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Mark Attendance. Expected: seconds advance; \"Today: not punched in yet\".",
+  "negativeTests": "1. Leave Mark Attendance open for a minute. Expected: the clock keeps ticking (does not freeze at the time the screen opened). 2. Check the screen for the old hard-coded 'General Shift 9:30–6:30' text. Expected: not shown.",
+  "automated": "on-device smoke (clock 10:34:27 → 10:34:31)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A10",
+  "bug": "Empty catch blocks hid failures (DashboardViewModel, AttendanceViewModel.refreshToday, PushTokenManager).",
+  "status": "Fixed",
+  "summary": "Dashboard: profile failure shows a \"Couldn't load your profile — Retry\" line; banners/unread/team failures are logged. Attendance today: error line with Retry. PushTokenManager: logs and retries registration once; register/unregister return success. Support catalog, OD eligibility and team-member loads now surface their errors.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/dashboard/DashboardScreen.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/AttendanceViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/MarkAttendanceScreen.kt",
+   "android/app/src/main/java/com/truehr/app/push/PushTokenManager.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/SupportViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/OnDutyViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/feature/TaskViewModel.kt"
+  ],
+  "testSteps": "Stop the backend, open the Dashboard / Mark Attendance. Expected: a readable error with Retry instead of silent defaults.",
+  "negativeTests": "1. Turn on airplane mode, then open the Dashboard. Expected: 'Couldn't load your profile — Retry' instead of a blank 'Employee' header; tap Retry after reconnecting and the name loads. 2. Airplane mode on Mark Attendance. Expected: an error line with Retry, and the Punch button does not show a stale state.",
+  "automated": "not covered by unit tests (UI/logging)",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A11",
+  "bug": "Logout should unregister the device token before clearing the session.",
+  "status": "Fixed",
+  "summary": "SessionCleaner calls DELETE me/device-token while the token is valid, then clears Room and the session.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/data/SessionCleaner.kt",
+   "android/app/src/main/java/com/truehr/app/push/PushTokenManager.kt"
+  ],
+  "testSteps": "Log in to the TrueHR app (Android 1.2.0) as an Employee with no reportees (e.g. sneha.iyer@truehr.example / Demo@12345). Sign out. Expected: no more push notifications for that user on this phone.",
+  "negativeTests": "1. Offline sign-out. Expected: still signs out and wipes local data.",
+  "automated": "SessionCleanerTest.signOutClearsEverythingInOrder, failuresNeverSkipTheClearing; on-device smoke: DELETE /api/v2/me/device-token seen in logcat on sign-out",
+  "v1Impact": "None"
+ },
+ {
+  "id": "A12",
+  "bug": "Error messages showed raw \"HTTP 4xx\" / exception text; field errors were ignored.",
+  "status": "Fixed",
+  "summary": "One parser (core/ApiError) reads `{ error, fields }` (and `_form`) without consuming the body; every screen shows the server's words, and forms with fields show each message under its field. friendly() in Login uses it; no \"Request failed (4xx)\" text remains. All v1→v2 shape changes adapted: directory (no phone, numeric id), support catalog (\"Other\"), leave/miss-punch/resignation/support/task/OD request fields.",
+  "files": [
+   "android/app/src/main/java/com/truehr/app/core/ApiError.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/auth/LoginViewModel.kt",
+   "android/app/src/main/java/com/truehr/app/presentation/profile/ProfileViewModel.kt"
+  ],
+  "testSteps": "Log in with a wrong password. Expected: \"Invalid username or password\".",
+  "negativeTests": "1. Backend down. Expected: \"Can't reach the server. Check your internet connection.\"",
+  "automated": "ApiErrorTest (6 tests); on-device smoke",
+  "v1Impact": "None"
+ },
+ {
+  "id": "_meta",
+  "build": "Android 1.2.0 (versionCode 4), BASE_URL /api/v2/ for prod (https://api.truehr.co.in/api/v2/) and staging (http://$STAGING_HOST:4000/api/v2/). `gradle --no-daemon --offline :app:assembleStagingDebug :app:assembleProdRelease :app:testStagingDebugUnitTest` → BUILD SUCCESSFUL — staging debug APK, prod release (R8/minify + shrinkResources) app-prod-release-unsigned.apk, unit tests green. Must run online once: with --offline, lintVitalAnalyzeProdRelease fails because lint-gradle 31.6.1 is not in the local Gradle cache. Prod release is unsigned here (no keystore.properties).",
+  "unitTests": "44 passed, 0 failed (ApiErrorTest 6, V2DtoDecodingTest 11, ValidatorsTest 15, SessionCleanerTest 5, ChangeRequestFormTest 4, DatesLabelsTest 3) — JUnit4 on the JVM, real v2 JSON samples in android/app/src/test/resources/v2/",
+  "deviceSmoke": "Emulator Medium_Phone_API_36.1 + local backend (truehr_android, seed_demo), staging debug APK. Exercised: wrong-password login message; employee login → dashboard shows \"Sneha Iyer\"/SI, no team items; leave negative (half day without session/date/reason → three field messages) and positive half-day (Second half, 0.5 day, \"Pending with Meera Krishnan\"); leave cancel confirmation + Cancelled tab with date/by; miss-punch negative (0,32; in/out/remarks required); resignation page with full employee details, no \"blocked\" text, \"cannot be submitted yet\" when HR approver missing, then (after adding an HR approver row in the test DB) reason-required, confirm text, submit (account stayed ACTIVE) and withdraw; change password wrong-current (403 message) and success; forced change survives force-stop and lands on Dashboard after success; payslip list, PDF opened in the viewer, month filter empty state; address book trimmed department search, no phones; support empty-form messages, ticket list with #no/date, reply; request-a-change \"Nothing has changed\" and PIN 12ab; policies tabs; profile; mark attendance with APPROXIMATE permission (punch in OK) and Location off message; sign-out confirmation + DELETE device-token; manager login shows Team List / Team Tasks / Team Resignation. Screens: docs/qa-v2/android-screens/*.jpg.",
+  "notExercisedOnDevice": "Tour start/stop and the tracking-service restart (A6), offline geo-tag buffering across two accounts (A5 on device — covered by unit tests + backend suite), certificate upload, comp-off apply (no approved OD credit in demo data), assign task as manager, OTP login (LOGIN_OTP off locally), prod release APK install (unsigned).",
+  "backendChanges": [
+   "backend/src/controllers/tourController.js — POST /geotags accepts `capturedAt` on v2 only (ISO, ≤7 days old, not >5 min in the future; else upload time). v1 unchanged.",
+   "backend/scripts/v2/test-android.js — new suite (24 checks): geotag capturedAt v2/v1, and the v2 messages/shapes the app depends on (change-password, untrimmed password, leave half-day/reason/WFH, miss-punch, resignation context, directory, full-profile masking, unchanged change request, support required fields). Result: 24 passed, 0 failed. Needs seed_demo on the DB."
+  ],
+  "notes": "Test data: during the smoke test one approver_matrix row (org 1, HR → Priya Nair) was inserted into the private truehr_android DB only. Remaining gaps (honest): E33 CTC/Form 16 and E44 acknowledgement and E53 document upload stay on the web; A6 not exercised on device. Owner to do: create android/keystore.properties + release keystore and build a signed prodRelease (AAB) for Play; roll out 1.2.0 only after the v2 backend is deployed to api.truehr.co.in (nginx already proxies /api/v2); keep /api v1 for old installs until adoption is high.",
+  "releaseNotes": "TrueHR 1.2.0: • Clear messages on every form, shown next to the field. • Leave: half day with First/Second half, reason required, balances after pending requests, holiday & restricted-holiday list, certificate upload, cancel with confirmation. • Miss punch: in/out time, validation, cancel a pending request. • Resignation: your access continues during the notice period; withdraw before final approval; attach a letter. • New \"Request a change\" for personal, address and bank details. • Full read-only profile. • Support tickets with subject, number, replies, cancel/reopen. • Payslip filters. • Safer sign-out, approximate location supported, fixes for crashes and offline sync."
+ }
+]

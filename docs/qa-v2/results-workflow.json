@@ -1,0 +1,747 @@
+[
+ {
+  "id": "C26",
+  "status": "Fixed",
+  "summary": "The Record a termination picker listed candidates still in onboarding (no employee ID). It now loads a dedicated list of active employees only (ACTIVE, with an employee ID, not past an approved last working day, not already terminated), and the server refuses a termination of anyone who is not an active employee.",
+  "files": [
+   "backend/src/controllers/terminationController.js",
+   "backend/src/routes/v2/workflow/exit.js",
+   "web/app/admin/terminations/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin. 2. Separation > Terminations > Record a termination. 3. Type the name of a candidate who is still in onboarding (e.g. status 'Filling details'). Expected: the candidate does not appear; only active employees with an employee ID are listed.",
+  "negativeTests": "1. (API) POST /api/v2/admin/employees/<candidate id>/terminate. Expected 409: 'Only active employees can be terminated. This person is still a candidate in onboarding (or has already left) — manage them from Onboarding instead.'",
+  "automated": "scripts/v2/test-workflow-exit.js — 'candidate not offered', 'v2: terminating a candidate refused', 'v1 contract unchanged (still accepted)'",
+  "v1Impact": "None (v2 only) — the v1 terminate endpoint keeps its old checks; the new picker endpoint is v2-only."
+ },
+ {
+  "id": "C32",
+  "status": "Fixed",
+  "summary": "The NFA queue printed raw codes (PENDING, PAYMENT RELEASED, ADVANCE SELF). It now uses readable labels everywhere: filters, rows, detail and chain. An HR override approved or queried with no confirmation and was recorded under the stage approver's name. Now every Approve / Query / Reject asks for confirmation. If you are not the stage approver, the dialog says it is an HR override, names the stage and its approver, and lists any later stages with no approver that will then be skipped. The action is recorded under the acting HR user (stage shows \"Actioned by <you> (HR override)\", and the trail is marked as an override). When an NFA is on query, the admin now sees \"Waiting for <employee> to reply\" and can still close it with \"Reject without waiting\". The employee replies to the query with text and can attach the requested bill (PDF/image).",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "backend/src/services/approvalEngine.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "web/app/admin/nfa/page.jsx",
+   "web/app/ess/nfa/page.jsx",
+   "web/app/ess/nfa/NfaParts.jsx"
+  ],
+  "testSteps": "1. Log in as HR. Open NFA & Finance > NFA Queue. Expected: the Status and Payment type filters read \"Payment released\", \"Advance (self)\", \"Reimbursement (self)\", \"PPS candidate\"; no raw codes. 2. Open a pending NFA whose current stage belongs to someone else, type a remark and click Approve. Expected: a confirmation says \"This is an HR override of the Reporting Manager stage (approver: …) and will be recorded under your name\" and lists later stages that will be skipped. Confirm. Expected: the chain row shows \"Actioned by <HR name> (HR override)\" while the approver name stays the stage approver. 3. On another pending NFA click Raise query with remark \"Attach bill\". 4. Log in as the Employee > NFA > My NFAs > open that NFA. Type a reply, attach a PDF bill and click Resubmit. Expected: the NFA returns to Pending and the PDF is listed under Attachments as \"Query reply: …\". 5. As HR, query it again and open it. Expected: \"Waiting for … to reply\" and a \"Reject without waiting\" button.",
+  "negativeTests": "1. Click Raise query or Reject with an empty remark. Expected: \"Remarks are required to reject or raise a query.\" 2. As the Employee, click Resubmit with an empty reply. Expected: \"Your reply is required\". 3. Click Cancel on the override confirmation. Expected: nothing is recorded.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'HR query is recorded under the HR user, not the stage approver', 'trail marks the override', 'reply is required (v2)', 'employee resubmits with the bill', 'HR can close an NFA that sits on query'",
+  "v1Impact": "Applies to v1 too — acting-user recording and the extra columns are additive (new response keys actedBy/override only). On an override the stage keeps its approver instead of being overwritten with the HR's employee id, which only corrects whose name is shown. Rejecting a queried NFA as staff is a new capability; it does not change any existing v1 call. Requiring a reply text is v2 only."
+ },
+ {
+  "id": "C33",
+  "status": "Fixed",
+  "summary": "Masters accepted case-only duplicates (\"Staffing\"/\"staffing\") and junk names (\"!!!\"). Location and client types showed raw codes, and expense-hierarchy buttons read \"off\"/\"del\". Now (v2) a name must start with a letter or digit and contain letters, and a case-insensitive duplicate within the organisation (or under the same parent for headers/sub-headers) is refused with \"<Type> \\\"x\\\" already exists\". Location types show City / Office / Centre / Special and client types show Client / Vendor / Client & vendor. The buttons read Deactivate / Activate / Delete, and Delete asks for confirmation. The typed name stays in the box when the server refuses it.",
+  "files": [
+   "backend/src/controllers/mastersController.js",
+   "web/app/admin/masters/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin. Open NFA & Finance > Masters > Business Operations. 2. Add \"Staffing\". Expected: added. 3. Add \"staffing\". Expected: 'Business operation \"staffing\" already exists' and the text stays in the box. 4. Open the Locations tab. Expected: the type dropdown and column read City / Office / Centre / Special. 5. Open Expense Hierarchy. Expected: each row has Deactivate and Delete buttons, and Delete asks \"Delete \\\"…\\\"?\".",
+  "negativeTests": "1. Add \"!!!\". Expected: \"Business operation name must start with a letter or digit and contain letters\". 2. Add an empty name. Expected: \"Business operation name is required\". 3. Add a header with the same name, different case, under the same category. Expected: refused as a duplicate.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'case-only duplicate is refused with a readable 409', 'junk name \"!!!\" is refused with a field message', 'unknown location type is refused', 'duplicate header under the same category is refused', 'v1: unchanged (no new name rules)'",
+  "v1Impact": "None (v2 only) — v1 create/update keep their old rules (asserted)."
+ },
+ {
+  "id": "C34",
+  "status": "Fixed",
+  "summary": "The Approvers stage list only had matrix stages, so Reporting Manager, Functional Head/Manager, Office Admin and Human Resource could never be assigned. It also allowed one person on every stage, and saving the same approver twice was silently ignored. Now the list covers every stage of every chain (NFA, settlement, resignation, PMS). Each stage shows which chains use it, whether it is required, and how it is used. For a manager stage, the row applies when the employee has no such manager. The engine now honours these rows. Saving an approver who already holds other stages shows a confirmation listing them. Replacing an existing approver asks first. Saving the identical approver again is refused with \"<Name> is already the Finance approver for this scope\" (409).",
+  "files": [
+   "backend/src/controllers/approvalController.js",
+   "backend/src/services/approvalEngine.js",
+   "web/app/admin/approvers/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin. Open NFA & Finance > Approvers. Open the Stage dropdown. Expected: Reporting Manager (required), Functional Head, Functional Manager, Office Admin, Human Resource (required), Finance, Business Head, etc. Choosing one shows e.g. \"Resignation, Settlement · Normally the employee's own manager…\". 2. Choose Finance, pick employee X and click Save. 3. Choose Business Head, pick the same X and click Save. Expected: a confirmation \"X already approves: Finance…\"; click Save anyway. 4. Choose Reporting Manager, pick a manager and click Save. Then, as an employee with no reporting manager, open Create NFA. Expected: stage 1 of the approval chain shows that manager.",
+  "negativeTests": "1. Save Finance = X with the same scope again. Expected: \"X is already the Finance approver for this scope.\" 2. Save with no stage or approver. Expected: \"Choose a stage\" / \"Choose an approver\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'stage list covers manager-chain and named stages', 'stages carry readable labels', 'saving the same approver twice → 409 with a message', 'approver who already holds a stage is reported (alsoApproves)', 'a Reporting Manager row on the Approvers page now staffs the stage', 'v1: unchanged (silent replace)'",
+  "v1Impact": "Mostly v2 only: the 409 duplicate and stage validation are v2. The engine fallback (a manager or named stage with nobody uses the Approvers row for the same stage) applies to both versions. It only takes effect once an admin assigns such a row, which v1 could not offer before. Existing chains are snapshots and are unaffected."
+ },
+ {
+  "id": "C35",
+  "status": "Fixed",
+  "summary": "The help text wrongly pointed employees to 'NFA > Vendor Registration'; it now says they register vendors from the employee portal's Vendors menu. Admins can now add a vendor directly (Add vendor), which is approved straight away. A vendor can no longer be approved unless its statutory details are complete and valid (PAN is mandatory; GSTIN, ESIC, PF, MSME and NSIC are optional but must be well-formed). Approve now asks for confirmation. Rejecting a vendor or an agreement requires a reason, which is stored and shown to the employee.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "backend/src/routes/v2/workflow/vendor.js",
+   "web/app/admin/vendors/page.jsx",
+   "web/app/admin/vendors/vendorForms.jsx",
+   "web/app/ess/vendors/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin. Open Vendors & Agreements. Expected: the subtitle says employees register from the employee portal's Vendors menu. 2. Click Add vendor and enter Company 'Sunrise Facility Services', Type 'Private Limited', PAN 'ABCPS1234K', GSTIN '21ABCPS1234K1Z5', plus bank details. Click Add vendor. Expected: the vendor appears under the Approved filter, marked 'Added by admin'. 3. Choose the Pending approval filter and click Approve on a valid pending vendor. Expected: a confirmation appears; after you confirm, the status is Approved and the card shows 'Reviewed by <you> on <date>'. 4. Click Reject on another pending vendor, type 'PAN card missing' and confirm. Expected: Rejected, and 'Reason: PAN card missing' is shown. 5. Log in as that Employee and open Vendors. Expected: the row shows Rejected with the reason.",
+  "negativeTests": "1. Approve a pending vendor that has no PAN (one registered from the old mobile app). Expected error: 'Complete the vendor's statutory details before approving — PAN is required'. 2. Click Reject and leave the reason empty. Expected: 'Reason is required', and the dialog stays open. 3. Add vendor with every field empty. Expected: all errors at once, including 'Company name is required', 'Type of company is required' and 'PAN is required'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'C35: vendor with invalid/missing statutory details cannot be approved', 'reject without reason → 400', 'reject with reason stored', 'employee sees the rejection reason', 'admin-added vendor is approved immediately', 'admin add validates every field at once', 'employee cannot use the admin add'",
+  "v1Impact": "The v1 review endpoint behaves as before: no reason is required and there is no statutory check on approve. A reason sent by an old client is now stored. Admin add is a new v2-only route."
+ },
+ {
+  "id": "C36",
+  "status": "Fixed",
+  "summary": "The grade ladder was read-only and global, and a KPI from someone with no reporting manager sat at 'RM pending' forever. Each organisation can now edit its own grade ladder (PMS / KPI > Grade system > Edit grades; codes, labels and 'from %' per grade, validated so there are no gaps or overlaps), or reset to the standard ladder. Final grades use the employee's organisation's ladder. A KPI raised by an employee with no (active) reporting manager is routed to HR: the employee is told so, it appears in HR's 'KPI approvals' tab marked 'no reporting manager — HR approves', and HR can approve or send it back. PMS rating stages that nobody holds now appear in HR's Rating queue so HR can rate them.",
+  "files": [
+   "backend/src/controllers/pmsController.js",
+   "backend/src/services/kpiBands.js",
+   "backend/src/routes/v2/workflow/pms.js",
+   "backend/src/db/migrations_v2/60_workflow_pms.sql",
+   "web/app/admin/pms/page.jsx",
+   "web/app/ess/pms/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin > PMS / KPI > Grade system > Edit grades. 2. Change AT's 'From %' to 95 and its label, Save ladder, confirm. Expected: table shows the new ranges as '95% to below 105%' and the header says 'Your organisation's own grade ladder'. 3. Log in as an employee with no reporting manager (e.g. TH5001) > Performance > Submit KPI for the current month. Expected: a note says the KPI goes to HR; status shows 'Pending with HR'. 4. Log in as HR > PMS / KPI > KPI approvals. Expected: the KPI is listed with 'no reporting manager — HR approves'; Approve (confirm) locks it. 5. Employee submits PMS; HR > Rating queue shows it with 'nobody assigned — HR rates'; rate it; the final grade uses the organisation ladder.",
+  "negativeTests": "1. Edit grades with the lowest 'From %' = 10. Expected: 'The lowest grade must start at 0%, or a low score would get no grade.' 2. Two grades with codes 'ab' and 'AB'. Expected: 'Code AB is used twice'. 3. Blank label. Expected: 'Label is required'. 4. Grade 2 starting below grade 1. Expected: 'A higher grade must start at a higher percentage.' 5. Another organisation's admin cannot see or approve this KPI (404). 6. An employee calling the ladder save gets 403.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'HR saves a custom ladder', 'lowest grade must start at 0%', 'duplicate code (case-insensitive)...', 'another organisation still has the default ladder', 'KPI without an RM is routed to HR with a notice', 'v2: HR sees it in KPI approvals', 'another organisation’s admin cannot approve it (404)', 'v2: HR rating queue shows a stage nobody holds', '104.5% graded on the organisation ladder (A)'",
+  "v1Impact": "v1 GET /pms/grades keeps its array shape (adds upperPct/rangeLabel; serves the org's ladder if one was configured in v2). Final grading uses the org ladder on both versions — only differs once an org configures one. v1 team-pending / rating queue unchanged (HR extras are v2 only)."
+ },
+ {
+  "id": "C46",
+  "status": "Fixed",
+  "summary": "Root causes: (a) /meta/nfa-masters scoped by the account's organisation, so an account with no organisation saw every tenant's masters; (b) master ids on an NFA were never checked against the raiser's organisation; (c) one NFA counter for the whole deployment; (d) the chain resolved the requester as his own Finance approver and stalled on an empty mandatory Reporting Manager stage. Now: masters are always the employee's own organisation's (both versions); a foreign master id is refused; numbering is per organisation (the organisation that already owns the plain NFA2026xxxx numbers continues them, every other organisation gets its own series prefixed with its code, e.g. TH-NFA20260001); in v2 nobody is resolved as approver of their own NFA and an NFA cannot be raised while a required stage has no approver — the form shows which stage and tells the employee to ask HR; optional stages with no approver are skipped, as the Approvers page says.",
+  "files": [
+   "backend/src/controllers/mastersController.js",
+   "backend/src/controllers/nfaController.js",
+   "backend/src/services/approvalEngine.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "web/app/ess/nfa/create/page.jsx",
+   "web/app/admin/approvers/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee of the Company Admin organisation (e.g. TH5001) > NFA > Create NFA. Expected: Business Operation / Project / Location / Client dropdowns show only this organisation's entries (no BJP Call Center, True Kind Foundation, cvf, Dmeo). 2. With project, category and zone chosen, check the Approval chain card. Expected: every stage shows an approver or \"Skipped (no approver)\"; a required stage without one shows \"Not assigned — required\" and a red note. 3. Once HR has assigned the stages, submit an NFA. Expected: its number is this organisation's own series (e.g. <ORGCODE>-NFA20260001), not the next TRUE HR number.",
+  "negativeTests": "1. If the employee is himself the Finance approver for the project, Submit. Expected: \"You are the Finance approver for this project, and you cannot approve your own NFA. Ask HR to assign a different Finance on the Approvers page.\" 2. With no Reporting Manager: \"No Reporting Manager approver is set up for you, so this NFA cannot be raised yet. Ask HR to assign one on the Approvers page.\" 3. Posting another organisation's project id: \"Project is not one of your organisation's options\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'org 1 employee does not see org 2 projects', 'an account with no organisation sees its employee\\'s organisation only (v1 too)', 'another organisation\\'s project on an NFA is refused (v2)', '… and on v1 (cross-tenant leak fix)', 'mandatory Finance stage with nobody → NFA cannot be raised', 'self-approval → refused with a clear message', 'org 2 gets its own series starting at 0001'",
+  "v1Impact": "Applies to v1 too for the leak fixes (masters scoping, foreign master id refused — an ownerless master is still accepted, as before) and numbering (the code string format is unchanged for the legacy-owner organisation; other organisations get a prefixed code, still a string). Self-approval block and the \"required stage must be staffed\" check are v2 only."
+ },
+ {
+  "id": "C50",
+  "status": "Fixed",
+  "summary": "The resignation Approvals card read the approver matrix with no organisation filter, so another company's employee was shown TRUE HR's Business Head and Finance. The preview now resolves every stage exactly as the approval engine does, using only the employee's own organisation (approver matrix, managers and default approvers must all be in the same organisation). The engine's matrix lookup was also tightened to the exact organisation.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/services/approvalEngine.js"
+  ],
+  "testSteps": "1. Log in as an employee of the Company Admin organisation (e.g. TH5001). 2. Resignation > My Resignation, scroll to Approvals. Expected: only approvers set on that organisation's Approvers page (or its own managers) are shown; no TRUE HR employees (TKF…).",
+  "negativeTests": "1. In TRUE HR, assign Business Head = TKF5002 on Approvers. 2. Log in as the other organisation's employee and open Resignation. Expected: Business Head shows 'Not assigned — this step will be skipped', never TKF5002.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'v2: other org's employee sees no TRUE HR approvers', 'v1: other org's employee sees no TRUE HR approvers', 'own org employee sees own Business Head & Finance'",
+  "v1Impact": "Applies to v1 too — cross-tenant leak fix; the response keeps the same fields (adds roleKey/assignment)."
+ },
+ {
+  "id": "H84",
+  "status": "Fixed",
+  "summary": "A last working day shorter than the notice period is still allowed (business may agree an early release), but the shortfall in days is now computed and stored on the resignation, shown to the employee before submitting, and shown to HR in the Resignations list and CSV ('Shortfall N day(s) — recover in F&F') for the Full & Final recovery.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/db/migrations_v2/60_workflow_exit.sql",
+   "web/app/ess/resignation/page.jsx",
+   "web/app/admin/resignations/page.jsx"
+  ],
+  "testSteps": "1. Employee with 30 days notice: Resignation > set Last working date = resignation date + 10 days. Expected: note 'This is 20 day(s) short of your 30-day notice period…'. 2. Submit. 3. HR > Separation > Resignations. Expected: the row shows 'Shortfall 20 day(s) — recover in F&F'; Export CSV has 'Notice shortfall (days)' = 20.",
+  "negativeTests": "1. LWD before resignation date. Expected: 'Last working date cannot be before the resignation date'.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'notice shortfall recorded (30 - 10 = 20)'",
+  "v1Impact": "None for v1 requests (shortfall stays 0); new response fields only."
+ },
+ {
+  "id": "H85",
+  "status": "Fixed",
+  "summary": "Employees stayed ACTIVE after their approved last working day. A new exit job (runs at start-up and hourly, acting once per exit) marks every employee whose approved resignation or live termination has a last working day before today (India time) as Inactive — removing them from payroll, org chart, pickers and counts — and disables their login. Every list that uses the shared 'active employee' rule also already excludes anyone past an approved LWD.",
+  "files": [
+   "backend/src/services/exitWorker.js",
+   "backend/src/server.js",
+   "backend/src/db/migrations_v2/60_workflow_exit.sql",
+   "web/app/admin/resignations/page.jsx"
+  ],
+  "testSteps": "1. HR approves a resignation with LWD = yesterday (or wait for the LWD to pass). 2. Within an hour after midnight IST: Employees list. Expected: the employee is Inactive; Resignations > Approved shows 'Exited · login closed <date>'.",
+  "negativeTests": "1. LWD = today. Expected: the employee is still Active today (access ends after the LWD, not on it).",
+  "automated": "scripts/v2/test-workflow-exit.js — 'on the last working day itself the employee is still active', 'employee INACTIVE after LWD', 're-run is a no-op', 'HR sees exitedAt'",
+  "v1Impact": "Applies to v1 too (background job). It only acts after an approved last working day, so it cannot affect an active employee."
+ },
+ {
+  "id": "H86",
+  "status": "Fixed",
+  "summary": "Exited employees could still sign in. The exit job disables the login account after the last working day and drops the cached session context, so even an open session stops working on its next request. Login on both web (v2) and app (v1) is refused.",
+  "files": [
+   "backend/src/services/exitWorker.js",
+   "backend/src/server.js"
+  ],
+  "testSteps": "1. After an employee's approved LWD has passed, try to sign in as that employee on the web and the app. Expected: sign-in refused (account disabled).",
+  "negativeTests": "1. Before the LWD passes, the resigning employee can still sign in (D2).",
+  "automated": "scripts/v2/test-workflow-exit.js — 'login DISABLED after LWD', 'sign-in refused', 'sign-in refused on v1 too'",
+  "v1Impact": "Applies to v1 too — the job only acts after an approved LWD."
+ },
+ {
+  "id": "H87",
+  "status": "Fixed",
+  "summary": "A resignation could be dated before the date of joining. On v2 the resignation date must be on or after the DOJ and within the back-dating limit, and the last working date on or after the resignation date. Approved exits now change the employee status (see H85).",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "web/app/ess/resignation/page.jsx"
+  ],
+  "testSteps": "1. Employee with DOJ in the future (or recent): Resignation > the date picker does not allow dates before the DOJ.",
+  "negativeTests": "1. (API) resignationDate before DOJ. Expected 400: 'Resignation date cannot be before your date of joining (dd-mm-yyyy)'.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'resignation before the date of joining refused'",
+  "v1Impact": "None (v2 only). Existing bad rows (TKF9008) are data to correct by HR."
+ },
+ {
+  "id": "H88",
+  "status": "Fixed",
+  "summary": "After reversing a termination the employee did not reappear in the picker until a page refresh. The picker is now loaded from a dedicated endpoint and re-read after every record and every reversal. The reversal reason is taken in a proper dialog instead of a browser prompt.",
+  "files": [
+   "web/app/admin/terminations/page.jsx",
+   "backend/src/controllers/terminationController.js",
+   "backend/src/routes/v2/workflow/exit.js"
+  ],
+  "testSteps": "1. HR > Separation > Terminations. 2. Reverse a termination (enter a reason, Reverse termination). 3. Click Record a termination and search for that employee. Expected: they are listed without refreshing the page.",
+  "negativeTests": "1. Reverse with a reason shorter than 5 characters. Expected: 'Please give a reason of at least 5 characters.' and the dialog stays open.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'terminated employee leaves the picker', 'reversed employee back in the picker immediately'",
+  "v1Impact": "None (portal only)."
+ },
+ {
+  "id": "H89",
+  "status": "Fixed",
+  "summary": "Same fix as C26: candidates who never joined (Offer sent, Filling details) are no longer listed for termination; the list holds active employees of the organisation only.",
+  "files": [
+   "backend/src/controllers/terminationController.js",
+   "web/app/admin/terminations/page.jsx"
+  ],
+  "testSteps": "1. HR > Terminations > Record a termination. 2. Search 'Rahul' / 'Susmita' (candidates). Expected: not listed.",
+  "negativeTests": "1. Reverse a termination, then open Record a termination without refreshing. Expected: the employee is back in the list. 2. Search for a candidate in Filling details (Susmita). Expected: not listed.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'candidate not offered', 'exited employee not offered', 'other org never sees our employees'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H108",
+  "status": "Fixed",
+  "summary": "The NFA queue showed raw values (PAYMENT_RELEASED, ADVANCE VENDOR) and d/m/yyyy dates. All NFA screens (queue, detail, My NFAs, Approvals, NFA Reports) now use readable labels (\"Payment released\", \"Advance (vendor)\", \"Settled\") and the app's single dd-mm-yyyy date format.",
+  "files": [
+   "web/app/admin/nfa/page.jsx",
+   "web/app/ess/nfa/NfaParts.jsx",
+   "web/app/ess/nfa/page.jsx",
+   "web/app/ess/approvals/page.jsx",
+   "web/app/admin/nfa-reports/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > NFA Queue. Expected: Raised column like 20-07-2026; status \"Payment released\"; payment type \"Advance (vendor)\". 2. NFA Reports > Settlements / Pending Settlement. Expected: dates dd-mm-yyyy, statuses readable.",
+  "negativeTests": "1. Filter by status \"Payment released\". Expected: the dropdown never shows PAYMENT_RELEASED.",
+  "automated": "scripts/v2/test-workflow-nfa.js — UI only — no automated check",
+  "v1Impact": "None (UI only)."
+ },
+ {
+  "id": "H109",
+  "status": "Partially fixed",
+  "summary": "An employee's unsettled NFA advances were invisible when their exit was approved. The HR Resignations list now shows 'Open NFA advance ₹…' (with the NFA numbers) on pending and approved resignations, the HR approve confirmation warns to recover it in the Full & Final, and the amount is recorded on the exit audit entry. Automatic posting into the F&F 'Advances / Loans' line is in the F&F screen owned by another area and is requested from the lead (a helper outstandingAdvance(employeeId) is provided).",
+  "files": [
+   "backend/src/services/exitWorker.js",
+   "backend/src/controllers/resignationController.js",
+   "web/app/admin/resignations/page.jsx"
+  ],
+  "testSteps": "1. Employee with a released, unsettled NFA advance resigns. 2. HR > Separation > Resignations. Expected: the row shows 'Open NFA advance ₹1,07,000'; clicking Approve shows the warning listing the NFA numbers.",
+  "negativeTests": "1. Employee with no open advance: no advance line shown (openAdvance 0).",
+  "automated": "scripts/v2/test-workflow-exit.js — 'HR list shows open advance field (H109)'",
+  "v1Impact": "Applies to v1 too — fields added to the admin list only."
+ },
+ {
+  "id": "H110",
+  "status": "Fixed",
+  "summary": "The Settlements report showed the settlement's own amount and date (Rs 10,000 on 22-07) as if they were the NFA's (Rs 1,00,000 raised 20-07). The report now shows, per row: NFA raised date, Advance (the NFA amount), Settled (this settlement), Balance (advance − settled), the date the settlement was submitted, its status and the stage it is waiting on. Pending Settlement shows NFA raised, Advance, Settled (closed settlements), Balance and Due, and its total is the balance. The Excel/CSV export has the same columns.",
+  "files": [
+   "backend/src/controllers/settlementController.js",
+   "backend/src/controllers/nfaReportController.js",
+   "web/app/admin/nfa-reports/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > NFA & Finance > Reports > Settlements. Expected: NFA20260002 shows NFA raised 20-07-2026, Advance ₹1,00,000, Settled ₹10,000, Balance ₹90,000, Settlement submitted 22-07-2026. 2. Open Pending Settlement and click Export Excel. Expected: Advance, Settled and Balance columns.",
+  "negativeTests": "1. An NFA with no settlement yet appears in Pending Settlement with Settled ₹0 and Balance = Advance.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'row carries the NFA advance, settled amount and balance', 'pending-settlement report has advance / settled / balance'",
+  "v1Impact": "Applies to v1 too — fields are only added (advanceAmount, settledAmount, balance, nfaRaisedAt; raised_on, settled_amount, balance); existing fields are unchanged."
+ },
+ {
+  "id": "H111",
+  "status": "Fixed",
+  "summary": "Masters used by HR's NFAs and approver rules (\"QA Test Project v2\", \"East Zone\") were stamped on another organisation, or on none, so HR's Masters page showed \"No entries\". A one-time, idempotent data repair (migration 60_workflow_nfa.js) re-attaches a master to the organisation whose NFAs, approver rows or agreements use it. It does this only when exactly one organisation uses it, its current owner does not, and that organisation has no master with the same name. Expense headers and sub-headers follow their category. New masters are always created on the admin's organisation, and the screens now read the employee's organisation (C46), so it cannot recur.",
+  "files": [
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "backend/src/controllers/mastersController.js"
+  ],
+  "testSteps": "1. After the release, log in as HR > NFA & Finance > Masters > Projects and Zones. Expected: \"QA Test Project v2\" and \"East Zone\" are listed and can be edited or deactivated.",
+  "negativeTests": "1. A master used by two organisations is left where it is (shared use cannot be split automatically). The lead's data clean-up handles any such rows.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'an ownerless project used by org 1 now belongs to org 1', 'a zone stamped on org 2 but used only by org 1 moves to org 1', 'HR now sees it on the Masters page'",
+  "v1Impact": "Applies to v1 too — data repair only; it never moves a master that its owner organisation uses."
+ },
+ {
+  "id": "H112",
+  "status": "Fixed",
+  "summary": "Same fix as C34: the Approvers stage list includes every stage used by any chain, including Functional Head (settlement chain), Reporting Manager, Functional Manager, Office Admin, Admin, Director, Closer and Human Resource, with readable names. The NFA Reports \"Pending approvals by stage\" card uses the same names.",
+  "files": [
+   "backend/src/controllers/approvalController.js",
+   "backend/src/services/approvalEngine.js",
+   "web/app/admin/approvers/page.jsx",
+   "backend/src/controllers/nfaReportController.js",
+   "web/app/admin/nfa-reports/page.jsx"
+  ],
+  "testSteps": "1. HR > Approvers > Stage dropdown. Expected: \"Functional Head\" is present (used by Settlement). 2. Assign it, then submit a settlement as an employee with no functional manager. Expected: the settlement chain shows that approver at Functional Head.",
+  "negativeTests": "1. Posting an unknown stage key to the API. Expected: \"Choose a stage from the list\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'stage list covers manager-chain and named stages', 'stages carry readable labels', 'unknown stage refused (v2)'",
+  "v1Impact": "As C34."
+ },
+ {
+  "id": "H113",
+  "status": "Fixed",
+  "summary": "The approver dropdown listed people whose last working day had passed. The Approvers page now loads approvers from a new list of current employees only (active, with an employee code, not past an approved last working day), and v2 refuses to save anyone else. The approval engine never routes a stage to someone who has left (deactivated, past an approved resignation LWD, or past an active termination's last day); that stage is treated as having no approver. Rows the exit job flags for reassignment are ignored by the engine and shown on the Approvers page with a \"Needs reassignment\" badge and a warning banner. The flag itself is set by the exit worker (owned by the workflow lead). The exit job (services/exitWorker.js, started from server.js) sets needs_reassignment on every approver row of an employee once their last working day has passed.",
+  "files": [
+   "backend/src/controllers/approvalController.js",
+   "backend/src/services/approvalEngine.js",
+   "backend/src/routes/v2/workflow/nfa.js",
+   "web/app/admin/approvers/page.jsx",
+   "backend/src/services/exitWorker.js",
+   "backend/src/server.js",
+   "backend/src/db/migrations_v2/60_workflow_exit.sql"
+  ],
+  "testSteps": "1. HR > Approvers > Approver dropdown. Expected: Smruti Nanda (TKF9004) and Koustav Maity (TKF5001) are not listed. 2. If their rows were flagged by the exit job, the table shows \"Needs reassignment\" next to them and a banner at the top. 3. Assign a new person for that stage. Expected: the flagged row is replaced.",
+  "negativeTests": "1. Posting an exited employee id to the API. Expected: \"Only a current employee can be an approver\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'candidates exclude an employee past an approved LWD', 'candidates route is v2 only', 'assigning an exited employee is refused (v2)', 'engine skips an exited approver (stage bypassed)', 'rows flagged for reassignment are shown as such'; scripts/v2/test-workflow-exit.js — 'their approver rows flagged for reassignment', 'terminated approver flagged for reassignment after LWD'",
+  "v1Impact": "The engine change applies to both versions: routing to someone who has left is wrong data. An optional stage is skipped; a required stage waits for HR override, which is the existing behaviour for an unstaffed stage. The picker endpoint and save refusal are v2 only."
+ },
+ {
+  "id": "H114",
+  "status": "Fixed",
+  "summary": "The PAN and GSTIN formats are now validated in the browser and on the server, and GSTIN must contain the PAN. The tester's values '7980cxmuiop' and 'Gstn807599' are refused. The same checks apply when HR adds or edits a vendor.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "web/app/admin/vendors/vendorForms.jsx"
+  ],
+  "testSteps": "1. Log in as HR Admin. Open Vendors & Agreements and click Add vendor. 2. Enter Company 'Green call', Type 'Proprietorship', PAN '7980cxmuiop', GST 'Gstn807599', then click Add vendor. Expected: no save, and errors under PAN and GSTIN. 3. Enter PAN 'abcpg1234k'. Expected: accepted and stored as ABCPG1234K.",
+  "negativeTests": "1. PAN '7980cxmuiop'. Expected: 'PAN is not valid (like ABCDE1234F)'. 2. GST 'Gstn807599'. Expected: 'GSTIN is not valid (15 characters, like 21ABCDE1234F1Z5)'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'tester data \"7980cxmuiop\" / \"Gstn807599\" rejected', 'valid vendor accepted, identifiers upper-cased'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H115",
+  "status": "Fixed",
+  "summary": "A PAN or GSTIN already used by another vendor in the same organisation is now blocked when an employee registers a vendor, and when HR adds or edits one. The check ignores case and spaces. The error names the existing vendor. Rejected and withdrawn registrations don't count. A different organisation may register the same PAN.",
+  "files": [
+   "backend/src/controllers/vendorController.js"
+  ],
+  "testSteps": "1. As HR Admin, add vendor 'Sunrise Facility Services' with PAN 'ABCPS1234K'. 2. As Employee, open Vendors and register 'Sunrise FS (2)' with PAN 'abcps1234k'. Expected: the error under PAN.",
+  "negativeTests": "1. Same PAN in a different case. Expected: 'A vendor with this PAN is already registered (Sunrise Facility Services)'. 2. Same GSTIN. Expected: 'A vendor with this GSTIN is already registered (…)'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'same PAN blocked', 'same PAN (different case) blocked for admin add too', 'same PAN is allowed in a different organisation'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H116",
+  "status": "Fixed",
+  "summary": "The Vendor Registrations tab now opens on a 'Pending approval' filter, so pending vendors are actually shown. Other filters are Approved, Rejected, Deactivated, Withdrawn and All, and a search box looks up name, PAN, GSTIN or contact. HR can Approve (with confirmation), Reject (reason required), Edit, Deactivate (reason required) and Reactivate. Each card shows who registered and who reviewed, and when. 'Details & trail' opens the full approval history with who did what and when.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "backend/src/routes/v2/workflow/vendor.js",
+   "backend/src/db/migrations_v2/60_workflow_vendor.sql",
+   "web/app/admin/vendors/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR Admin. Open Vendors & Agreements > Vendor Registrations. Expected: the filter shows 'Pending approval' and lists pending vendors. 2. Type a PAN in the search box. Expected: only that vendor. 3. Approve it (confirm), then click Deactivate and enter 'Contract ended'. Expected: status Deactivated. Then click Reactivate. 4. Click Details & trail. Expected: Registered, Approved, Deactivated and Reactivated, each with a name and date-time. 5. Click Edit, change the contact person and save. Expected: the change is saved and appears in the trail as 'Edited by admin'.",
+  "negativeTests": "1. Deactivate with an empty reason. Expected: 'Reason is required'. 2. Choose a filter with no results. Expected: 'No vendors found — Nothing matches the current filter.' 3. An Employee calling the admin trail or edit API. Expected: refused (403).",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'HR pending queue lists the employee registration', 'search by PAN', 'HR edits a vendor', 'deactivate needs a reason', 'HR deactivates', 'HR reactivates', 'trail lists registered / edited / approved / deactivated with who & when', 'employee cannot open the admin trail', org-2 404 checks",
+  "v1Impact": "GET /vendors gains optional ?q= search and extra response fields (bank details, reviewNote, reviewedBy, reviewedAt). These are additive. The new actions are v2-only routes."
+ },
+ {
+  "id": "H117",
+  "status": "Fixed",
+  "summary": "Entity type is now a fixed dropdown: Proprietorship, Partnership, LLP, Private Limited, Public Limited, Trust / Society / NGO, Government body, Individual, Others. An old free-text value is shown as '(old value)' until it is corrected. The vendor now records bank details: account holder, bank, account number (9-18 digits) and IFSC, all-or-nothing. HR sees the bank details on the card and in Details & trail, and can open the uploaded document (PAN card, GST certificate or cancelled cheque).",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "backend/src/db/migrations_v2/60_workflow_vendor.sql",
+   "web/app/admin/vendors/page.jsx",
+   "web/app/admin/vendors/vendorForms.jsx",
+   "web/app/ess/vendors/page.jsx"
+  ],
+  "testSteps": "1. Log in as Employee. Open Vendors and look at Type of company. Expected: a dropdown. 2. Fill the bank details 'Ravi Kumar / State Bank of India / 123456789012 / SBIN0001234', attach a PDF and register. 3. Log in as HR Admin and open Vendors & Agreements. Expected: the card shows 'Bank: Ravi Kumar · State Bank of India · A/c 123456789012 · SBIN0001234'. Click Document. Expected: the PDF opens in a new tab.",
+  "negativeTests": "1. Enter only the Bank name. Expected: 'Account holder name is required', 'Account number is required' and 'IFSC is required'. 2. IFSC 'SBI123'. Expected: 'IFSC is not valid (like SBIN0001234)'. 3. Type of company 'Propitership' sent through the API. Expected: 'Type of company must be one of: …'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'H117: free-text entity type rejected', 'H117: partial bank details rejected (all-or-nothing)', 'valid vendor accepted, identifiers upper-cased, bank details stored', 'entity-type list served'",
+  "v1Impact": "None. Bank columns are new and nullable, written only by v2. v1 GET responses gain the extra fields."
+ },
+ {
+  "id": "H118",
+  "status": "Partially fixed",
+  "summary": "HR can now upload an agreement from the admin Agreements tab (Upload agreement). It is recorded as approved, under HR's name. Every approved agreement shows 'Expires in N days' when 30 days or fewer remain, or 'Expired'. A new 'Expiring in 30 days' filter lists the agreements due for renewal. Not done: automatic reminder emails and a renewal workflow. The filter and the badges are the minimal tracking.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "backend/src/routes/v2/workflow/vendor.js",
+   "backend/src/db/migrations_v2/60_workflow_vendor.sql",
+   "web/app/admin/vendors/page.jsx",
+   "web/app/admin/vendors/vendorForms.jsx"
+  ],
+  "testSteps": "1. Log in as HR Admin. Open Vendors & Agreements > Agreements. Click Upload agreement. 2. Enter Project, Client, Type Service, Start today and End 10 days from today, then Upload. Expected: it appears as Approved with 'Expires in 10 days'. 3. Choose the filter 'Expiring in 30 days'. Expected: the agreement is listed. 4. Reject a pending employee agreement with the reason 'Unsigned copy'. Expected: the reason is shown on the card and in the employee's list.",
+  "negativeTests": "1. Upload with no Project or Client. Expected: 'Project is required' and 'Client is required'. 2. End date in the past. Expected: 'End date has already passed — an expired agreement cannot be uploaded'. 3. Reject with no reason. Expected: 'Reason is required'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'H118: HR uploads an agreement (approved)', 'H118: \"expiring in 30 days\" filter', 'agreement reject needs a reason', 'agreement rejected with reason', 'employee sees the agreement rejection reason', 'org 2 cannot review org 1 agreement (404)'",
+  "v1Impact": "GET /agreements gains an optional ?expiring=N filter and extra fields (reviewNote, daysToExpiry, expiry). These are additive. HR upload is a v2-only route."
+ },
+ {
+  "id": "H119",
+  "status": "Fixed",
+  "summary": "Grade ranges had gaps (90-104 then 105-119), so a PLI of 104.5% or 89.5% got no final grade at all. A grade now covers its floor up to, but not including, the next grade's floor: 104.5% is AT, 89.5% BT, 119.99% SAT. Ranges are shown as '90% to below 105%' / '120% and above'. The live band preview on the PMS form uses the same rule.",
+  "files": [
+   "backend/src/controllers/pmsController.js",
+   "backend/src/services/kpiBands.js",
+   "web/app/admin/pms/page.jsx",
+   "web/app/ess/pms/page.jsx"
+  ],
+  "testSteps": "1. HR > PMS / KPI > Grade system. Expected: AT shows '90% to below 105%', SAT '105% to below 120%', OAT '120% and above'. 2. Rate a PMS at the last stage with PLI % 104.5. Expected: final grade AT (shown on the employee's Performance list).",
+  "negativeTests": "1. PLI % 89.5 → BT (not blank). 2. PLI % 59.5 → SBT.",
+  "automated": "scripts/v2/test-workflow-pms.js — '104.5% grades AT on the default ladder', '89.5% grades BT on the default ladder', '119.99% grades SAT, 120% OAT', 'range labels are continuous', '104.5% graded on the organisation ladder (A)'; scripts/test-pms.js still green",
+  "v1Impact": "Applies to v1 too — wrong-data fix: a final grade that used to be blank for fractional percentages is now set; whole-number percentages grade exactly as before. v1 /pms/grades still returns minPct/maxPct 90/104."
+ },
+ {
+  "id": "H120",
+  "status": "Partially fixed",
+  "summary": "HR only saw items waiting on them. New Overview tab (first tab of PMS / KPI): every active employee with their KPI/PMS state for a chosen month (KPI not submitted, awaiting approval, sent back, approved, rating in progress, rated), counts per state, status filter and search, reporting manager (or 'None — HR approves'), self rating and grade. 'Start KPI cycle' opens a month for KPI submission (current month is always open), optionally with a closing date, and notifies every active employee. Grade system is editable (see C36). Kept minimal: a cycle only opens a month for submission and notifies; there are no cycle-level deadlines enforcement, reminders or bulk actions.",
+  "files": [
+   "backend/src/controllers/pmsController.js",
+   "backend/src/routes/v2/workflow/pms.js",
+   "backend/src/db/migrations_v2/60_workflow_pms.sql",
+   "web/app/admin/pms/page.jsx"
+  ],
+  "testSteps": "1. HR > PMS / KPI > Overview. Expected: all active employees for the current month with readable status and counts. 2. Status = 'KPI not submitted'. Expected: only those employees. 3. Start KPI cycle > pick August 2026 > Start cycle > confirm. Expected: 'Cycle started — N employee(s) notified.'; employees can now pick August 2026 in Submit KPI.",
+  "negativeTests": "1. Start a cycle for next month. Expected: 'A KPI cycle cannot be opened for a future month'. 2. Closes on a past date. Expected: 'Closing date cannot be in the past'. 3. Start the same month again. Expected: 'The August 2026 cycle is already open'. 4. An employee calling the overview/cycle API gets 403. 5. Another organisation's overview never lists these employees.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'overview lists active employees with a state each', 'status filter works', 'search works', 'another organisation’s overview has none of these employees', 'a cycle cannot be opened for a future month', 'HR starts a cycle and employees are notified', 'the same cycle twice → 409 with a message', 'the opened month is now allowed'",
+  "v1Impact": "None (v2 only endpoints)."
+ },
+ {
+  "id": "E19",
+  "status": "Fixed",
+  "summary": "Submitting an empty NFA showed \"businessOperationId is required; groupCompanyId is required; …\". v2 now validates in the browser and on the server and shows every problem at once next to its field: \"Business operation is required\", \"Project is required\", \"Cost approval zone is required\", \"Purpose is required\", \"Add at least one expense line\", plus a summary at the top. The form keeps what was typed.",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "web/app/ess/nfa/create/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee > NFA > Create NFA. 2. Click Submit NFA without filling anything. Expected: a red summary at the top and messages under Business operation, Cost to company, Project, Expense category, Cost approval zone, Location and Purpose; \"Add at least one expense line\" under the lines.",
+  "negativeTests": "1. Fill everything except Location. Expected: only \"Location is required\". 2. Fill all fields and Submit. Expected: the NFA is created.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'empty NFA → friendly field messages', 'v1: old message unchanged'",
+  "v1Impact": "None (v2 only) — v1 keeps the old message (asserted)."
+ },
+ {
+  "id": "E20",
+  "status": "Fixed",
+  "summary": "Amounts were not validated properly. Negative amounts got a misleading message, a negative logistic amount slipped through, ₹0.001 and ₹9,99,99,99,99,999 were accepted, and the same header could be added twice. Now each line's NFA and logistic amounts must be 0 or more, with at most 2 decimals, and the line total must be above zero. The whole NFA is capped at ₹1,00,00,000. The same header + sub-header cannot be added twice. Each case shows a specific message, in the browser and on the server.",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "web/app/ess/nfa/create/page.jsx"
+  ],
+  "testSteps": "1. Employee > Create NFA, choose a category. 2. Header Office Supplies, NFA amount 500, logistic 0 > + Add line. Expected: added.",
+  "negativeTests": "1. NFA -500 / logistic -100. Expected: \"NFA amount cannot be negative\" / \"Logistic amount cannot be negative\". 2. 0.001. Expected: \"NFA amount can have at most 2 decimal places\". 3. 999999999999. Expected: \"The NFA total cannot be more than ₹1,00,00,000\". 4. 0 and 0. Expected: \"Enter an amount greater than zero\". 5. Add Office Supplies again. Expected: \"This expense header is already added — change the amount on the existing line instead\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'negative amounts → \"cannot be less than 0\"', 'negative logistic with a positive NFA amount is refused', '₹0.001 → at most 2 decimals', '₹9,99,99,99,99,999 → above the limit', 'zero line → \"enter an amount greater than zero\"', 'same header twice is refused', 'v1: a negative amount is a 400, not a database 500'",
+  "v1Impact": "v2 only for the new rules. On v1 a negative amount used to reach the database check and return a 500; it now returns 400 \"Amounts cannot be negative\" (crash fix)."
+ },
+ {
+  "id": "E21",
+  "status": "Fixed",
+  "summary": "Dropdowns showed another tenant's junk masters, and HR's Masters page showed \"No entries\". Both are fixed by the masters scoping (C46) and the H111 data repair. The Create NFA dropdowns now come only from the organisation's own Masters page, which HR can view, edit, deactivate and delete. The Location dropdown labels non-city entries with their type, e.g. \"Client-Side (Special)\". Junk values (cvf, Dmeo, BJP…) that belong to a real organisation must still be deactivated by that organisation's HR on the Masters page; that is a one-time data clean-up, not code.",
+  "files": [
+   "backend/src/controllers/mastersController.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "web/app/ess/nfa/create/page.jsx",
+   "web/app/admin/masters/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > NFA & Finance > Masters. Expected: the projects, zones and locations used by your organisation's NFAs are listed. 2. Deactivate a junk entry (e.g. \"cvf\"). 3. As an Employee, open Create NFA. Expected: \"cvf\" is no longer in Business Operation, and no other organisation's values appear.",
+  "negativeTests": "1. As HR, try adding \"!!!\" back. Expected: refused (see C33).",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'org 1 employee sees its own project', 'org 2 employee sees only org 2 projects', 'HR now sees it on the Masters page'",
+  "v1Impact": "Applies to v1 too — the masters scoping is a cross-tenant leak fix; the data repair only re-attaches masters to the one organisation that uses them."
+ },
+ {
+  "id": "E22",
+  "status": "Fixed",
+  "summary": "A settlement date of 01-01-2020 was accepted. The v2 form and server now require a settlement date from today (India time) up to one year ahead, and the date picker blocks other dates.",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "web/app/ess/nfa/create/page.jsx"
+  ],
+  "testSteps": "1. Employee > Create NFA. Expected: Settlement date defaults to 7 days ahead and the picker does not offer past dates. 2. Submit with a date within the next year. Expected: accepted.",
+  "negativeTests": "1. Enter 2020-01-01 (typed). Expected: \"Settlement date cannot be in the past\". 2. A date over one year ahead. Expected: \"Settlement date must be within one year\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'past settlement date is refused'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "E23",
+  "status": "Fixed",
+  "summary": "An NFA could be raised with no approver at mandatory stages and sat stuck at Reporting Manager. There was no way to withdraw it, and the popup had no close button or Escape. Now (v2) an NFA cannot be raised while a required stage (Reporting Manager, Finance) has no approver, and the employee sees which one and is told to ask HR. Optional stages with no approver are skipped. The employee can withdraw an NFA that is Pending or On query (with confirmation): it becomes Withdrawn and leaves every approver's queue. The detail popup closes with X, Escape or the Close button.",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "backend/src/services/approvalEngine.js",
+   "backend/src/routes/v2/workflow/nfa.js",
+   "web/app/ess/nfa/page.jsx",
+   "web/app/ess/nfa/create/page.jsx"
+  ],
+  "testSteps": "1. Employee > NFA > My NFAs > click a Pending NFA. Expected: the popup has an X and a Close button, and Escape closes it. 2. Click Withdraw NFA and confirm. Expected: status Withdrawn; the chain shows Withdrawn; the approver no longer sees it under Approvals. 3. The \"Withdrawn\" filter lists it.",
+  "negativeTests": "1. Try to withdraw an Approved NFA. Expected: no Withdraw button (API: \"Only a pending NFA, or one on query, can be withdrawn\"). 2. Create an NFA when no Reporting Manager is set. Expected: \"No Reporting Manager approver is set up for you, so this NFA cannot be raised yet…\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'requester withdraws a pending NFA', 'it leaves the manager\\'s inbox', 'withdrawing twice → 409', 'someone else\\'s NFA → 404', 'v1 has no withdraw route', 'no reporting manager and no Approvers row → blocked'",
+  "v1Impact": "None (v2 only) — withdraw is a new v2 route; the staffing check is v2 only."
+ },
+ {
+  "id": "E24",
+  "status": "Fixed",
+  "summary": "The NFA detail showed raw values (ADVANCE SELF, NON BILLABLE) and did not list the expense lines. The employee and admin detail, and the approver's Approvals card (\"View expense lines, attachments and chain\"), now show readable labels and every expense line with header, sub-header, NFA, logistic and total (plus item, quantity and rate for a purchase request). They also show attachments, the full chain and dates in dd-mm-yyyy.",
+  "files": [
+   "web/app/ess/nfa/NfaParts.jsx",
+   "web/app/ess/nfa/page.jsx",
+   "web/app/admin/nfa/page.jsx",
+   "web/app/ess/approvals/page.jsx",
+   "backend/src/controllers/nfaController.js"
+  ],
+  "testSteps": "1. Employee > My NFAs > open an NFA with two lines. Expected: Payment type \"Advance (self)\", Billable type \"Non-billable\", an Expense lines table with both lines and a grand total, an Attachments list and the Approval chain.",
+  "negativeTests": "1. Open an NFA with no attachments. Expected: \"No attachments.\" rather than an empty area.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'two lines with amounts in the detail'",
+  "v1Impact": "None — display only; the API only gained additive fields (documents, itemDescription/quantity/unitRate)."
+ },
+ {
+  "id": "E25",
+  "status": "Fixed",
+  "summary": "Purchase Request opened the same form as Expense. Choosing \"Purchase request\" now switches the lines to Item, Quantity and Unit rate, with the amount computed as quantity × rate. It also adds a Vendor quotation reference field and requires a quotation attachment. The server enforces the same rules and stores item, quantity and rate on each line.",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "web/app/ess/nfa/create/page.jsx",
+   "web/app/ess/nfa/NfaParts.jsx"
+  ],
+  "testSteps": "1. Employee > Create NFA > NFA raised for = Purchase request. Expected: the lines section reads \"Items to purchase\" with Item, Quantity and Unit rate. 2. Add \"Chairs\", 4, 1250.50. Expected: the line shows 4 × ₹1,250.5 = ₹5,002. 3. Attach a file with type Quotation and submit. Expected: created; the detail shows the item columns.",
+  "negativeTests": "1. Submit without a quotation. Expected: \"Attach the vendor quotation for a purchase request\". 2. Quantity 1.5. Expected: \"Quantity must be a whole number of 1 or more\". 3. Item empty. Expected: \"Item is required\".",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'purchase request needs item, quantity, rate and a quotation', 'purchase request raised, amount = qty × rate'",
+  "v1Impact": "None (v2 only); new columns are nullable and ignored by v1."
+ },
+ {
+  "id": "E26",
+  "status": "Fixed",
+  "summary": "There was no way to attach bills, invoices or quotations to an NFA. Create NFA now has an Attachments section: pick a type (Bill, Invoice, Quotation, Reimbursement form, Other) and add PDF/image files, up to 5MB each and 10 in total. A reimbursement (self or vendor) needs at least one bill or invoice; a purchase request needs a quotation. Attachments are listed on the NFA for the employee, the approvers and HR, and open in a new tab. Query replies can carry attachments too (C32).",
+  "files": [
+   "backend/src/controllers/nfaController.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "backend/src/routes/v2/workflow/nfa.js",
+   "web/app/ess/nfa/create/page.jsx",
+   "web/app/ess/nfa/NfaParts.jsx",
+   "web/app/admin/nfa/page.jsx",
+   "web/app/ess/approvals/page.jsx"
+  ],
+  "testSteps": "1. Employee > Create NFA > Payment type \"Reimbursement for self\". 2. In Attachments choose \"Bill\", pick a PDF and submit. Expected: created; the detail lists \"Bill: <file>\", and clicking it opens the PDF.",
+  "negativeTests": "1. Submit a reimbursement without a bill. Expected: \"Attach the bill or invoice for a reimbursement\". 2. Pick a 6MB file. Expected: \"<file> is larger than 5MB\". 3. An admin of another organisation opening /nfa/<id>/documents gets 404.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'reimbursement without a bill is refused', 'reimbursement with a bill is raised', 'owner lists the attachment', 'owner downloads it', 'another organisation\\'s admin gets 404'",
+  "v1Impact": "None (v2 only) — new endpoints; v1 create ignores attachments."
+ },
+ {
+  "id": "E27",
+  "status": "Fixed",
+  "summary": "A status filter with no results said \"Create your first NFA to see it here\". It now says \"No NFAs with this status\" (\"You have no NFAs that are approved.\"). The first-NFA message only shows on \"All\" when there are none. A Withdrawn filter was added and the filter chips use readable labels.",
+  "files": [
+   "web/app/ess/nfa/page.jsx"
+  ],
+  "testSteps": "1. Employee > NFA > My NFAs > click Approved (with no approved NFAs). Expected: \"No NFAs with this status\".",
+  "negativeTests": "1. Click All for a new employee with no NFAs. Expected: \"No NFAs yet — Create your first NFA to see it here.\"",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'WITHDRAWN filter lists it' (empty-state copy is UI only)",
+  "v1Impact": "None (UI only)."
+ },
+ {
+  "id": "E28",
+  "status": "Fixed",
+  "summary": "Same root cause and fix as C46: dropdowns show only the employee's organisation's masters, NFA numbers are per organisation, the requester is never his own approver, and empty optional stages are skipped. A required stage with nobody now blocks submission with a clear message instead of leaving the NFA stuck at Reporting Manager.",
+  "files": [
+   "backend/src/controllers/mastersController.js",
+   "backend/src/controllers/nfaController.js",
+   "backend/src/services/approvalEngine.js",
+   "backend/src/db/migrations_v2/60_workflow_nfa.js",
+   "web/app/ess/nfa/create/page.jsx"
+  ],
+  "testSteps": "As C46, logged in as TH5001: 1. Create NFA. Expected: only Company Admin organisation's masters; Staffing and Bhubaneswar appear once. 2. Submit an NFA for Rs 550. Expected: the number is <ORGCODE>-NFA2026000n; the chain does not list TH5001 as approver.",
+  "negativeTests": "1. As TH5001, check every Create NFA dropdown for TRUE HR masters (BJP Call Center, True Kind Foundation, cvf, Dmeo). Expected: none. 2. Submit an NFA where a mandatory stage has no approver. Expected: blocked with a message naming the stage, not stuck at Reporting Manager. 3. Try to make yourself the approver. Expected: refused.",
+  "automated": "scripts/v2/test-workflow-nfa.js — 'org 1 employee does not see org 2 projects', 'org 2 gets its own series starting at 0001', '… and continues 0002', 'the self-approval stage is never resolved to the raiser', 'self-approval → refused with a clear message'",
+  "v1Impact": "As C46."
+ },
+ {
+  "id": "E29",
+  "status": "Fixed",
+  "summary": "A KPI could be submitted with no reporting manager and then nobody could approve it. On the web (v2) the Submit KPI form now warns 'You have no reporting manager assigned, so your KPI will go to HR for approval', the KPI is flagged as routed to HR, shows 'Pending with HR', and HR approves it from PMS / KPI > KPI approvals.",
+  "files": [
+   "backend/src/controllers/pmsController.js",
+   "web/app/ess/pms/page.jsx",
+   "web/app/admin/pms/page.jsx"
+  ],
+  "testSteps": "1. Log in as an employee with no reporting manager (TKF9010) > Performance > Submit KPI. Expected: amber note about HR approval. 2. Add KRAs adding to 100%, Create KPI. Expected: alert 'You have no reporting manager assigned, so this KPI has been sent to HR for approval.'; list shows 'Pending with HR'. 3. HR > PMS / KPI > KPI approvals > Approve. Expected: employee's KPI becomes 'Approved' and Submit PMS is available.",
+  "negativeTests": "1. A colleague (not manager, not HR) calling approve gets 'Not a manager of this employee' (403). 2. HR of another organisation gets 404.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'allowed-months tells the portal there is no manager', 'KPI without an RM is routed to HR with a notice', 'a colleague cannot approve it (403)', 'HR approves → LOCKED'",
+  "v1Impact": "None for v1 create (routing flag set only on v2); HR could already approve via the v1 endpoint."
+ },
+ {
+  "id": "E30",
+  "status": "Fixed",
+  "summary": "Any month (including future ones) could be chosen and a submitted KPI could not be changed. On the web the Month list now only offers the current month, the previous month until the 10th, and months HR has opened; the server refuses others. A KPI still awaiting approval (or sent back) has Edit and Withdraw buttons (Withdraw asks for confirmation); withdrawing lets the employee raise a fresh KPI for that month. The popup closes with Esc or the X.",
+  "files": [
+   "backend/src/controllers/pmsController.js",
+   "backend/src/routes/v2/workflow/pms.js",
+   "web/app/ess/pms/page.jsx"
+  ],
+  "testSteps": "1. Log in as Employee > Performance > Submit KPI. Expected: Month shows only e.g. 'November 2026 — Current month' (and October until the 10th). 2. Create the KPI, then click its row. Expected: Edit and Withdraw buttons. 3. Edit a KRA and 'Save & resubmit'. Expected: saved, status Pending. 4. Withdraw, confirm. Expected: row disappears; Submit KPI works again for that month. 5. Press Esc on any KPI popup. Expected: it closes.",
+  "negativeTests": "1. Post a KPI for December 2026 (API). Expected: 'KPIs can only be submitted for November 2026 or October 2026'. 2. Weightages 60 + 30. Expected: 'KRA weightages must add up to 100% (now 90%)'. 3. Blank KRA description. Expected: 'KRA 1 description is required'. 4. Withdraw after the manager approved. Expected: 'Only a KPI awaiting approval can be withdrawn'. 5. Another employee withdrawing my KPI gets 404.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'v2: KPI for a future month is refused with a month field message', 'v1 still accepts any month (unchanged contract)', 'v2: every KRA field error at once', 'pending KPI is editable by its owner', 'owner withdraws a pending KPI', 'an approved KPI cannot be withdrawn (409)', 'another employee cannot withdraw my KPI (404)'",
+  "v1Impact": "None (v2 only). The withdraw endpoint (DELETE /kpi/:id) and allowed-months exist only on /api/v2."
+ },
+ {
+  "id": "E31",
+  "status": "Fixed",
+  "summary": "Bands showed as '120-∞%' and KRAs had no target/actual. Bands now read '90% to below 105%', '120% and above', 'Below 60%'. Each KRA has a Target when the KPI is created, and the PMS form shows Target (pre-filled) and Actual fields, from which the rating is worked out.",
+  "files": [
+   "backend/src/services/kpiBands.js",
+   "backend/src/controllers/pmsController.js",
+   "backend/src/db/migrations_v2/60_workflow_pms.sql",
+   "web/app/ess/pms/page.jsx",
+   "web/app/admin/pms/page.jsx"
+  ],
+  "testSteps": "1. Employee > Performance > Submit KPI: each KRA row has Description, Target and Wt %. 2. Open an approved KPI: KRA shows 'Target 100' and 'Bands: Below 60% → 1 · … · 120% and above → 5'. 3. Submit PMS: Target is pre-filled; enter Actual 104.5. Expected: '104.5% of target → rating 3'.",
+  "negativeTests": "1. Target longer than 100 characters. Expected: 'KRA 1 target must be at most 100 characters'.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'band labels read \"120% and above\" not \"120-infinity\"', 'v2 KPI create stores the target per KRA', 'detail carries readable bandLabels'",
+  "v1Impact": "Applies to v1 too only additively: KPI detail gains target/bandLabels fields; v1 clients ignore them."
+ },
+ {
+  "id": "E32",
+  "status": "Fixed",
+  "summary": "Assign Task showed to employees with no team, the empty form did nothing, and the time label read 'AROUND TIME'. The Assign Task and Team Tasks tabs now appear only for someone with active team members. The form shows every problem at once ('Assign to is required', 'Title is required', 'Due date is required', 'Due date cannot be in the past'), only lists active team members, and the label reads 'Due time'. Statuses and dates are shown readably.",
+  "files": [
+   "backend/src/controllers/taskController.js",
+   "backend/src/routes/v2/workflow/pms.js",
+   "web/app/ess/tasks/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee with no reports > Tasks. Expected: only 'My Tasks'. 2. Log in as a manager > Tasks > Assign Task, click Assign Task with everything empty. Expected: messages under Assign to, Title and Due date. 3. Fill member, title 'Weekly report', due date today, Due time 17:30 > Assign Task. Expected: 'Task assigned.'",
+  "negativeTests": "1. Due date yesterday. Expected: 'Due date cannot be in the past'. 2. Title 'ab'. Expected: 'Title must be at least 3 characters'. 3. API: assign to someone outside the team. Expected: 'You can only assign tasks to your active team members'. 4. Bad time '25:99'. Expected: 'Due time must be a valid time like 17:30'.",
+  "automated": "scripts/v2/test-workflow-pms.js — 'an employee with no team cannot assign (Assign Task hidden)', 'a manager sees active team members', 'v2: empty Assign Task returns every field message', 'v1 keeps its old message', 'past due date and bad due time rejected', 'cannot assign to someone outside the team'",
+  "v1Impact": "None (v2 only); v1 POST /tasks keeps 'assignedTo and title are required' (title is now trimmed before saving)."
+ },
+ {
+  "id": "E46",
+  "status": "Fixed",
+  "summary": "The employee vendor form now validates every statutory number before submitting, and the server re-checks them. PAN must look like ABCDE1234F. GSTIN must be 15 characters and contain that PAN. ESIC must be 17 digits. PF must look like MHBAN00123450000123456. MSME must be an Udyam number such as UDYAM-OD-01-0001234. NSIC/SSI must be 5-30 letters or digits. Phone and email are checked too. All errors are shown at once, under each field. Each row in My registrations now has View, plus Edit and Withdraw while it is pending.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "backend/src/routes/v2/workflow/vendor.js",
+   "web/app/ess/vendors/page.jsx",
+   "web/app/admin/vendors/vendorForms.jsx"
+  ],
+  "testSteps": "1. Log in as Employee. Open Vendors > Vendor Registration. 2. Enter Company 'QA Test Vendor', Type 'Proprietorship', PAN '123', GST 'abc', ESIC 'e1', PF 'p1', MSME 'm1', NSIC 'n1', and click Register vendor. Expected: no submission, and an error under each field. 3. Correct them to PAN 'ABCPQ1234K' and GSTIN '21ABCPQ1234K1Z5', clear the others, and submit. Expected: 'Vendor submitted for HR approval.' and a Pending row. 4. On that row click View. Expected: a details popup that closes with X or Esc. 5. Click Edit, change the contact person and save. Expected: 'Changes saved.' 6. Click Withdraw and confirm. Expected: status Withdrawn.",
+  "negativeTests": "1. PAN '123'. Expected: 'PAN is not valid (like ABCDE1234F)'. 2. GST 'abc'. Expected: 'GSTIN is not valid (15 characters, like 21ABCDE1234F1Z5)'. 3. ESIC 'e1'. Expected: 'ESIC number is not valid (17 digits)'. 4. MSME 'm1'. Expected: 'MSME (Udyam) number is not valid (like UDYAM-OD-01-0001234)'. 5. PAN 'ABCPQ1234K' with GSTIN '21ZZZZZ9999Z1Z5'. Expected: 'GSTIN does not match the PAN (characters 3-12 of a GSTIN are the PAN)'. 6. Phone '12345'. Expected: 'Contact phone must be a valid 10-digit mobile number starting with 6-9'. 7. Withdraw an approved vendor (through the API). Expected: 'Only a pending registration can be withdrawn'.",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'invalid PAN/GST/ESIC/PF/MSME/NSIC/phone rejected with field messages', 'PAN is required in v2', 'GSTIN whose PAN part differs is rejected', 'employee edits own pending vendor', 'edit re-validates', 'employee withdraws pending vendor', 'employee cannot edit an approved vendor'",
+  "v1Impact": "None (v2 only). v1 POST /vendors still accepts free-form identifiers, which the test 'v1 still accepts free-form identifiers (Android app)' checks."
+ },
+ {
+  "id": "E47",
+  "status": "Fixed",
+  "summary": "Upload Agreement now requires a Project and a Client (Location stays optional). An agreement whose end date has already passed is refused. An end date before the start date now gives a friendly message instead of the raw 'endDate before startDate'. The date pickers limit the end date to today or later. Only this organisation's projects, clients and locations are accepted.",
+  "files": [
+   "backend/src/controllers/vendorController.js",
+   "web/app/ess/vendors/page.jsx",
+   "web/app/admin/vendors/vendorForms.jsx"
+  ],
+  "testSteps": "1. Log in as Employee. Open Vendors > Upload Agreement. 2. Pick Project, Client, Type Rent, Start today and End one year from today, then submit. Expected: 'Agreement submitted for approval.' and a Pending row with dates in dd-mm-yyyy. 3. Click Withdraw on the row and confirm. Expected: Withdrawn.",
+  "negativeTests": "1. Submit with no Project and no Client. Expected: 'Project is required' and 'Client is required'. 2. Start 01-01-2000, End 02-01-2000. Expected: 'End date has already passed — an expired agreement cannot be uploaded'. 3. Start 31-12-2026, End 01-01-2026 (typed). Expected: 'End date must be on or after the start date' (or the expired message if that date has passed).",
+  "automated": "scripts/v2/test-workflow-vendor.js: 'E47: project/client required and expired period blocked', 'E47: reversed dates give a friendly message', 'another organisation's project refused', 'foreign project refused on v1 too (tenancy)', 'v1 still accepts an agreement without project/client', 'employee withdraws a pending agreement'",
+  "v1Impact": "v1 keeps optional project/client and its own date message. Applies to v1 too: a project, location or client id belonging to another organisation is refused. This is a tenancy fix; valid ids are unaffected."
+ },
+ {
+  "id": "E48",
+  "status": "Fixed",
+  "summary": "Submitting a resignation blocked the account immediately. On the web portal (v2) the account now stays active through the notice period: the employee can keep working, download payslips and withdraw the request. Access is removed automatically by a daily exit job after the approved last working day. The confirmation text explains this.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/services/exitWorker.js",
+   "backend/src/server.js",
+   "web/app/ess/resignation/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee whose approvers are all assigned. 2. Resignation > My Resignation, enter a reason, keep the default dates, Submit Resignation > Submit resignation. Expected: green message 'Your resignation has been submitted. You keep full access until your last working day (dd-mm-yyyy).'; you stay signed in; the request shows Pending with a Withdraw button. 3. Click Withdraw > Withdraw. Expected: status Withdrawn; the request disappears from the reporting manager's approvals.",
+  "negativeTests": "1. After HR approves, click Withdraw (API). Expected 409: 'Your resignation has already been approved, so it can no longer be withdrawn. Please contact HR.'",
+  "automated": "scripts/v2/test-workflow-exit.js — 'apply 201, accountBlocked false', 'account still ACTIVE during notice', 'approval instance cancelled', 'gone from the reporting manager's inbox'",
+  "v1Impact": "v1 (Android) keeps blocking on apply (scripts/test-resignation-block.js still passes). Withdrawal now also cancels the approval chain on both versions — a withdrawn request must not stay actionable."
+ },
+ {
+  "id": "E49",
+  "status": "Fixed",
+  "summary": "Employee Details on the resignation page now comes from the employee master: Employee code, name, Vertical (company), Department, Designation, Office location (branch, or location text), Date of joining, Reporting manager and Notice period.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "web/app/ess/resignation/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee. 2. Resignation > My Resignation. Expected: Employee Details lists Vertical, Department, Designation, Office Location, Date of Joining (dd-mm-yyyy), Reporting Manager (code - name) and Notice Period, matching the employee's profile.",
+  "negativeTests": "1. An employee with no reporting manager. Expected: Reporting Manager shows '—' (and submission is blocked, see E50).",
+  "automated": "scripts/v2/test-workflow-exit.js — 'date of joining shown', 'reporting manager shown', 'notice period shown'",
+  "v1Impact": "Applies to v1 too — fields only added to the context response."
+ },
+ {
+  "id": "E50",
+  "status": "Fixed",
+  "summary": "The Approvals card showed most stages as Not assigned and still let the employee resign. Each stage is now resolved from the organisation's own approvers; optional stages with nobody assigned are shown as 'will be skipped', required stages (Reporting Manager, Human Resource) with nobody assigned are shown as 'Required' and the form is disabled with a message asking HR to assign them; the server refuses the submission too. HR can staff any stage (including Reporting Manager and Human Resource) from the Approvers page.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/services/approvalEngine.js",
+   "web/app/ess/resignation/page.jsx"
+  ],
+  "testSteps": "1. As HR, make sure no 'Human Resource' approver is set on NFA & Finance > Approvers. 2. Log in as an Employee > Resignation. Expected: amber note 'You cannot submit a resignation yet: no Human Resource approver is set up for you…', Submit disabled. 3. As HR, Approvers > Stage 'Human Resource' > pick an approver > Save. 4. Reload the employee page. Expected: Human Resource shows the approver and Submit is enabled.",
+  "negativeTests": "1. (API) POST /api/v2/resignation while a required stage is unassigned. Expected 409: 'Your resignation cannot be submitted yet: no Human Resource approver is set up for you. Please ask HR to assign one.'",
+  "automated": "scripts/v2/test-workflow-exit.js — 'HR stage reported missing; canSubmit false', 'apply refused with a readable message', 'now every required level is staffed'",
+  "v1Impact": "None (v2 only) — v1 apply is unchanged. Approver emails are the approvers' official emails; demo-domain addresses are data to clean (see notes)."
+ },
+ {
+  "id": "E51",
+  "status": "Fixed",
+  "summary": "Resignation date now defaults to today and can be back-dated by at most 3 days (never before the date of joining) and at most 30 days ahead; Last working date defaults to resignation date + notice period, cannot be before the resignation date (checked before the confirm step and on the server); Reason is mandatory (5+ characters); a resignation letter (PDF/image, 5MB) can be attached and opened later by the employee, approvers and HR.",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/routes/v2/workflow/exit.js",
+   "backend/src/db/migrations_v2/60_workflow_exit.sql",
+   "web/app/ess/resignation/page.jsx"
+  ],
+  "testSteps": "1. Log in as an Employee > Resignation. Expected: Resignation date = today; Last working date = today + notice period. 2. Enter a reason, attach a PDF letter, submit. Expected: request listed with a 'Letter' button that opens the PDF.",
+  "negativeTests": "1. Resignation date 29-10-2026 (more than 3 days back). Expected: 'Resignation date cannot be before <date>'; server: 'Resignation date cannot be more than 3 days in the past'. 2. LWD 20-10-2026 with resignation date 29-10-2026. Expected: 'Last working date cannot be before the resignation date' before the confirm box appears. 3. Empty reason. Expected: 'Reason is required'. 4. Attach a .html file. Expected: 'The resignation letter must be a PDF, JPG… file'.",
+  "automated": "scripts/v2/test-workflow-exit.js — '400 with every field error', 'back-dating message', 'reason mandatory message', 'LWD before resignation date refused', 'letter type checked', 'letter downloadable by the employee', 'another org cannot fetch the letter (404)'",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "E52",
+  "status": "Fixed",
+  "summary": "Same root cause as C50: the resignation chain preview read every organisation's approver matrix. It now uses only the employee's own organisation (both API versions).",
+  "files": [
+   "backend/src/controllers/resignationController.js",
+   "backend/src/services/approvalEngine.js"
+  ],
+  "testSteps": "1. Log in as TH5001 (Company Admin organisation). 2. Resignation > My Resignation > Approvals. Expected: no TRUE HR employees (TKF5002, TKF1009); only that organisation's approvers or 'Not assigned'.",
+  "negativeTests": "1. As TH5001, open Resignation > Approvals. Expected: no TKF5002 / TKF1009 or any other organisation's employee. 2. With a mandatory stage unassigned, try to submit. Expected: blocked with 'No approver is set for <stage>'.",
+  "automated": "scripts/v2/test-workflow-exit.js — 'v2: other org's employee sees no TRUE HR approvers', 'v1: …'",
+  "v1Impact": "Applies to v1 too — cross-tenant leak fix."
+ },
+ {
+  "id": "_meta",
+  "leadRequests": [
+   "Production data clean-up (not code): junk NFA masters that genuinely belong to a tenant (cvf, Dmeo, BJP… in the Company Admin org) should be deactivated by that org's HR on Masters; the migration only re-attaches masters used by exactly one other organisation.",
+   "The admin Approve buttons are guarded by requireModule('VENDORS','manage') exactly as in v1; no guard change needed.",
+   "Mobile/v1 note: GET /api/v2/pms/grades now returns { custom, grades } (v1 /api/pms/grades keeps the array).",
+   "H109: in fnfController (F&F), pre-fill the Advances / Loans recovery from outstandingAdvance(employeeId) exported by backend/src/services/exitWorker.js (released NFA advances minus closed settlements).",
+   "Deploy note: on its first run the exit job processes already-approved exits whose LWD has passed (e.g. TKF9004, TKF5001): they become Inactive and lose login — intended per D2/H85/H86, worth announcing. Demo-domain approver emails and historic bad resignations (TKF9008 before DOJ) are data for HR to correct."
+  ],
+  "migrations": [
+   "backend/src/db/migrations_v2/60_workflow_nfa.js — approval acted-by columns; nfa_org_seq + nfa_code_format (per-org numbering, seeds the legacy owner from existing NFAs); nfa_documents; nfa_lines item/qty/rate; nfas.vendor_quote_ref, withdrawn_at; H111 master re-attachment (idempotent)",
+   "backend/src/db/migrations_v2/60_workflow_vendor.sql: vendor_registrations and agreements get organisation_id (backfilled from the registering/uploading employee), bank_* columns, review_note, reviewed_by_user_id, updated_at and agreements.uploaded_by_user_id. All are ADD COLUMN IF NOT EXISTS, and the backfills only touch NULLs.",
+   "backend/src/db/migrations_v2/60_workflow_pms.sql (pms_org_grades, pms_cycles tables; kpi_kras.target; kpis.routed_to_hr)",
+   "backend/src/db/migrations_v2/60_workflow_exit.sql — approver_matrix.needs_reassignment/reassign_reason; resignations.notice_shortfall_days, letter/letter_mime/letter_name, exited_at; terminations.exited_at"
+  ],
+  "newEndpoints": [
+   "POST /api/v2/nfa/:id/withdraw",
+   "GET /api/v2/nfa/:id/documents",
+   "GET /api/v2/nfa/:id/documents/:docId",
+   "GET /api/v2/admin/approver-matrix/candidates (requireModule APPROVERS)",
+   "GET /api/v2/meta/vendor-options",
+   "PUT /api/v2/vendors/:id (employee edits own pending)",
+   "POST /api/v2/vendors/:id/withdraw",
+   "POST /api/v2/agreements/:id/withdraw",
+   "POST /api/v2/admin/vendors (VENDORS manage)",
+   "PUT /api/v2/admin/vendors/:id (VENDORS manage)",
+   "POST /api/v2/admin/vendors/:id/deactivate | /reactivate (VENDORS manage)",
+   "GET /api/v2/admin/vendors/:id/trail (VENDORS view)",
+   "POST /api/v2/admin/agreements (VENDORS manage)",
+   "Shared v1/v2 additions: GET /vendors?q=, GET /agreements?expiring=30&q=, review endpoints accept {reason}",
+   "GET /api/v2/kpi/allowed-months (employee)",
+   "DELETE /api/v2/kpi/:id (employee withdraws a pending KPI)",
+   "PUT /api/v2/admin/pms/grades, DELETE /api/v2/admin/pms/grades (PMS manage)",
+   "GET /api/v2/admin/pms/overview?year=&month=&status=&q= (PMS view)",
+   "GET /api/v2/admin/pms/cycles (PMS view), POST /api/v2/admin/pms/cycles (PMS manage)",
+   "GET /api/v2/tasks/team-members",
+   "Changed v2 behaviour on shared paths: GET /pms/grades (object shape), POST /kpi, PUT /kpi/:id, GET /kpi/team-pending, GET /pms/pending, POST /tasks",
+   "GET /api/v2/admin/terminations/eligible (TERMINATION view)",
+   "GET /api/v2/resignation/:id/letter",
+   "Changed v2 behaviour on shared paths: POST /resignation (no account block, validation, chain must be staffed), POST /admin/resignations/:id/review (reject reason required), POST /admin/employees/:id/terminate (active employees only)"
+  ],
+  "testRun": "=== test-workflow-nfa.js ===\n72 passed, 0 failed\n=== test-workflow-vendor.js ===\n55 passed, 0 failed\n=== test-workflow-pms.js ===\n63 passed, 0 failed\n=== test-workflow-exit.js ===\n62 passed, 0 failed\n252 passed, 0 failed\nExisting suites on truehr_workflow (fresh DB incl. 99_lead.sql): test-nfa 22/0, test-approval-engine 20/0, test-settlement 17/0, test-resignation-block 11/0, test-resignation-chain 8/0, test-termination 25/0 (re-run after H41), test-vendors 10/0, test-pms 21/0; test-masters: known baseline crash. check-jsx: 17 ok, 0 failed.",
+  "notes": "Workflow split into sub-areas: routes/v2/workflow.js mounts routes/v2/workflow/{nfa,vendor,pms,exit}.js; scripts/v2/test-workflow.js runs test-workflow-{nfa,vendor,pms,exit}.js each in its own process and sums them (re-runnable on the same DB). New worker services/exitWorker.js started in server.js (hourly + at boot; acts once per exit, only after the LWD in IST). Engine (approvalEngine.js) changes used by resignation/PMS too: exitedSql() export, matrix fallback for manager_chain/named_user stages, needs_reassignment ignored, previewChain/createInstance accept { noSelf }, preview items carry roleLabel/optional/missing, STAGE_LABELS/stageLabel exported, act() records acted_by_user_id/acted_by_name/is_override (columns from 60_workflow_nfa.js) and lets staff REJECT an instance in QUERY. 'Exited' deliberately does not use activeEmployeeSql in the engine (old fixtures have managers without ACTIVE/code); the picker does. NFA numbering: the first organisation to number NFAs (or, on an upgraded DB, the one with most existing NFAs) keeps NFA<yyyy><nnnn>; others get <ORGCODE>-NFA<yyyy><nnnn>; collisions with the old shared counter are skipped.  Tenancy (both versions): vendors and agreements are now scoped on COALESCE(row.organisation_id, employee.organisation_id). Previously they were scoped only through an inner join to the employee, so a vendor added by an admin login with no employee record belonged to no tenant. Agreement project/location/client ids that belong to another organisation are refused on both versions. Decision on 'statutory details before approval': PAN is mandatory (and must be valid); GSTIN is optional because unregistered small vendors are legitimate, but if given it must be valid and match the PAN; all other given identifiers must be valid. The shared form components live in web/app/admin/vendors/vendorForms.jsx and are imported by the ESS page. Grade lookup is floor-based on both versions (wrong-data fix). Per-org ladder falls back to the global pms_grades. Employees with no organisation (legacy rows, as in scripts/test-pms.js) use the global ladder. KPI create/update now accept an optional per-KRA target on both versions (additive). approvalEngine.js untouched. Follow-up: (1) deep links from the HR dashboard are read on load via useSearchParams (Suspense-wrapped): /admin/nfa?status=PENDING|QUERY (filter), /admin/vendors?status=PENDING and ?tab=agreements&status=PENDING, /admin/resignations?status=PENDING, /admin/pms?status=RM_PENDING (KPI approvals tab) and ?status=APPROVAL_PENDING (Rating queue tab); unknown values map to the nearest filter. (2) E2 (auth point): ESS team UI is hidden unless useHasTeam() === true (null = hidden): ess/pms Team Approvals, ess/tasks Assign Task/Team Tasks, ess/resignation Team tab. (3) Admin NFA queue settlement Approve/Reject now confirm via useConfirm. (4) Local status maps replaced by label() where lib/labels.js now covers them (CLOSE, PMS/KPI states). (5) clients_vendors per-org unique index applied by the lead (99_lead.sql); suite re-run green on a fresh DB. H41 (people agent's point, done here at the lead's request): terminationController.terminate now queues employeeStatusEmail({ action: 'TERMINATED' }) branded with emailBrand() for the employee's organisation, to the personal email (else the official one), on both versions; a mail failure never fails the termination. Covered in test-workflow-exit: 'termination email queued to the employee', 'email carries the organisation's branding', 'v1 terminate also notifies, with the other organisation's own name'."
+ }
+]

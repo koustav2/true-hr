@@ -1,0 +1,779 @@
+[
+ {
+  "id": "C20",
+  "status": "Fixed",
+  "summary": "Set structure now follows the company's Payslip components: monthly CTC plus per-employee overrides of those components (the fixed Basic/HRA/LTA/PF template is gone in v2). Monthly CTC is pre-filled from the annual CTC on the employee record. CTC must be 1–1,00,00,000; overrides cannot be negative and percentages cannot exceed 100; a set whose earnings exceed CTC or whose deductions exceed gross is refused. Only active employees (not candidates) can get a structure, and the run sheet lists only employees.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "backend/src/services/payComponents.js",
+   "web/app/admin/payroll/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR. 2. Payroll > pick an employee > Set structure. Expected: Monthly CTC pre-filled (annual CTC ÷ 12), a table of the company's components with \"inherit\" boxes, grade shown read-only from the designation, live breakup on the right. 3. Enter CTC 50,000 > Save. Expected: saved, row shows ₹50,000.00.",
+  "negativeTests": "1. CTC -1000 > Save. Expected: \"Monthly CTC cannot be less than 1\". 2. Basic override 150. Expected: \"Basic Salary cannot be more than 100\". 3. PF override -5. Expected: \"Provident Fund cannot be less than 0\". 4. A candidate (Offer sent) is not in the list; via API: 409 \"A salary structure can only be set for an active employee…\".",
+  "automated": "scripts/v2/test-payroll.js — section \"Salary structure follows payslip components\"",
+  "v1Impact": "v1 PUT/GET /api/admin/salary-structure unchanged (asserted); new behaviour is on the v2 route only."
+ },
+ {
+  "id": "C21",
+  "status": "Fixed",
+  "summary": "Generate draft now validates every input: days paid 0–days in the month, arrears/bonus/TDS non-negative and at most ₹1 crore, and a draft whose net pay would be negative is refused. Publish, Publish all, Delete and Regenerate ask for confirmation. Published payslips are locked: \"Unpublish\" is replaced by \"Revert to draft\", which requires a reason and records who/when/why (payslips.revert_reason). The Year list is dynamic (two years back to next year).",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "web/app/admin/payroll/page.jsx",
+   "backend/src/db/migrations_v2/40_payroll.sql"
+  ],
+  "testSteps": "1. HR > Payroll > a closed month > employee > Generate, leave fields blank > Generate draft. Expected: draft created. 2. Publish > confirm dialog > Publish. Expected: status Published, row shows \"Revert to draft\" (no Unpublish). 3. Revert to draft > reason \"Wrong arrears\" > confirm. Expected: back to Draft. 4. Delete a draft > confirm dialog appears first.",
+  "negativeTests": "1. Days paid 45 (30-day month). Expected: \"Days paid cannot be more than 30\". 2. Arrears -1000. Expected: \"Arrears cannot be less than 0\". 3. TDS 99999999. Expected: \"TDS cannot be more than 1,00,00,000\". 4. TDS 90,00,000 on ₹50,000 CTC. Expected: \"Net pay would be ₹-… — deductions are more than the earnings…\". 5. Revert to draft with an empty reason. Expected: \"Give a reason…\".",
+  "automated": "scripts/v2/test-payroll.js — \"Generate validation, publish lock and month-end\"",
+  "v1Impact": "v1 generate/unpublish unchanged (asserted: 45 days accepted, unpublish without reason works)."
+ },
+ {
+  "id": "C22",
+  "status": "Fixed",
+  "summary": "Increments now have maker-checker: whoever recorded a revision cannot approve it (\"You recorded this revision, so someone else must approve it.\"). A revision can only be applied on or after its effective date, so a December revision no longer changes November payroll. Errors show inside the New revision form next to the field and the form stays open with the input kept. Apply/Cancel are dialogs (and row-level errors show under the row).",
+  "files": [
+   "backend/src/controllers/incrementController.js",
+   "backend/src/routes/v2/payroll.js",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin > Increments > New revision > TH5001, Effective 01-12-2026, New annual CTC 3,60,000 > Record. 2. Approve (same user). Expected: error under the row \"You recorded this revision, so someone else must approve it.\" 3. Log in as HR > Approve > confirm. Expected: Approved. 4. Apply. Expected: \"This revision takes effect on 01-12-2026. Apply it on or after that date…\"; payroll CTC unchanged.",
+  "negativeTests": "1. Same-user approve → 403 message above. 2. Apply before effective date → 409 message above. 3. Invalid input keeps the form open with field errors.",
+  "automated": "scripts/v2/test-payroll.js — \"Increments: validation, maker-checker, effective date\"",
+  "v1Impact": "v1 approve/apply unchanged (asserted: recorder can approve, future revision applies on v1)."
+ },
+ {
+  "id": "C23",
+  "status": "Fixed",
+  "summary": "Saving payslip components is refused (v2) when deductions would exceed gross pay for any active employee on that company (at their own CTC and overrides), or for the preview CTC when nobody has a structure yet. The Preview shows a red \"net pay is negative\" warning and the Save button refuses with the same message.",
+  "files": [
+   "backend/src/controllers/payComponentController.js",
+   "web/app/admin/salary-components/page.jsx"
+  ],
+  "testSteps": "1. HR > Payslip components > add deduction PFX \"Provident Fund\", Fixed rupees, 60000. Expected: Preview shows net pay negative in red. 2. Save components. Expected: error \"Net pay would be … deductions are more than gross pay\" (client) / \"Deductions would be more than gross pay for N cases — … Lower the deduction before saving.\" (server). Nothing saved.",
+  "negativeTests": "1. As above with a ₹50,000 CTC employee. Expected: refused, listing the employee and the negative net.",
+  "automated": "scripts/v2/test-payroll.js — \"Deductions above gross are blocked\"",
+  "v1Impact": "v1 PUT salary-components unchanged (asserted)."
+ },
+ {
+  "id": "C24",
+  "status": "Fixed",
+  "summary": "One source for UAN/PF/ESIC: the Statutory page reads employee_statutory (what the employee's Bank & statutory card writes) first and writes both tables, and a migration backfilled the old Statutory-page values; the PF/ESIC registers and HRMIS read the same. v2 validates UAN (12 digits), PF (e.g. MHBAN00123450000123456) and ESIC (17 digits). Nominees: name must be letters, relation from a list, share 0.01–100 and the scheme's shares cannot exceed 100% (the page shows each scheme's total and flags anything not 100%). Removing a nominee asks for confirmation.",
+  "files": [
+   "backend/src/controllers/statutoryController.js",
+   "backend/src/db/migrations_v2/40_payroll.sql",
+   "web/app/admin/statutory/page.jsx"
+  ],
+  "testSteps": "1. HR > Employees > TH5001 > Bank & statutory: UAN 100200300400 > save. 2. Statutory > TH5001. Expected: UAN 100200300400 shown. 3. Change UAN here to 999888777666 > Save. Expected: the employee card shows the same. 4. Add nominee PF, Sita Devi, Mother, 60%; then Ram Lal, Father, 40%. Expected: PF badge \"100%\". 5. Remove > confirm dialog.",
+  "negativeTests": "1. UAN abc, PF p, ESI e > Save. Expected: \"UAN is not valid (12 digits)\", \"PF number is not valid (like MHBAN00123450000123456)\", \"ESIC number is not valid (17 digits)\". 2. Nominee name 123, relation @@, share 150. Expected: \"Nominee name should contain letters only\", relation required/list, \"Share % cannot be more than 100\". 3. Shares 60 + 50. Expected: \"PF nominees would total 110% — only 40% is left\".",
+  "automated": "scripts/v2/test-payroll.js — \"Statutory: one source, formats, nominees\"",
+  "v1Impact": "Reading/writing both tables applies to v1 too (a data-correctness fix: both screens now show the same identifiers). Format/nominee validation is v2 only (v1 nominee add asserted unchanged)."
+ },
+ {
+  "id": "C25",
+  "status": "Fixed",
+  "summary": "Status tabs and badges use readable labels (Submitted, Verified, Sent back, Draft). Verify & lock and Send back ask for confirmation; Send back needs remarks. Verify saves an approved amount for every item (blank = declared, capped at the section limit) and the list shows Declared and Approved totals. Employees can upload a proof (PDF/PNG/JPEG, 5 MB) per investment and HR can open it from the review dialog.",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "web/app/admin/tax-declarations/page.jsx",
+   "web/app/ess/tax/page.jsx",
+   "backend/src/db/migrations_v2/40_payroll.sql"
+  ],
+  "testSteps": "1. Employee > Tax > add 80C 50,000 > Save draft > Attach proof (PDF) > Submit to HR > confirm. 2. HR > Investment decl. > Submitted tab > Review. Expected: proof file link, approved amount box pre-filled 50,000. 3. Verify & lock > confirm. Expected: moves to Verified; Approved column shows ₹50,000.",
+  "negativeTests": "1. Approved 90,000 against declared 50,000. Expected: \"80C: approved amount must be between 0 and the declared ₹50,000\". 2. Send back with empty remarks. Expected: \"Tell the employee what to change\". 3. Verifying a verified declaration via API → 409.",
+  "automated": "scripts/v2/test-payroll.js — \"Investment declarations\"",
+  "v1Impact": "Approved-amount and status checks are v2 only (v1 verify unchanged)."
+ },
+ {
+  "id": "C27",
+  "status": "Fixed",
+  "summary": "F&F can only be created for an employee with an approved resignation or termination (others get \"A Full & Final settlement can only be made for an employee whose resignation or termination has been approved.\"). The employee list shows only those, with Employee ID and LWD. LWD, leave balance (earned leave allocated − used), notice shortfall and open NFA advances are pre-filled, and assets still assigned are listed for recovery. LWD must be ≥ joining date; all amounts/days must be ≥ 0. Drafts can be edited and deleted (with confirmation). The engine no longer pays a day when LWD is before DOJ, and the leave encashment bug (SUM of a non-existent balance column → always 0) is fixed.",
+  "files": [
+   "backend/src/controllers/fnfController.js",
+   "backend/src/services/fnf.js",
+   "web/app/admin/fnf/page.jsx",
+   "backend/src/routes/v2/payroll.js"
+  ],
+  "testSteps": "1. HR > Full & Final > New settlement. Expected: only employees with an approved exit are listed. 2. Pick one. Expected: LWD, leave balance, notice shortfall, advances pre-filled; any laptop listed for recovery. 3. Preview > Save draft. 4. In the list, Edit changes the same draft; Delete asks to confirm.",
+  "negativeTests": "1. TH5001 (active, no resignation) via API. Expected: 409 message above. 2. LWD 2018-01-01. Expected: \"Last working date cannot be before the joining date\". 3. Leave -5, shortfall -10, bonus -100. Expected: \"… cannot be less than 0\" on each.",
+  "automated": "scripts/v2/test-payroll.js — \"Full & Final\"",
+  "v1Impact": "Leave-encashment and approved-resignation fixes apply to v1 (wrong data written); eligibility and validation are v2 only (v1 preview for an active employee asserted unchanged)."
+ },
+ {
+  "id": "C28",
+  "status": "Fixed",
+  "summary": "Letters have rules per type: Relieving/Experience only after an approved exit (LWD taken from that record and locked), Promotion/Increment only off an applied revision (pre-filled from it — the employee record is changed through Increments, not by a letter), Confirmation and others only for active employees. Every field is typed (date pickers, CTC number, designation from the master, choices) and validated server-side; any missing field, including the signatory, stops the issue with field errors. Issued letters can be revoked with a reason (PDF stamped REVOKED). Reference numbers are sequential per organisation per year (e.g. TH/LTR/2026/0007).",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "backend/src/services/letters.js",
+   "web/app/admin/letters/page.jsx",
+   "backend/src/db/migrations_v2/40_payroll.sql"
+  ],
+  "testSteps": "1. HR > Letters > Issue a letter > Relieving Letter. Expected: only employees with an approved exit listed; LWD pre-filled and greyed. 2. Fill signatory > Generate > confirm. Expected: issued with a sequential reference. 3. Revoke > reason > Revoke. Expected: status Revoked.",
+  "negativeTests": "1. Relieving for an active employee via API. Expected: 409 \"This letter can only be issued after the employee's resignation or termination has been approved.\" 2. Transfer with effective date xyz and no signatory. Expected: \"Effective date is not a valid date\", \"Signatory name is required\"; nothing issued. 3. Promotion with no applied promotion. Expected: \"There is no applied promotion… Record and apply it under Increments first…\".",
+  "automated": "scripts/v2/test-payroll.js — \"Letters\"",
+  "v1Impact": "Sequential refs and dd-mm-yyyy dates apply to v1 too (wrong data); rules/validation/revoke are v2 only (v1 issue with missing fields asserted unchanged)."
+ },
+ {
+  "id": "C37",
+  "status": "Fixed",
+  "summary": "Added a \"New employees (candidates)\" bulk kind: template with dropdowns, every row validated (names, emails unique, mobile, gender, DOB 18+, DOJ, department/designation from the master, employment type, active manager, CTC), preview first, then candidates are created in \"Offer sent\" with no email unless \"Send offer emails\" is ticked. Salary bulk now has a ₹1 crore/month ceiling and accepts \"50,000\".",
+  "files": [
+   "backend/src/controllers/bulkController.js",
+   "web/app/admin/bulk/page.jsx"
+  ],
+  "testSteps": "1. HR > Bulk utilities > New employees (candidates) > Template. 2. Fill 1 valid row > Preview only. Expected: \"would add\". 3. Apply changes (offer emails unticked) > confirm. Expected: candidate created, status Offer sent, no email. 4. Salary tab: New Monthly CTC 99999999999 > Preview. Expected: error \"…above the ₹1,00,00,000 a month limit…\".",
+  "negativeTests": "1. Row with name 123, bad email, phone 0000000000, DOB 2015, no DOJ. Expected: one error row listing every problem. 2. Duplicate official email. Expected: \"… is already in use\".",
+  "automated": "scripts/v2/test-payroll.js — \"Bulk utilities\"",
+  "v1Impact": "New kind listed on v2 only; CTC ceiling v2 only (v1 asserted unchanged); comma-number parsing applies to both (only loosens)."
+ },
+ {
+  "id": "C47",
+  "status": "Fixed",
+  "summary": "The tax projection (ESS Tax, HR review, Form 16) now covers only the months of the financial year the employee is paid for: the joining month prorated by days plus the months after it. An employee joining 02-11-2026 on ₹30,000 projects ₹1,49,000 for FY 2026-27, not ₹3,60,000. The page shows \"N months from your joining date × CTC\".",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "backend/src/services/incomeTax.js",
+   "backend/src/controllers/statutoryController.js",
+   "web/app/ess/tax/page.jsx"
+  ],
+  "testSteps": "1. Log in as TH5001 (DOJ 02-11-2026, ₹30,000) > Tax. Expected: Salary for the year ₹1,49,000 with \"4.97 months from your joining date × ₹30,000\".",
+  "negativeTests": "1. An employee who joined before April shows 12 months (unchanged).",
+  "automated": "scripts/v2/test-payroll.js — \"projection covers only the months after joining\"",
+  "v1Impact": "Applies to v1 too: it corrects a wrong figure; response shape unchanged (projection/hasStructure fields only added)."
+ },
+ {
+  "id": "H67",
+  "status": "Fixed",
+  "summary": "The v2 payroll run sheet lists employees only (active, with an employee code, not past an approved LWD), plus anyone leaving during/after the month and anyone with a slip already — no candidates, no deactivated people. Counts follow.",
+  "files": [
+   "backend/src/controllers/payrollController.js"
+  ],
+  "testSteps": "1. HR > Payroll. Expected: Employees count = active employees; Sanvi Malik / Rahul malik (candidates) and inactive TKF9007 are not listed.",
+  "negativeTests": "1. Search for a candidate's name. Expected: \"No employees match …\".",
+  "automated": "scripts/v2/test-payroll.js — \"Payroll list: employees only\"",
+  "v1Impact": "v1 list unchanged (asserted)."
+ },
+ {
+  "id": "H68",
+  "status": "Fixed",
+  "summary": "Publishing (single or all) a month that has not ended is blocked in v2 with \"October 2026 has not ended yet … Tick \"Publish before the month ends\" to publish anyway.\"; the page shows that explicit checkbox for an open month and records early publishing on the payslip.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "web/app/admin/payroll/page.jsx"
+  ],
+  "testSteps": "1. HR > Payroll > current month > Generate > Publish. Expected: message asking to tick the checkbox. 2. Tick \"Publish before the month ends\" > Publish > confirm. Expected: published.",
+  "negativeTests": "1. Publish all for the current month without the tick. Expected: button disabled / 409 MONTH_OPEN.",
+  "automated": "scripts/v2/test-payroll.js — \"publishing before the month ends needs an override\"",
+  "v1Impact": "v1 publish unchanged (asserted)."
+ },
+ {
+  "id": "H69",
+  "status": "Fixed",
+  "summary": "In v2 Professional Tax is worked out on the month's gross on the state slab of the employee's work location (posting state, else a state-named location, else current address; organisation PT slab overrides respected). ₹6,000 gross in Odisha → PT 0. When no state is known the company's PT component value is used, as before. To be confirmed with the payroll team per the tester's note.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "backend/src/services/statutoryRates.js"
+  ],
+  "testSteps": "1. Employee with posting state Odisha, CTC ₹6,000 > Generate. Expected: Professional Tax ₹0. 2. Karnataka, ₹50,000. Expected: ₹200.",
+  "negativeTests": "1. Employee with no state recorded. Expected: company PT component value.",
+  "automated": "scripts/v2/test-payroll.js — \"no PT on ₹6,000 gross in Odisha\"",
+  "v1Impact": "v1 keeps the flat component (asserted) unless STATE_PT is set, as before."
+ },
+ {
+  "id": "H70",
+  "status": "Fixed",
+  "summary": "Per-employee overrides cannot be negative (and % at most 100); the special-allowance balancing no longer silently absorbs a negative allowance because it can no longer be entered. The Payslip components override screen refuses negatives too.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "web/app/admin/payroll/page.jsx",
+   "web/app/admin/salary-components/page.jsx"
+  ],
+  "testSteps": "1. Payroll > Arjun Pillai > Structure > Personal Allowance -1 > Save.",
+  "negativeTests": "1. Expected: \"Personal Allowance cannot be less than 0\"; nothing saved.",
+  "automated": "scripts/v2/test-payroll.js — \"negative allowance refused (H70)\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H72",
+  "status": "Fixed",
+  "summary": "The Year dropdown is generated from today: next year, this year and two years back (so January 2027 is selectable).",
+  "files": [
+   "web/app/admin/payroll/page.jsx"
+  ],
+  "testSteps": "1. HR > Payroll > Year. Expected: 2027, 2026, 2025, 2024.",
+  "negativeTests": "1. API generate for a year beyond next year. Expected: \"Year cannot be more than …\".",
+  "automated": "scripts/v2/test-payroll.js — \"year beyond next year refused\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H73",
+  "status": "Fixed",
+  "summary": "The grade is no longer free text: the structure shows (read-only) and stores the grade of the employee's designation (or its hierarchy level), and the increment form takes a designation from the master instead of a typed grade. HRMIS prints the same master grade.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "backend/src/controllers/incrementController.js",
+   "backend/src/controllers/hrmisController.js",
+   "web/app/admin/payroll/page.jsx",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. Payroll > Arjun Pillai (Functional Lead, M2) > Structure. Expected: Grade M2 (greyed). Save. Expected: stored grade M2.",
+  "negativeTests": "1. There is no grade box to type into.",
+  "automated": "scripts/v2/test-payroll.js — \"grade comes from the designation master\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H74",
+  "status": "Fixed",
+  "summary": "Increment validation errors appear inside the \"Record a salary revision\" modal next to the field (plus a summary), and the modal stays open with the input kept. Server errors (e.g. reduction) come back with field keys.",
+  "files": [
+   "backend/src/controllers/incrementController.js",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. Increments > New revision > Arjun Pillai > Increment, New monthly CTC 100 > Record.",
+  "negativeTests": "1. Expected: under the CTC box \"That is a reduction, not an increment. Record it as a Correction if it is intentional.\"; modal still open.",
+  "automated": "scripts/v2/test-payroll.js — \"reduction error is on the field (H74)\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H75",
+  "status": "Fixed",
+  "summary": "After choosing an employee the form shows current monthly and annual CTC, grade and designation. Past effective dates need an explicit \"This revision is back-dated\" tick; dates before joining or more than a year ahead are refused.",
+  "files": [
+   "backend/src/controllers/incrementController.js",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. New revision > Arjun Pillai. Expected: \"Current pay ₹… a month · ₹… a year · grade M2\".",
+  "negativeTests": "1. Effective 01-01-2026 without the tick. Expected: \"01-01-2026 is in the past. Tick \"This revision is back-dated\" to record it anyway.\"",
+  "automated": "scripts/v2/test-payroll.js — \"current CTC shown\", \"back-dated needs confirmation\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H76",
+  "status": "Fixed",
+  "summary": "For revision type Correction the \"Set the new pay by\" dropdown is disabled and the corrected monthly CTC is entered directly; the server ignores a % for corrections.",
+  "files": [
+   "backend/src/controllers/incrementController.js",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. New revision > Revision type Correction. Expected: \"Set the new pay by\" greyed, field \"Corrected monthly CTC\".",
+  "negativeTests": "1. API correction with hikePct only. Expected: \"New monthly CTC is required\".",
+  "automated": "scripts/v2/test-payroll.js — \"correction takes an amount, not a %\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H77",
+  "status": "Fixed",
+  "summary": "\"Set the new pay by\" now defaults to New annual CTC (also offers monthly and %), and the form shows the new pay as both monthly and annual with the % change. The list shows annual alongside monthly.",
+  "files": [
+   "backend/src/controllers/incrementController.js",
+   "web/app/admin/increments/page.jsx"
+  ],
+  "testSteps": "1. New revision > New annual CTC 3,60,000. Expected: \"New pay: ₹30,000 a month · ₹3,60,000 a year (+20.00%)\".",
+  "negativeTests": "1. Annual CTC 0. Expected: \"New annual CTC cannot be less than 12\".",
+  "automated": "scripts/v2/test-payroll.js — \"annual CTC accepted and stored monthly\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H78",
+  "status": "Fixed",
+  "summary": "Preview and run now share one compute path: the structure preview calls the server (POST /api/v2/admin/payroll/preview), which uses the same component set, overrides and state PT as generate. The old client-side fixed-template preview (which omitted Welfare Trust etc.) is gone.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "web/app/admin/payroll/page.jsx",
+   "backend/src/routes/v2/payroll.js"
+  ],
+  "testSteps": "1. Payroll > Debasis Panigrahi > Structure: note net pay in the breakup. 2. Generate the month with full days and TDS 0. Expected: identical gross, deductions and net.",
+  "negativeTests": "1. Change an override; the preview updates from the server.",
+  "automated": "scripts/v2/test-payroll.js — \"preview gross/deductions = payslip\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H79",
+  "status": "Fixed",
+  "summary": "The table component on Payslip components was declared inside the page render, so React remounted it on every keystroke. It is now a module-level component; Code, Label and Value keep focus.",
+  "files": [
+   "web/app/admin/salary-components/page.jsx"
+  ],
+  "testSteps": "1. HR > Payslip components > BASIC value: type 150. Expected: 150. Type a label \"Conveyance\" in one go.",
+  "negativeTests": "1. In Payslip components type a long value quickly (e.g. 'Conveyance Allowance') in Label, and '12.5' in Value. Expected: every character is kept, focus never jumps. 2. Type letters into a % value field. Expected: 'must be a number' error on save, the typed text is not lost.",
+  "automated": "n/a (UI; JSX checked)",
+  "v1Impact": "None (web only)"
+ },
+ {
+  "id": "H80",
+  "status": "Fixed",
+  "summary": "The structure no longer has its own HRA default: it uses the company set (e.g. HRA 40% of Basic) unless an override is set, and the preview uses the same rule as Annexure A and payroll. The legacy \"Company default\" template button was removed from Payroll.",
+  "files": [
+   "backend/src/controllers/payrollController.js",
+   "backend/src/services/payComponents.js",
+   "web/app/admin/payroll/page.jsx"
+  ],
+  "testSteps": "1. Payslip components: HRA 40% of Basic > Save. 2. Payroll > Arjun Pillai > Structure. Expected: HRA company value 40, preview HRA = 40% of Basic.",
+  "negativeTests": "1. Set an employee override HRA of 120% of Basic. Expected: refused ('cannot be more than 100'). 2. Remove the override. Expected: the structure falls back to the company HRA (40%), and the preview, Annexure A and payslip all show the same HRA amount.",
+  "automated": "scripts/v2/test-payroll.js — \"structure preview uses the company HRA rule\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H81",
+  "status": "Fixed",
+  "summary": "The Statutory employee search lists joined, active employees only, shown as \"Name (Employee ID)\". Saving identifiers and Form 16 for a candidate is refused in v2.",
+  "files": [
+   "backend/src/controllers/statutoryController.js",
+   "web/app/admin/statutory/page.jsx"
+  ],
+  "testSteps": "1. Statutory > Employee: type Rahul. Expected: candidate Rahul malik not listed.",
+  "negativeTests": "1. API PUT statutory for a candidate → 409 \"Statutory records are kept for active employees only.\"; Form 16 → 409.",
+  "automated": "scripts/v2/test-payroll.js — \"statutory picker lists joined employees\", \"candidate refused\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H82",
+  "status": "Fixed",
+  "summary": "Corrected the page description: it now says \"UAN, PF and ESIC identifiers and nominations (PF, gratuity, ESIC, pension)…\". Gratuity is handled as a nomination scheme (no separate identifier exists).",
+  "files": [
+   "web/app/admin/statutory/page.jsx"
+  ],
+  "testSteps": "1. Statutory. Expected: description mentions gratuity nominations; Add nominee offers Gratuity.",
+  "negativeTests": "1. Try to add a Gratuity nominee with share 150%. Expected: 'Nominee shares must total 100%'. 2. Add a second gratuity nominee taking the total above 100%. Expected: refused with the same message.",
+  "automated": "scripts/v2/test-payroll.js — \"gratuity nominee supported\"",
+  "v1Impact": "None (web text)"
+ },
+ {
+  "id": "H83",
+  "status": "Fixed",
+  "summary": "Investment declaration tabs and badges show Submitted / Verified / Sent back / Draft via the shared labels.",
+  "files": [
+   "web/app/admin/tax-declarations/page.jsx",
+   "web/app/ess/tax/page.jsx"
+  ],
+  "testSteps": "1. HR > Investment decl. Expected: proper-case tab names.",
+  "negativeTests": "1. Open each Investment declaration tab (Submitted, Verified, Sent back, Draft). Expected: proper-case labels on tabs and badges; no lowercase 'submitted' / raw codes anywhere.",
+  "automated": "n/a (UI)",
+  "v1Impact": "None (web only)"
+ },
+ {
+  "id": "H90",
+  "status": "Fixed",
+  "summary": "Same as C27: an F&F can only be created/previewed in v2 for an employee with an approved resignation or termination and an employee code — never for a candidate.",
+  "files": [
+   "backend/src/controllers/fnfController.js"
+  ],
+  "testSteps": "1. Full & Final > New settlement: Susmita Das (candidate) is not listed.",
+  "negativeTests": "1. API POST /api/v2/admin/fnf/<candidate id>. Expected: 409 \"A Full & Final settlement can only be made…\".",
+  "automated": "scripts/v2/test-payroll.js — \"F&F for an employee with no approved exit refused\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H91",
+  "status": "Fixed",
+  "summary": "The employee search lists only employees with an approved exit, labelled \"Name (Employee ID) — LWD dd-mm-yyyy · settlement status\".",
+  "files": [
+   "backend/src/controllers/fnfController.js",
+   "web/app/admin/fnf/page.jsx"
+  ],
+  "testSteps": "1. New settlement > Employee: type Rahul. Expected: no match.",
+  "negativeTests": "1. In New settlement search for an active employee who has not resigned (e.g. Aarav). Expected: not listed. 2. Search for a candidate (Rahul malik). Expected: not listed, and no '(31)'-style internal ID is shown for anyone.",
+  "automated": "scripts/v2/test-payroll.js — \"eligible list = approved exits only\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H92",
+  "status": "Fixed",
+  "summary": "Draft settlements have Edit (opens the form pre-filled with the saved inputs; saving updates the same settlement) and Delete. Finalised/paid settlements cannot be replaced or deleted.",
+  "files": [
+   "backend/src/controllers/fnfController.js",
+   "web/app/admin/fnf/page.jsx"
+  ],
+  "testSteps": "1. Full & Final > a Draft > Edit > change bonus > Save draft. Expected: same row updated.",
+  "negativeTests": "1. Save for an employee whose settlement is Finalised. Expected: \"…already finalised. It cannot be replaced.\" 2. Delete a finalised one via API → 409.",
+  "automated": "scripts/v2/test-payroll.js — \"editing the draft updates the same settlement\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H93",
+  "status": "Fixed",
+  "summary": "The F&F PDF prints the status (Draft / Finalised / Paid) beside the last working date and is regenerated on every download, so it follows status changes. A dedicated status slot in the PDF layout is a lead request to the docPdf owner.",
+  "files": [
+   "backend/src/controllers/fnfController.js"
+  ],
+  "testSteps": "1. Full & Final > PDF on a Draft. Expected: \"Last working date dd-mm-yyyy · Status: Draft\". Finalise > PDF. Expected: \"Status: Finalised\".",
+  "negativeTests": "1. Mark a settlement Paid, then download the PDF again. Expected: 'Status: Paid', not the old Draft status. 2. Try to edit a Paid settlement. Expected: refused (only Draft is editable).",
+  "automated": "scripts/v2/test-payroll.js — \"PDF renders (status printed beside the LWD)\"",
+  "v1Impact": "Applies to v1 too (PDF content; the LWD is also now dd-mm-yyyy)."
+ },
+ {
+  "id": "H94",
+  "status": "Fixed",
+  "summary": "Picking the employee pre-fills LWD (approved resignation/termination), leave balance (earned leave allocated − used), notice shortfall (recorded shortfall, else notice period − days served) and advances (open NFA advances via the exit worker).",
+  "files": [
+   "backend/src/controllers/fnfController.js",
+   "web/app/admin/fnf/page.jsx"
+  ],
+  "testSteps": "1. New settlement > pick an approved leaver. Expected: all four fields filled.",
+  "negativeTests": "1. Pick an employee with no leave balance and no advances. Expected: leave balance 0 and advances 0 pre-filled, not blank. 2. Overwrite the pre-filled leave balance with -5. Expected: 'Leave balance cannot be less than 0'.",
+  "automated": "scripts/v2/test-payroll.js — \"LWD pre-filled\", \"leave balance pre-filled\", \"notice shortfall pre-filled\", \"advances pre-filled\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H95",
+  "status": "Fixed",
+  "summary": "Negative amounts, negative leave/shortfall and an LWD before joining are refused with field errors. Preview always shows final-month salary and gratuity lines (gratuity explains \"Not payable: N completed years of service, 5 needed\" when not eligible).",
+  "files": [
+   "backend/src/controllers/fnfController.js",
+   "backend/src/services/fnf.js",
+   "web/app/admin/fnf/page.jsx"
+  ],
+  "testSteps": "1. Preview for a 7-year employee. Expected: Salary for N day(s) worked, Leave encashment, Gratuity (7 yrs) all shown.",
+  "negativeTests": "1. Arrears -5000. Expected: \"Arrears cannot be less than 0\". 2. Leave -10. Expected: \"Leave balance cannot be less than 0\". 3. LWD 01-01-2020 (before DOJ). Expected: \"Last working date cannot be before the joining date (…)\".",
+  "automated": "scripts/v2/test-payroll.js — \"LWD before joining refused\", \"preview computes final salary and gratuity\"",
+  "v1Impact": "Engine fix (no day paid when LWD < DOJ) applies to v1 too; validation v2 only."
+ },
+ {
+  "id": "H96",
+  "status": "Fixed",
+  "summary": "Confirmation (and every non-exit letter) can only be issued to an active employee; the employee list for the chosen type shows only eligible people.",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "web/app/admin/letters/page.jsx"
+  ],
+  "testSteps": "1. Letters > Issue > Confirmation of Employment. Expected: candidates such as Rahul malik not listed.",
+  "negativeTests": "1. API issue to a candidate. Expected: 409 \"This letter can only be issued to an active employee…\".",
+  "automated": "scripts/v2/test-payroll.js — \"confirmation refused for a candidate\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H97",
+  "status": "Fixed",
+  "summary": "Letter fields are typed: date pickers for effective date / LWD, a number for CTC, the designation master for new designation, choices for conduct/extension, and letters-only for signatory name. All are validated client- and server-side and Generate is refused until every field is valid.",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "backend/src/services/letters.js",
+   "web/app/admin/letters/page.jsx"
+  ],
+  "testSteps": "1. Issue > Relieving Letter. Expected: LWD is a date (locked from the exit); signatory fields required.",
+  "negativeTests": "1. Transfer, effective date xyz. Expected: \"Effective date is not a valid date\". 2. Signatory name 123. Expected: \"Signatory name should contain letters only\".",
+  "automated": "scripts/v2/test-payroll.js — \"garbage effective date refused\", \"missing signatory stops the issue\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H98",
+  "status": "Fixed",
+  "summary": "Because every value is validated and formatted before rendering (dates dd-mm-yyyy, CTC \"INR 3,60,000\", master designation names), the PDF prints only valid data; the PDF date is dd-mm-yyyy (was \"Tue Nov 03\").",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "backend/src/services/letters.js"
+  ],
+  "testSteps": "1. Issue a Transfer letter with effective date today > open PDF. Expected: date shown dd-mm-yyyy.",
+  "negativeTests": "1. Try to issue a letter with Effective date 'xyz' or CTC 'abc' (typed via the API or by pasting). Expected: refused with field errors; no letter or reference number is created. 2. Leave Signatory blank. Expected: 'Signatory name is required' and nothing is issued.",
+  "automated": "scripts/v2/test-payroll.js — \"PDF text has the formatted date\"",
+  "v1Impact": "Date formatting applies to v1 too (wrong data shown)."
+ },
+ {
+  "id": "H99",
+  "status": "Fixed",
+  "summary": "Relieving letters and Experience certificates require an approved resignation or termination; the LWD comes from that record.",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "web/app/admin/letters/page.jsx"
+  ],
+  "testSteps": "1. Issue > Experience Certificate. Expected: only employees with an approved exit listed.",
+  "negativeTests": "1. API for Aarav Sharma (active). Expected: 409 \"This letter can only be issued after the employee's resignation or termination has been approved.\"",
+  "automated": "scripts/v2/test-payroll.js — \"relieving letter refused…\", \"experience letter issued after the approved exit\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H121",
+  "status": "Fixed",
+  "summary": "The upload checks which template it is (by its input columns). A Salary template on the Leave balances tab is refused: \"This file is not a Leave balances template — it looks like a Salary (monthly CTC) template. Download the Leave balances template and fill that in.\"",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Bulk utilities > Leave balances > choose a filled Salary template > Preview only.",
+  "negativeTests": "1. Expected: the error above; nothing read.",
+  "automated": "scripts/v2/test-payroll.js — \"a Salary template on the Leave tab is refused\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H122",
+  "status": "Fixed",
+  "summary": "Templates now protect the sheet: Employee Code, Name and \"Current …\" columns are locked; \"New …\" columns are unlocked with dropdowns (department, designation, employment type, manager codes, gender — from a hidden Lists sheet) or range checks (CTC, leave days, phone length, dates).",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Download any template > try to edit Employee Code. Expected: Excel says the cell is protected. 2. New Department cell shows a dropdown of departments.",
+  "negativeTests": "1. Type 999 into New SL Allocated. Expected: Excel validation message (0 to 12).",
+  "automated": "scripts/v2/test-payroll.js — \"template protects its read-only columns\"",
+  "v1Impact": "Template file applies to v1 too (only adds protection/dropdowns)."
+ },
+ {
+  "id": "H123",
+  "status": "Partially fixed",
+  "summary": "Leave allocations above the type's annual quota and gender-ineligible types (e.g. maternity for a male employee) are refused, allocations must be in half days, and the template now lists every leave type (LWP/WFH shown as used days) with Current Used next to Allocated. Carry-forward is not a column because leave_balances has no carry-forward field; that remains with the leave module.",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Leave balances template: TKF1004 New SL Allocated 10 > Preview. Expected: would change.",
+  "negativeTests": "1. TKF1003 SL 999. Expected: \"SL allocation 999 is more than the SL annual quota of 12\". 2. TKF1006 (male) ML 182. Expected: \"Maternity Leave is for female employees only\".",
+  "automated": "scripts/v2/test-payroll.js — leave-balance checks",
+  "v1Impact": "v1 upload keeps old validation; template columns change for both (header-based reading)."
+ },
+ {
+  "id": "H124",
+  "status": "Fixed",
+  "summary": "Salary bulk: monthly CTC above ₹1,00,00,000 is an error; \"50,000\" (and ₹ / spaces) is read as a number.",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Salary template: TKF1005 = 50,000 > Preview. Expected: would change ₹50,000.",
+  "negativeTests": "1. TKF1003 = 99999999. Expected: \"New Monthly CTC ₹9,99,99,999 is above the ₹1,00,00,000 a month limit — check the figure\".",
+  "automated": "scripts/v2/test-payroll.js — \"CTC above the limit\", \"\\\"50,000\\\" is read as a number\"",
+  "v1Impact": "Ceiling v2 only (v1 asserted); comma parsing both."
+ },
+ {
+  "id": "H125",
+  "status": "Fixed",
+  "summary": "Reporting lines bulk: a manager must be an active employee, and a change that creates a loop (with the database or with earlier rows in the same file) is refused.",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Managers template: TKF1003 → TKF1002 > Preview. Expected: would change.",
+  "negativeTests": "1. TKF1002 → TKF9007 (inactive). Expected: \"TKF9007 is not an active employee, so cannot be a manager\". 2. TKF1006 → TKF1007 and TKF1007 → TKF1006. Expected: second row \"Reporting loop: …\".",
+  "automated": "scripts/v2/test-payroll.js — \"an inactive manager is refused\", \"a reporting loop…\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H126",
+  "status": "Fixed",
+  "summary": "Contact bulk: phone must be a valid Indian mobile (0000000000 refused); a personal email already used by another employee (or twice in the file) is refused; employment types are the portal's (Full time, Part time, Contract, Intern — no CONSULTANT) and labels like \"Part time\" are accepted.",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "1. Info template: TKF1008 New Employment Type \"Part time\" > Preview. Expected: would change → Part time.",
+  "negativeTests": "1. Phone 0000000000. Expected: \"\\\"0000000000\\\" is not a valid 10-digit mobile number\". 2. priya.nair@truehr.example for TKF1005. Expected: \"… already belongs to TKF1002\". 3. CONSULTANT. Expected: \"Employment type must be one of: Full time, Part time, Contract, Intern\".",
+  "automated": "scripts/v2/test-payroll.js — info checks",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H127",
+  "status": "Fixed",
+  "summary": "Transfer bulk maps names to the master spelling (\"engineering\" → Engineering, shown so in the preview and stored by id), requires a New Effective Date (not in the future, not over a year back; recorded in the audit log), and checks the department–designation pairing when the master defines it. The designation master currently has no department link, so the pairing check only applies once one exists; future-dated transfers must be uploaded on/after the date. Integration: designations now carry a department, so the bulk transfer check of department–designation pairing is active.",
+  "files": [
+   "backend/src/controllers/bulkController.js"
+  ],
+  "testSteps": "Setup: link the designation to a department in Hierarchy & Levels first. 1. Transfer template: TKF1003 New Department engineering, New Designation senior software engineer, Effective today > Preview. Expected: \"Department → Engineering; Designation → Senior Software Engineer; Effective → dd-mm-yyyy\".",
+  "negativeTests": "1. No effective date. Expected: \"New Effective Date is required for a transfer\". 2. A future date. Expected: \"The transfer takes effect on … — upload it on or after that date\". Upload a transfer row pairing that designation with a different department. Expected: the preview rejects the row with a pairing error.",
+  "automated": "scripts/v2/test-payroll.js — transfer checks",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "H128",
+  "status": "Fixed",
+  "summary": "All HRMIS dates (DOJ, DOB, structure updated, purchase/assigned dates, exit raised/LWD) are real Excel date cells formatted dd-mm-yyyy with the year (they were String(Date).slice(0,10) → \"Sat Jul 03\").",
+  "files": [
+   "backend/src/controllers/hrmisController.js"
+  ],
+  "testSteps": "1. HRMIS > Download workbook. Expected: People > Date of Joining e.g. 03-07-2021; column sorts/filters as dates.",
+  "negativeTests": "1. In the HRMIS workbook, sort People by Date of Joining. Expected: sorts chronologically (real dates), not alphabetically. 2. Check that no date cell looks like 'Sat Jul 03'.",
+  "automated": "scripts/v2/test-payroll.js — \"Date of Joining is a real date with the year\"",
+  "v1Impact": "Applies to v1 too (file content; correct data)."
+ },
+ {
+  "id": "H129",
+  "status": "Fixed",
+  "summary": "Last Login is a real date-time cell (dd-mm-yyyy hh:mm, India time) instead of a sliced string.",
+  "files": [
+   "backend/src/controllers/hrmisController.js"
+  ],
+  "testSteps": "1. Workbook > People > Last Login for TKF5001. Expected: e.g. 11-08-2026 15:45.",
+  "negativeTests": "1. Check Last Login for an employee who never signed in. Expected: blank, not corrupted text. 2. Check no Last Login value starts with a missing letter (e.g. ' ue Aug').",
+  "automated": "scripts/v2/test-payroll.js — \"Last Login is a full date-time\"",
+  "v1Impact": "Applies to v1 too (file content)."
+ },
+ {
+  "id": "H130",
+  "status": "Fixed",
+  "summary": "Annual CTC = Monthly CTC × 12 from one source (the salary structure); when there is no structure yet, the offer CTC is shown with Monthly = annual ÷ 12 and a \"CTC Source\" column says which.",
+  "files": [
+   "backend/src/controllers/hrmisController.js"
+  ],
+  "testSteps": "1. Compensation sheet: TKF5002 monthly 50,000 → annual 6,00,000.",
+  "negativeTests": "1. Find an employee with an offer CTC but no salary structure (e.g. TKF9009). Expected: Monthly CTC = Annual ÷ 12 and CTC Source says 'Offer'. 2. Check no row has Annual CTC ≠ Monthly × 12.",
+  "automated": "scripts/v2/test-payroll.js — \"Annual CTC = monthly × 12\"",
+  "v1Impact": "Applies to v1 too (file content)."
+ },
+ {
+  "id": "H131",
+  "status": "Fixed",
+  "summary": "Compensation columns are the company's payslip components (e.g. \"House Rent Allowance (monthly)\", \"Welfare Trust (monthly)\") computed for each employee, not the legacy fixed 50% fields; grade comes from the designation master; an \"IFSC Format\" column flags invalid IFSCs (e.g. sbin000445) and the summary counts them.",
+  "files": [
+   "backend/src/controllers/hrmisController.js",
+   "web/app/admin/hrmis/page.jsx"
+  ],
+  "testSteps": "1. Workbook > Compensation: HRA column = 40% of Basic for a 40% company; Welfare Trust 20.",
+  "negativeTests": "1. TKF5002 IFSC sbin000445 → IFSC Format \"Invalid\".",
+  "automated": "scripts/v2/test-payroll.js — \"HRA column from the company components\", \"invalid IFSC flagged\"",
+  "v1Impact": "Applies to v1 too (file content)."
+ },
+ {
+  "id": "H132",
+  "status": "Fixed",
+  "summary": "UAN/PF/ESIC are validated on save in v2 (see C24), and the Statutory sheet has UAN/PF/ESIC Format columns (\"Invalid\" for garbage); the HRMIS screen's \"Worth fixing\" counts them.",
+  "files": [
+   "backend/src/controllers/statutoryController.js",
+   "backend/src/controllers/hrmisController.js",
+   "web/app/admin/hrmis/page.jsx"
+  ],
+  "testSteps": "1. Workbook > Statutory: TKF9003 UAN Format \"Invalid\". 2. HRMIS screen: \"UAN / PF / ESIC in the wrong format\" with a count.",
+  "negativeTests": "1. Statutory page UAN Gcshwhsvvs. Expected: \"UAN is not valid (12 digits)\".",
+  "automated": "scripts/v2/test-payroll.js — \"garbage UAN flagged\", \"garbage UAN refused\"",
+  "v1Impact": "Workbook flags apply to v1; save validation v2 only."
+ },
+ {
+  "id": "H135",
+  "status": "Fixed",
+  "summary": "The People sheet has a \"Login Note\" column explaining an unusable login (e.g. \"Disabled while the employee is Active — re-enable it under Users if this is wrong\", \"Disabled — exit approved…\", \"Opens on the joining date\"), and \"Worth fixing\" counts active employees with a disabled login. Keeping account status in sync is the auth/people agents' domain; this report only explains it. The tester's recommendation allows \"or show why login is disabled\": the HRMIS People sheet now shows the reason per employee, so this is complete.",
+  "files": [
+   "backend/src/controllers/hrmisController.js",
+   "web/app/admin/hrmis/page.jsx"
+  ],
+  "testSteps": "1. Workbook > People > TKF9008: Login Status Disabled with a Login Note explaining why.",
+  "negativeTests": "1. Find an ACTIVE employee whose login is disabled. Expected: the Login Note explains why (e.g. exit approved / disabled by admin), and the 'Worth fixing' count includes them. 2. Check an employee whose login opens on the joining date. Expected: note 'Opens on the joining date', not just 'DISABLED'.",
+  "automated": "scripts/v2/test-payroll.js — \"login status explained\"",
+  "v1Impact": "Applies to v1 too (file content)."
+ },
+ {
+  "id": "H136",
+  "status": "Fixed",
+  "summary": "Exits sheet: status words match the portal (REVOKED → \"Reversed\"), kind reads \"Termination (Dismissal)\" instead of \"TERMINATION: TERMINATION\", raised date is the India date, and a \"Data Check\" column flags a raised date in the future, before joining, or an LWD before joining/raised date.",
+  "files": [
+   "backend/src/controllers/hrmisController.js"
+  ],
+  "testSteps": "1. Workbook > Exits > TKF9008. Expected: Status Reversed; Data Check \"Raised date is in the future\" / \"Raised before the joining date\".",
+  "negativeTests": "1. Check the Exits sheet for 'REVOKED' or 'TERMINATION: TERMINATION'. Expected: neither appears. 2. A resignation raised before the joining date. Expected: Data Check column flags it.",
+  "automated": "scripts/v2/test-payroll.js — \"exit status shown as Reversed\", \"future raised date flagged\"",
+  "v1Impact": "Applies to v1 too (file content)."
+ },
+ {
+  "id": "H137",
+  "status": "Fixed",
+  "summary": "\"Worth fixing\" now also counts active employees with no department, no designation or no date of joining (plus invalid statutory/IFSC and disabled logins). Headcount shows \"(no department)\". Making these fields mandatory on the employee form is the people agent's area.",
+  "files": [
+   "backend/src/controllers/hrmisController.js",
+   "web/app/admin/hrmis/page.jsx"
+  ],
+  "testSteps": "1. HRMIS screen. Expected: \"No department\", \"No designation\", \"No date of joining\" with counts including Demo Manager / Demo Employee.",
+  "negativeTests": "1. Remove an active employee's department (via Edit). Expected: the HRMIS 'Worth fixing' count for 'No department' increases by 1, and Headcount lists them under '(no department)'.",
+  "automated": "scripts/v2/test-payroll.js — \"Worth fixing counts active employees without department / designation / DOJ\"",
+  "v1Impact": "Summary adds fields only; existing fields kept."
+ },
+ {
+  "id": "E33",
+  "status": "Fixed",
+  "summary": "Payslips page now has a Year and Month filter, a \"My salary\" card (monthly and annual CTC, grade, and the component breakup from the same engine as payroll), and a Form 16 download per financial year.",
+  "files": [
+   "web/app/ess/payslips/page.jsx",
+   "backend/src/controllers/payrollController.js",
+   "backend/src/controllers/statutoryController.js",
+   "backend/src/routes/v2/payroll.js"
+  ],
+  "testSteps": "1. Employee TKF9010 > Payslips. Expected: My salary card (or \"not set up yet\"), FY selector + Download Form 16, Year/Month filters.",
+  "negativeTests": "1. Filter to a month with no payslip. Expected: \"No payslips found\".",
+  "automated": "scripts/v2/test-payroll.js — \"ESS payslips: CTC view and Form 16\"",
+  "v1Impact": "New v2 endpoints only."
+ },
+ {
+  "id": "E34",
+  "status": "Fixed",
+  "summary": "At least one investment with an amount is required; a blank amount is refused; saving/submitting is blocked until a salary structure exists (\"Your salary structure has not been set up yet…\").",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "web/app/ess/tax/page.jsx"
+  ],
+  "testSteps": "1. Tax > add 80C 50,000 > Save draft > Submit. Expected: submitted.",
+  "negativeTests": "1. Remove all rows > Submit. Expected: \"Add at least one investment with an amount\". 2. Blank amount. Expected: \"Row 1 (80C) amount is required\". 3. Employee without a structure. Expected: notice and disabled buttons; API 409.",
+  "automated": "scripts/v2/test-payroll.js — \"no salary structure → declaration blocked\", \"empty declaration refused\", \"blank amount refused\"",
+  "v1Impact": "v2 only (v1 save asserted unchanged)."
+ },
+ {
+  "id": "E35",
+  "status": "Fixed",
+  "summary": "Section limits (80C ₹1,50,000, 80TTA ₹10,000, 80D ₹1,00,000, …), positive amounts and one row per section are enforced client- and server-side.",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "web/app/ess/tax/page.jsx"
+  ],
+  "testSteps": "1. 80C 1,50,000 > Save. Expected: saved.",
+  "negativeTests": "1. 80C 3,00,000. Expected: \"Row 1 (80C) amount cannot be more than 1,50,000\". 2. 80C -5,000. Expected: \"…must be more than zero\". 3. Second 80C row. Expected: \"80C is already declared — put the total in one row\". 4. 80TTA 99999999. Expected: \"…cannot be more than 10,000\".",
+  "automated": "scripts/v2/test-payroll.js — \"80C above ₹1,50,000 refused\" etc.",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E36",
+  "status": "Fixed",
+  "summary": "After Submit to HR the declaration is locked (fields disabled; Save draft refused with \"…submitted to HR and is locked. HR can send it back if it needs changes.\"). Each investment has \"Attach proof\" (PDF/PNG/JPEG ≤5 MB); proofs survive re-saving a draft.",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "web/app/ess/tax/page.jsx",
+   "backend/src/db/migrations_v2/40_payroll.sql"
+  ],
+  "testSteps": "1. Save draft > Attach proof > Submit > confirm. Expected: read-only page \"Submitted to HR — locked…\".",
+  "negativeTests": "1. API save after submit → 409 locked; status stays Submitted. 2. Upload an HTML file. Expected: \"The proof must be a PNG, JPG, WEBP, GIF, PDF file\".",
+  "automated": "scripts/v2/test-payroll.js — \"submitted declaration is locked\", \"proof uploaded\"",
+  "v1Impact": "None (v2 only)"
+ },
+ {
+  "id": "E37",
+  "status": "Fixed",
+  "summary": "Same as C47: the projection covers only the months from the joining date to March (TH5001 joining 02-11-2026 → ₹1,49,000).",
+  "files": [
+   "backend/src/controllers/taxDeclarationController.js",
+   "backend/src/services/incomeTax.js",
+   "web/app/ess/tax/page.jsx"
+  ],
+  "testSteps": "1. TH5001 > Tax. Expected: Salary for the year ₹1,49,000, \"4.97 months from your joining date × ₹30,000\".",
+  "negativeTests": "1. As an employee who joined on 1 April (full year), open Tax. Expected: 12 months projected. 2. As an employee with no salary structure, open Tax. Expected: a message that the salary structure is not set; submit is blocked.",
+  "automated": "scripts/v2/test-payroll.js — \"…which is 29/30 of November + 4 months\"",
+  "v1Impact": "Applies to v1 too (corrects a figure)."
+ },
+ {
+  "id": "E38",
+  "status": "Fixed",
+  "summary": "My Letters has \"Request a letter\" (Employment / Salary certificate, Address proof, Experience, Relieving, Other) with a purpose; the employee sees status (Pending / Issued / Rejected with HR's note / Withdrawn) and can withdraw a pending request. HR sees a Requests tab on Letters with Issue (opens the issue form for that employee; issuing marks the request Issued) and Decline (reason required). Minimal v2 table letter_requests.",
+  "files": [
+   "backend/src/controllers/letterController.js",
+   "web/app/ess/letters/page.jsx",
+   "web/app/admin/letters/page.jsx",
+   "backend/src/db/migrations_v2/40_payroll.sql"
+  ],
+  "testSteps": "1. Employee > My Letters > Request a letter > Salary certificate, purpose \"Home loan\" > Send. 2. HR > Letters > Requests tab. Expected: listed. Decline with reason. 3. Employee sees Rejected with the reason.",
+  "negativeTests": "1. Empty purpose. Expected: \"Tell HR what it is for\". 2. Second pending request of the same type. Expected: \"You already have a pending request for this letter.\"",
+  "automated": "scripts/v2/test-payroll.js — \"employee requests a salary certificate\", \"HR declines with a reason\"",
+  "v1Impact": "New v2 endpoints only."
+ },
+ {
+  "id": "_meta",
+  "leadRequests": [
+   "docPdf.js (org agent): give buildFnfPdf a status slot (meta.status is passed). Until then the F&F status is printed beside the LWD.",
+   "Employee Bank & statutory card (people agent, employeeController.updateBankStatutory): validate UAN 12 digits / PF / ESIC 17 digits in v2, same rules as the Statutory page, since both now share employee_statutory.",
+   "web/app/admin/layout.jsx: nothing new needed (no new menu items); Letters page has a Requests tab and ESS My Letters has Request a letter.",
+   "Designation master has no department link, so the H127 department–designation pairing check only fires if designations gain a department_id (the code reads it if present)."
+  ],
+  "migrations": [
+   "backend/src/db/migrations_v2/40_payroll.sql — payslips revert/early-publish columns; issued_letters organisation_id/status/revoke columns (+backfill); letter_ref_counters; letter_requests; investment_declaration_items proof columns; employee_statutory backfill from statutory_profiles (never overwrites)."
+  ],
+  "newEndpoints": [
+   "GET/PUT /api/v2/admin/salary-structure/:employeeId (component-based structure)",
+   "POST /api/v2/admin/payroll/preview, POST /api/v2/admin/payslip-components/preview",
+   "GET /api/v2/me/salary-structure, GET /api/v2/me/form16?fy=",
+   "GET /api/v2/admin/increments/current/:employeeId, POST /api/v2/admin/increments (validated)",
+   "GET /api/v2/admin/statutory/employees",
+   "POST|GET /api/v2/me/tax-declaration/items/:itemId/proof, GET /api/v2/admin/tax-declarations/:id/items/:itemId/proof",
+   "GET /api/v2/admin/fnf/eligible, GET /api/v2/admin/fnf/prefill/:employeeId, GET|DELETE /api/v2/admin/fnf/:id",
+   "GET /api/v2/admin/letters/prefill, GET /api/v2/admin/letters/employees, POST /api/v2/admin/letters/:id/revoke",
+   "GET /api/v2/admin/letter-requests, POST /api/v2/admin/letter-requests/:id/decide, GET|POST /api/v2/me/letter-requests, POST /api/v2/me/letter-requests/:id/cancel",
+   "Bulk kind \"employees\" (POST /api/v2/admin/bulk/employees, GET …/template) — listed in kinds on v2 only"
+  ],
+  "testRun": "scripts/v2/test-payroll.js: 198 passed, 0 failed (fresh truehr_payroll). Existing: test-payroll-run 16/0, test-attendance-payroll 42/0, test-greenhr-gaps 14/0, test-tenancy 24/0, test-termination 25/0, test-nfa 22/0, test-settlement 17/0, test-reports 9/0 (after test-nfa/test-settlement, as it requires), unit-fnf 11/0, unit-incometax 10/0, unit-letters 7/0, unit-statutory 17/0. Web: check-jsx 12 ok, 0 failed on every changed page.",
+  "notes": "Both-version fixes: resolveCompanyId no longer falls back to tenant #1's company (salary template read/write leak); F&F leave encashment (non-existent balance column) and approved-resignation selection; F&F engine no longer pays a day when LWD < DOJ; HRMIS dates/annual CTC/labels; letter/increment dates dd-mm-yyyy and sequential per-org reference numbers; Form 16 PAN read from employee_statutory.pan_enc and projected for mid-year joiners; UAN/PF/ESIC single source. TDS: v2 generate/generate-all compute TDS from incomeTax (projected FY gross from DOJ, verified declarations for the old regime, less TDS already deducted this FY, spread over remaining months); v1 still passes TDS 0 unless given. Lead requests folded in: H109 F&F advances pre-filled from exitWorker.outstandingAdvance(); H102 payslip PDF uses docPdf.drawLogo (fitted logo, company name kept clear of the title); H101 unsaved-changes guard on Payslip components (beforeunload, sidebar links, switching company/tab); tax-declarations admin honours ?status=<code>; H133 HRMIS calls ensureOrgBalances(orgId) (guarded) before building the workbook and summary. Companies created after the components migration get their component set seeded on first v2 structure/preview access (ensureCompanyComponents, carrying per-employee structure values across as overrides). Not done: leave carry-forward column in bulk (no schema field); the components page's own Preview still mirrors the engine client-side for instant feedback (the employee structure preview is server-side)."
+ }
+]

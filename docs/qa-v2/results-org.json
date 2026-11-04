@@ -1,0 +1,709 @@
+[
+  {
+    "id": "M1",
+    "status": "Fixed",
+    "summary": "Organisation names are now unique regardless of letter case or extra spaces, and short codes are unique regardless of case. 'true hr' is refused because TRUE HR exists. Applies to New organisation and to Edit.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master. 2. Platform > Organisations > New organisation. 3. Enter Organisation name 'true hr', a valid short code, and the admin email and password. 4. Click Create organisation. Expected: the form stays open and the name field shows 'An organisation named \"TRUE HR\" already exists'. 5. Change the name to a new one and the code to an existing code typed in lowercase. Expected: 'The short code XYZ is already used by <org>'.",
+    "negativeTests": "1. Name '  TRUE HR  '. Expected: the same duplicate error. 2. Open an existing organisation and rename it to another organisation's name in different case. Expected: the duplicate error on Organisation name.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: name differing only by case from TRUE HR is blocked', 'v2: padded duplicate name is blocked', 'v2: duplicate code (other case) rejected', 'v2: rename to an existing name (case) blocked', 'v1 unchanged: rename is not duplicate-checked'",
+    "v1Impact": "None (v2 only). Existing duplicates such as Sriram Industries / Sriram industries are not merged. Use Edit to rename one, or Delete/Archive it."
+  },
+  {
+    "id": "M2",
+    "status": "Fixed",
+    "summary": "Short code is now mandatory (2-16 letters or digits). Contact email and phone are validated. Every error shows under its field at once, plus a summary at the top. The form keeps what you typed. Also (C38 root cause): a new organisation's first company used to get Employee-ID prefix 'TH' (TRUE HR's) when no code was given. It now derives from the organisation's code, or from its name initials, and never reuses a prefix another company already has.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master. 2. Organisations > New organisation. 3. Enter Short code 'X', Contact email 'bad@', Contact phone 'abcxyz'. 4. Click Create organisation. Expected: nothing is created. You see 'Short code is not valid (2-16 letters or digits)', 'Contact email is not a valid email address' and 'Contact phone must be a valid 10-digit mobile number starting with 6-9'. 5. Correct each field. Expected: its error disappears and the organisation can be created.",
+    "negativeTests": "1. Leave Short code blank. Expected: 'Short code is required'. 2. Phone '+91 9123456780'. Expected: accepted.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: invalid code/email/phone and no admin rejected together', 'v2: short code is mandatory', 'v2: edit validates email and phone', 'C38: org without code gets name-initial prefix, not TH (v1 too)', 'C38: initials that collide with an existing prefix (TH) get a fresh one', 'C38: v2 org prefix derives from its code and is unique'",
+    "v1Impact": "None (v2 only). v1 still accepts an organisation without a code, e.g. 'v1 unchanged: org without code or admin still created'. The prefix derivation applies to v1 too (wrong data written before); the payload is unchanged."
+  },
+  {
+    "id": "M3",
+    "status": "Fixed",
+    "summary": "The first Super Admin is now required: the checkbox is gone, and the server refuses an organisation without one. The list shows a 'No admin' badge on existing organisations without a Super Admin. The organisation detail lets the Master add one.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master. 2. Organisations > New organisation: the First Super Admin email and password are marked required. 3. Leave them blank and click Create. Expected: \"The first Super Admin's email is required\" and 'Temporary password is required'. 4. On the list, an organisation with 0 admins (e.g. Sriram Industries Pvt Ltd) shows 'No admin'. 5. Click its name: a box 'This organisation has no Super Admin' lets you enter an email and password and click Add Super Admin. Expected: the admin is listed and the badge disappears.",
+    "negativeTests": "1. Add Super Admin with email 'bad@' and password 'short'. Expected: 'Email is not a valid email address' and 'Temporary password must be at least 8 characters'. 2. Use an email that already has a login. Expected: 'A user with that email already exists'.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: first Super Admin is required', 'M3: an org with no Super Admin shows admins = 0', 'M3: add-admin validates email and password', 'M3: first Super Admin added to an org that had none'",
+    "v1Impact": "None (v2 only). v1 create still allows no admin, because the v1 test harness relies on it."
+  },
+  {
+    "id": "M4",
+    "status": "Fixed",
+    "summary": "Clicking an organisation's name, or Edit, opens its detail. It shows status, active employees, candidates, logins, Super Admins and contact warnings. Name, legal name, short code, email and phone can be edited there. An organisation with no employee records can be deleted outright, e.g. a test tenant. Any other can be archived: logins are disabled, it leaves the switcher, and its data is kept. Restore brings it back. The list has a search box (name, legal name, code, contact) and a status filter (Active / Suspended / Archived), with 'No organisations found' when nothing matches.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "backend/src/routes/v2/org.js",
+      "backend/src/db/migrations_v2/50_org_platform.sql",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations. 2. Type 'sandbox' in the search box and press Search. Expected: only matching organisations. 3. Click 'ZZ ESS SANDBOX (delete me)'. 4a. If it has no employee records, click Delete and confirm. Expected: '<name> deleted.' and it is gone. 4b. If it has employees, the box explains it can only be archived. Click Archive and confirm. Expected: status 'Archived'. It is no longer in the organisation switcher, and Status filter = Archived lists it. 5. Open any organisation, change the Legal name and click Save changes. Expected: the list shows the new legal name.",
+    "negativeTests": "1. Try to delete an organisation that has employees, e.g. through the API. Expected: '<org> has N employee records, so it cannot be deleted. Archive it instead.' 2. Delete TRUE HR (the Master's home organisation). Expected: refused. 3. Search 'zz-no-such-org'. Expected: 'No organisations found'.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: search by code finds exactly that org', 'v2: detail returns admins and canDelete', 'v2: legal name and code edited', 'v2: org with employees can be archived', 'archived org leaves the switcher', 'v2: org with employee records cannot be deleted (409, says archive)', 'v2: the platform owner home org cannot be deleted', 'v2: empty test tenant deleted', 'org Super Admin cannot delete an organisation'",
+    "v1Impact": "None. The new endpoints are v2 only (GET/DELETE /admin/organisations/:id, POST /admin/organisations/:id/admins). The ARCHIVED status is accepted only on v2. archived_at is an additive column."
+  },
+  {
+    "id": "M5",
+    "status": "Fixed",
+    "summary": "The Employees column and the 'Employees across all tenants' tile now count active employees by the same rule as the tenant's own reports. That means onboarded, with an Employee ID, and not past an approved last working day. Candidates are shown separately ('+N candidates') and are not counted. The old count included candidates and inactive people.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations. Note TRUE HR's Employees number. 2. Switch to TRUE HR and open its HRMIS report. Expected: the Organisations count equals the report's active-employee count. Candidates appear under the number as '+N candidates'. 3. The 'Employees, all tenants' tile equals the sum of the column.",
+    "negativeTests": "1. Add a candidate (offer sent) in a tenant. Expected: Employees is unchanged and the candidates figure goes up by 1. 2. Mark an employee Inactive. Expected: Employees goes down by 1.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: list counts 1 employee (candidate and inactive excluded)', 'v1: list counts 1 employee (candidate and inactive excluded)', 'v2: candidates counted separately'",
+    "v1Impact": "Applies to v1 too. It was a wrong number, and the field name and type are unchanged. GET /me/organisations (the switcher) uses the same count."
+  },
+  {
+    "id": "M6",
+    "status": "Fixed",
+    "summary": "An Active or Trial plan can no longer be saved with an Expires-on date in the past. The date picker blocks past dates for those statuses, and the error says 'Expires on is in the past. Pick a future date, clear it, or set the status to Expired'. Status options are readable (Trial, Active, Payment overdue, Expired). A plan that has lapsed already behaves as expired for access; the list now shows it as 'Expired' too.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations > TRUE HR > 'modules · manage'. 2. The Status options read Trial / Active / Payment overdue / Expired. 3. Choose Active, type Expires on 01-01-2020 and click Save subscription. Expected: the dialog stays open with 'Expires on is in the past…' under Expires on. 4. Set Status to Expired and save. Expected: it saves.",
+    "negativeTests": "1. Trial with a past date. Expected: the same error. 2. Active with 31-12-2099. Expected: it saves.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: ACTIVE with past expiry rejected', 'v2: TRIAL with past expiry rejected', 'v2: EXPIRED with past date accepted', 'v1 unchanged: ACTIVE with past expiry still saved', 'list reports the effective status EXPIRED for a lapsed ACTIVE plan'",
+    "v1Impact": "None (v2 only). The added subscriptionEffectiveStatus field is new. Access enforcement was already treating a past date as expired (middleware/auth.js) and is unchanged."
+  },
+  {
+    "id": "M10",
+    "status": "Fixed",
+    "summary": "Creating or editing an organisation now warns, without blocking, when the contact phone or email is already used by another organisation. It also warns when the contact email is on a personal domain (gmail, yahoo, outlook, rediffmail…). The warnings show after creation and in the organisation detail.",
+    "files": [
+      "backend/src/controllers/organisationController.js",
+      "web/app/admin/organisations/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations > New organisation. 2. Use contact phone +917586894901 (already used by BREATHE AGAIN INDIA PRIVATE LIMITED) and contact email someone@gmail.com. Create. Expected: the 'Organisation created' dialog lists 'The contact phone … is also used by BREATHE AGAIN INDIA PRIVATE LIMITED…' and 'The contact email is a personal gmail.com address; a company-domain address is preferred.' 3. Open Nishi Org's detail. Expected: the same duplicate-phone warning at the top.",
+    "negativeTests": "1. Use a unique company-domain email and a unique phone. Expected: no warnings.",
+    "automated": "scripts/v2/test-org-platform.js — 'M10: personal gmail contact gives a warning (not a block)', 'M10: same contact phone as another tenant warns'",
+    "v1Impact": "A 'warnings' array is added to the create/update responses on v1 too. It is additive and nothing is blocked."
+  },
+  {
+    "id": "M11",
+    "status": "Fixed",
+    "summary": "Master tickets: an empty filtered list now says 'No tickets found'. 'Nothing waiting' appears only on the default Needs-a-reply view. There are separate Resolved and Closed cards. Every ticket has an 'Assign to' picker listing platform admins, and assigning an Open ticket moves it to In progress. An 'Assigned' filter offers Anyone / Assigned to me / Unassigned. A 'New ticket' button lets the Master log a ticket for any organisation, e.g. one reported by phone.",
+    "files": [
+      "backend/src/controllers/platformTicketController.js",
+      "backend/src/routes/v2/org.js",
+      "backend/src/db/migrations_v2/50_org_platform.sql",
+      "web/app/admin/platform-tickets/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Master tickets. 2. Show: Everything with no tickets. Expected: 'No tickets found'. 3. Five cards are shown, including Closed. 4. Click New ticket, choose an organisation, enter a subject, description and phone 9876543210, then Create ticket. Expected: it appears in the list. 5. In its 'Assign to' picker choose superadmin@truehr.example. Expected: 'Assigned to superadmin@…' and status In progress. 6. Assigned: 'Assigned to me' lists it.",
+    "negativeTests": "1. New ticket with no organisation chosen. Expected: 'Choose the organisation this ticket is for'. 2. A tenant Super Admin calling the assign API. Expected: refused (403).",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: Master logs a ticket for a tenant', 'v2: log-on-behalf with unknown org rejected', 'ticket assigned; open ticket moves to In progress', 'assigning to a tenant user is refused', 'assign unknown ticket → 404', 'org Super Admin cannot assign', 'Closed count is reported separately', 'unassign works'",
+    "v1Impact": "None. The new routes are v2 only. The assigned_to/assigned_at columns are additive, and the list gains assignedTo/assigneeEmail fields."
+  },
+  {
+    "id": "C3",
+    "status": "Fixed",
+    "summary": "Tickets were numbered from one global counter shared by every organisation, and the only action was Resolve. Each organisation now has its own ticket numbers starting at #1, and screens show that number. Staff can reply to the employee, assign the ticket to a staff member of the same organisation, change its status (Open, In progress, Resolved, Closed) and see the full history. Employees can reply and reopen.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "backend/src/db/migrations_v2/50_org_support.js",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/support/page.jsx",
+      "web/app/ess/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as Employee of a newly created organisation > Support > Create Ticket: HR, Other, Subject 'Payslip', Description 'Payslip for March missing'. Expected: 'Ticket #1 created.' 2. Raise a second one. Expected: #2. 3. Log in as that org's Company Super Admin > Support Desk. Expected: cards show Ticket #1 and #2. 4. Click 'Open & respond', pick a staff member in 'Assigned to', type a reply and click 'Send reply'. Expected: the reply appears under Updates and the status becomes In progress. 5. As the Employee > My Tickets > View. Expected: the reply, the status and 'With <name>' are shown.",
+    "negativeTests": "1. As HR of another organisation, open /admin/support/<id of the other org's ticket> through the API. Expected: 404 'Ticket not found'. 2. Assign the ticket to a user of another organisation through the API. Expected: 400 'Choose a staff member of your organisation.'",
+    "automated": "scripts/v2/test-org-support.js — 'first ticket of a new organisation is #1', 'second is #2', 'assign to a staff member', 'assigning to another org's user → 400', 'staff reply', 'employee reply', 'HR of another org cannot open the ticket → 404'",
+    "v1Impact": "Applies to v1 too only additively: every ticket gets an org number and v1 responses gain a 'ticketNo' field. Replies, assignment and the new statuses are v2-only routes; v1 still sees only PENDING/RESOLVED (new states are folded back)."
+  },
+  {
+    "id": "C15",
+    "status": "Fixed",
+    "summary": "Departments and designations accepted junk names (!!!, 1234, <b>QA</b>), and the Hierarchy and Companies pages disagreed on whether these lists belong to the organisation or to each company. Now every department/designation name must contain letters and may only use letters, digits, spaces and & . , ' ( ) / + - (no HTML). A bulk paste with junk lines is refused and names each bad line. Both pages now say the same thing: departments and designations belong to the whole organisation and every company shares the same two lists.",
+    "files": [
+      "backend/src/controllers/companyController.js",
+      "web/app/admin/companies/page.jsx",
+      "web/app/admin/hierarchy/page.jsx",
+      "web/components/StructureEditor.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin. 2. Open People > Hierarchy & Levels > Structure. 3. In Departments type 'Quality Assurance' and click Add. Expected: '1 added.' and the message says the lists are shared by every company. 4. Open Administration > Companies > 'Departments & designations' on any company. Expected: the modal title reads 'Departments & designations (organisation-wide)' and explains the lists are shared by every company; the Companies page header says the same.",
+    "negativeTests": "1. In Hierarchy > Structure > Departments, paste '!!!', '1234' and '<b>QA</b>' on separate lines and click Add. Expected: 'Not added — fix these names: \"!!!\", \"1234\", \"<b>QA</b>\". A department name must contain letters …'. 2. In Companies > Departments & designations, add department '1234'. Expected: 'Department name must contain letters'. 3. Add designation '<script>'. Expected: 'Designation title cannot contain < or >'.",
+    "automated": "scripts/v2/test-org-structure.js — 'department \"!!!\" refused', 'department \"1234\" refused', 'department \"<b>QA</b>\" refused', 'a bulk paste with junk lines is refused and names them', 'junk designation refused', '…and the message says the lists are shared', 'v1 single add keeps old behaviour'",
+    "v1Impact": "None (v2 only) for name validation; the bulk-add message text is longer on both versions (same field)."
+  },
+  {
+    "id": "C16",
+    "status": "Fixed",
+    "summary": "Master data always showed 'Internal server error': the query that lists departments (the parent list for Sub-departments) referenced a table alias that did not exist, so GET /admin/org-masters failed for every organisation, and creating/renaming a Sub-department failed the same way. The query now reads the organisation's own departments; the hub loads and Sub-departments can be added and edited. This also fixes the empty Sub-department/Branch dropdowns on the employee form (H35). Master-data names are now validated (letters required, no HTML, case-insensitive duplicates refused with a field message), and delete/deactivate asks for confirmation. An 'Asset Category Master' list was added for the asset register.",
+    "files": [
+      "backend/src/controllers/orgMasterController.js",
+      "web/app/admin/org-masters/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin (a newly created organisation). 2. Open People > Master Data. Expected: the page loads with tiles (Bank Master, Branch Master, Sub-Department Master, Brand Master — Assets, Asset Category Master, Policy Type Master, Grade / Profile Master). 3. Click Sub-Department Master, Name 'Treasury', Department 'Finance', click Add. Expected: 'Added.' and the row appears. 4. Click Edit on it, rename to 'Treasury Ops', Save. Expected: 'Updated.'",
+    "negativeTests": "1. Bank Master > Name '!!!' > Add. Expected under Name: 'Name must contain letters'. 2. Name '<b>QA</b>'. Expected: 'Name cannot contain < or >'. 3. Add 'HDFC Bank' twice (second time 'hdfc bank'). Expected: '\"hdfc bank\" is already on this list'. 4. Sub-Department with no department chosen. Expected: 'Choose the department it belongs to'. 5. Delete a row. Expected: a confirmation dialog first.",
+    "automated": "scripts/v2/test-org-structure.js — 'GET /admin/org-masters → 200 (was 500: undefined alias c)', 'v1 hub also loads', 'a brand-new organisation\\'s hub loads', 'a sub-department can be created (was 500)', 'a sub-department can be renamed (was 500)', 'the sub-department picker now has rows (H35 dropdown)', 'another organisation\\'s department cannot be a parent', 'another organisation editing our row → 404', 'junk name \"!!!\" refused with a field message', 'case-insensitive duplicate refused with a field message'",
+    "v1Impact": "Applies to v1 too for the 500 fix (broken SQL alias — can only make a failing call work). Name validation is v2 only; v1 keeps its old checks. The hub response gains an ASSET_CATEGORY list (additive)."
+  },
+  {
+    "id": "C29",
+    "status": "Fixed",
+    "summary": "A new organisation's documents and emails fell back to the deployment's own identity (TRUE HR PVT LTD, Noida address, phone, website), and the branding editor pre-filled those values so saving stored them. Now every organisation other than the deployment's own starts from its OWN name/legal name, address and contact phone/email (no website); a company/organisation lookup (resolveBrand/brandForEmployee — used by offer letters, offer emails, letters, payslips) resolves that identity. A one-time repair migration replaces stored TRUE HR values on other tenants' profiles. The brand name now follows the legal name unless a different brand is set explicitly (and a stale TRUE HR brand is replaced when the legal name is saved). Address parts are printed once. v2 validates PIN, phone, website, email, GSTIN, CIN, PAN (stored upper-case), signatory name and the three colours with readable field messages; every error is shown at once next to its field and clears as soon as the field is edited; the editor jumps to the tab holding the first error. Offer-letter paragraphs (salutation, opening, terms, closing) reject unknown or unclosed {{placeholders}} and list the allowed ones.",
+    "files": [
+      "backend/src/services/docProfile.js",
+      "backend/src/controllers/docProfileController.js",
+      "backend/src/db/migrations_v2/50_org_branding.js",
+      "web/app/admin/branding/page.jsx"
+    ],
+    "testSteps": "1. Log in as Master, create a new organisation 'Acme Widgets Pvt Ltd' (contact phone 9876543210) and sign in as its Company Super Admin. 2. Open Documents and Comms > Document Branding. Expected: Legal name shows 'Acme Widgets Pvt Ltd'; the preview letterhead says ACME WIDGETS PVT LTD with phone 9876543210; no 'TRUE HR', Noida address or truekindfoundation website anywhere. 3. Click Proof-read > Letter / Offer. Expected: the PDFs carry Acme's name. 4. Change Legal name to 'Company Admin Pvt Ltd', PIN 751001, Website www.example.com, Phone +91 98765 43210, GSTIN 21ABCDE1234F1Z5, PAN ABCDE1234F and Save. Expected: saved; the preview and the proof-read PDFs now print COMPANY ADMIN PVT LTD. 5. As this org's HR, send an offer to a candidate. Expected: the offer letter/email is branded with this organisation, not TRUE HR.",
+    "negativeTests": "1. Enter PIN 12ab, Website xyz, Phone 12, GSTIN abc, PAN 123, CIN jasks… and click Save. Expected: no save; a summary box plus field messages: 'PIN code is not valid (6 digits)', 'Website is not valid (like www.example.com)', 'Phone is not valid (10-13 digits, like +91 98765 43210 or 0674-2301234)', 'GSTIN is not valid (15 characters, like 21ABCDE1234F1Z5)', 'PAN is not valid (like ABCDE1234F)', 'CIN is not valid (21 characters)'. 2. Colours & paper: type 'red' in Accent / rule, Save. Expected: 'Accent colour is not valid (like #0A5FD1)'; type #0A5FD1 — the message disappears immediately. 3. Offer letter tab: Salutation 'Dear {{badPlaceholder}},' Save. Expected: 'Unknown placeholder {{badPlaceholder}} — use only {{employeeName}}, {{designation}}, …'. 'Hello {{employeeName' gives 'A placeholder is not closed properly — write it like {{employeeName}}'. 4. Editing ?companyId of another organisation's company returns 404 'Company not found in your organisation.'",
+    "automated": "scripts/v2/test-org-branding.js — 'editor starts from the org's own name', 'effective brand is the org, not TRUE HR', 'resolveBrand({companyId}) alone finds the org identity (offer emails)', 'brandForEmployee for a new-org employee is that org', 'the deployment's own org keeps its fallback identity', 'field error for pincode/website/phone/gstin/pan/cin/accentColor/offer.salutation', 'unknown placeholder named in the message', 'unclosed placeholder rejected', 'brand name follows the saved legal name', 'a stale TRUE HR brand name follows a new legal name', 'legal name repaired to the org's own' (migration), 'v1 keeps its old (lenient) contract', 'another org's company → 404'",
+    "v1Impact": "Defaults/brand-name-follows-legal/address de-duplication/repair migration apply to v1 too — they only correct wrong data printed on documents (another company's identity). The new field validation is v2 only; v1 PUT keeps its old rules and messages (asserted)."
+  },
+  {
+    "id": "C30",
+    "status": "Fixed",
+    "summary": "Policies was a hard-coded list of 8 TRUE HR documents shown to every organisation. Each organisation now owns its list (new policy_slots table): HR can add, rename, reclassify (Policy/Format, category from the Policy Type master, description, 'acknowledgement required') and delete entries. TRUE HR keeps its existing 8 entries (seeded once by migration, 2 of them as Formats); a new organisation starts with an empty list.",
+    "files": [
+      "backend/src/controllers/policyController.js",
+      "backend/src/db/migrations_v2/50_org_policies.sql",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/policies/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin of a new organisation. 2. Open Policies. Expected: empty list 'No policies yet'. 3. Click 'Add policy', Title 'Code of Conduct', tick 'Employees must acknowledge', Save. Expected: it appears under Policies. 4. Click Edit, rename to 'Code of Conduct 2026', Save. Expected: renamed. 5. Switch to Formats tab, 'Add format' 'Travel Claim Form'. 6. Click Delete on an entry, confirm. Expected: removed. 7. Log in as TRUE HR HR. Expected: the same 8 documents as before (Star Of The Month Nomination Form and Reimbursement Form under Formats).",
+    "negativeTests": "1. Add policy with Title '!!!'. Expected: 'Title must contain letters or digits'. 2. Add 'code of conduct 2026' when 'Code of Conduct 2026' exists. Expected: '“code of conduct 2026” is already on your list'. 3. Rename an entry to an existing title. Expected: same duplicate message. 4. Blank title. Expected: 'Title is required'.",
+    "automated": "scripts/v2/test-org-policies.js — 'TRUE HR still lists its 8 documents', 'add a new policy', 'duplicate title (case-insensitive) refused', 'junk title refused', 'rename a policy', 'rename onto an existing title refused', 'remove a policy from the list', 'new org admin list empty on v1', 'rename/delete another org slot → 404', 'same title allowed in a different org'",
+    "v1Impact": "Applies to v1 too for the list content only (wrong data: other orgs no longer see TRUE HR's 8 titles); v1 response shapes unchanged (new keys added). A v1 upload under a new title still works and adds it to the org's list. Slot CRUD endpoints are v2 only."
+  },
+  {
+    "id": "C31",
+    "status": "Fixed",
+    "summary": "The scheduler accepted an hour of -3 (saved as 00:00), had no date for one-time schedules, and showed raw values (ALL, ONCE, active). Time is now an HH:MM picker (hours 0-23, minutes 00-59, India time). One-time schedules need a date that is today or later. Weekly uses weekday names and monthly uses a day 1-28. All errors show together and the form stays open. Audience, cadence and state are shown as readable labels (Everyone, One time, Active/Paused/Sent), with a sentence such as 'Every Monday at 18:05' and the next run in IST. The background job used to apply the hour in server UTC, so '9 am' went out at 14:30 IST. It now computes in Asia/Kolkata and honours minutes and the one-time date. Existing pending schedules were shifted once by migration so they keep their intended IST hour. Resuming a paused schedule moves it to its next occurrence instead of firing at once.",
+    "files": [
+      "backend/src/controllers/notificationScheduleController.js",
+      "backend/src/services/notificationScheduler.js",
+      "backend/src/db/migrations_v2/50_org_ops.sql",
+      "web/app/admin/notification-scheduler/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin or HR. 2. Documents and Comms > Scheduler > New schedule. 3. Title 'QA test schedule', Message 'Hello', Repeats 'One time', Date = tomorrow, Time 09:30 > Create. Expected: the row reads 'One time · <dd-mm-yyyy> at 09:30', 'Next run (IST)' shows the same date at 09:30, State 'Active'. 4. New schedule > Repeats 'Weekly' > Day of week 'Monday', Time 18:05 > Create. Expected: 'Every Monday at 18:05'.",
+    "negativeTests": "1. Type a time such as 25:00 (or send runAtHour -3 through the API). Expected: 'Hour must be between 0 and 23'. 2. Choose One time with no date. Expected: 'Date is required'. 3. Choose yesterday's date. Expected: 'Date cannot be in the past'. 4. Choose today with a time that has passed. Expected: 'That time today has already passed — choose a later time'. 5. Clear the title and message and press Create. Expected: both errors listed together, modal stays open with the input kept.",
+    "automated": "scripts/v2/test-org-ops.js — 'hour -3 rejected on v2', 'time 25:00 rejected', 'minutes 75 rejected', 'ONCE needs a date', 'ONCE date in the past rejected', 'WEEKLY needs a weekday', 'all field errors returned together', 'next run is 09:30 IST (04:00 UTC) on that date', 'DAILY 09:00 after 09:30 IST → next day 03:30 UTC', 'due schedule delivered exactly once across two ticks', 'v1 still accepts hour -3 (clamped to 0)', 'another org cannot pause my schedule (404)'",
+    "v1Impact": "Validation is v2 only. v1 POST still clamps the hour and accepts duplicates. The IST computation of next_run_at and the job's double-fire claim apply to v1 too: they are background-job fixes, so a v1 schedule fires at the hour it names in India time. The response only gains fields (run_time, day_name, run_at_minute, run_on_date)."
+  },
+  {
+    "id": "C38",
+    "status": "Fixed",
+    "summary": "Company employee-ID prefix could never be changed even with 0 IDs issued, statutory IDs accepted junk, names differing only by case were allowed, and the standard department option silently grew the organisation's lists. Now (v2): the prefix can be edited until the first employee ID is issued from it (the Edit dialog shows the prefix field, or explains how many IDs locked it); a prefix whose IDs already exist in another company (e.g. TKF/TH) is refused because codes would continue that company's numbering; GSTIN, PAN, PF code and ESIC code are validated (and GSTIN must contain the PAN); a duplicate company name in any letter case is refused; creating a company with the standard list reports exactly which departments/designations were added to the organisation-wide lists and which already existed. Employee counts on company cards now use the active-employee rule.",
+    "files": [
+      "backend/src/controllers/companyController.js",
+      "backend/src/controllers/metaController.js",
+      "web/app/admin/companies/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin. 2. Administration > Companies > New company: Name 'QA Logistics', prefix 'QAL', GSTIN '21ABCDE1234F1Z5', PAN 'ABCDE1234F', keep 'Add the standard department list' ticked, Create. Expected: notice says employee IDs start QAL and lists how many departments/designations were added to the organisation-wide lists (or that they already existed). 3. Click Edit on QA Logistics. Expected: 'Employee ID prefix' is editable with the hint 'No employee ID has been issued from it yet'. Change to 'QLG', Save. Expected: 'Company updated.' 4. Edit a company that already has employees. Expected: 'Employee ID prefix is … and can no longer be changed — N employee IDs have already been issued from it.'",
+    "negativeTests": "1. Edit company: GSTIN 'abc', PAN '123', PF 'p', ESIC 'e', Save. Expected (all at once): 'GSTIN is not valid (15 characters, like 21ABCDE1234F1Z5)', 'PAN is not valid (like ABCDE1234F)', 'PF code is not valid (like MHBAN00123450000123456)', 'ESIC code is not valid (17 digits)'; dialog stays open with input kept. 2. New company named 'company admin' when 'Company Admin' exists. Expected: 'A company called \"Company Admin\" already exists in this organisation'. 3. New company with prefix 'TKF' (TRUE HR's). Expected: 'Employee IDs starting TKF already exist in another company — pick a different prefix'. 4. Prefix 'X'. Expected: 'Employee ID prefix must be 2–6 letters or digits (e.g. TKF)'. 5. GSTIN 21ABCDE1234F1Z5 with PAN ZZZZZ9999Z. Expected: 'GSTIN does not contain this PAN …'.",
+    "automated": "scripts/v2/test-org-structure.js — 'bad GSTIN/PAN/PF/ESIC all refused at once', 'GSTIN that does not contain the PAN refused', 'the response says what the standard list did', 'standard names that already existed are reported, not silently added', 'a duplicate company name differing only by case is refused', 'v1 keeps its old behaviour for the duplicate name', 'a prefix already used for another company\\'s IDs is refused (v2)', 'the prefix can be changed while no ID has been issued', 'once an ID is issued the prefix is locked, and says why', 'v1 edit still ignores codePrefix', 'another organisation editing our company → 404', 'company employee count uses the active-employee rule'",
+    "v1Impact": "Validation, duplicate-name block and prefix editing are v2 only (v1 PATCH still ignores codePrefix — asserted by scripts/test-companies.js). Added response fields (idsIssued, prefixLocked, structure, structureMessage, fields) are additive. Company employee counts use activeEmployeeSql on both versions (wrong-data fix)."
+  },
+  {
+    "id": "C42",
+    "status": "Fixed",
+    "summary": "Assets accepted a negative cost, had no edit or delete, the assign dialog had no date or condition, return had no condition or notes, and statuses were raw lowercase. Now: cost must be 0 to ₹10 crore with at most 2 decimals (accepts '50,000'). Each asset has Edit, including a status change to In stock / In repair / Retired / Lost (an assigned asset must be returned first). Delete is offered only for assets never assigned; otherwise 'Mark it Retired or Lost instead'. Assign asks for employee, assigned date (not in the future, not before purchase) and condition at hand-over. Return asks for condition, where the asset goes (In stock / In repair / Retired / Lost) and notes. Only in-stock assets can be assigned. Statuses and conditions show as readable labels, and the assign picker lists employees only (not candidates).",
+    "files": [
+      "backend/src/controllers/assetController.js",
+      "backend/src/db/migrations_v2/50_org_ops.sql",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/assets/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin or HR. 2. Administration > Asset management > Add asset: Tag QA-LAP-001, Category Laptop, Cost 50,000 > Save. Expected: row with Status 'In stock', Cost '₹50,000'. 3. Assign > pick TH5001, Assigned on today, Condition Good > Assign. Expected: 'Assigned', 'since <date> · Good'. 4. Return > Condition Damaged, Asset goes to In repair, Notes 'Screen cracked' > Record return. Expected: Status 'In repair'. 5. Edit > Status Retired > Save. Expected: 'Retired'.",
+    "negativeTests": "1. Add asset with cost -50000. Expected: 'Cost cannot be less than 0'. 2. Assign without a date. Expected: 'Assigned date is required'. 3. Return without a condition (API). Expected: 'Condition on return is required'. 4. Delete an asset that was ever assigned (API). Expected: '<tag> has been assigned before, so it cannot be deleted. Mark it Retired or Lost instead.' 5. Assign an asset that is In repair (API). Expected: 'This asset is in repair — only an asset in stock can be assigned.' 6. Another organisation edits or deletes this asset id. Expected: 404 'Asset not found.'",
+    "automated": "scripts/v2/test-org-ops.js — 'negative cost rejected', 'assign needs date and condition', 'assign with date + condition', 'status cannot change while assigned', 'delete of an asset with history refused 409', 'return with condition + notes → In repair', 'an asset in repair cannot be assigned', 'edit + status Retired', 'partial edit keeps the fields it did not send', 'never-assigned asset deleted', 'another org cannot delete my asset (404)', 'v1 create unchanged (still accepts negative cost)', 'v1 status values unchanged (lowercase)'",
+    "v1Impact": "None (v2 only). Stored status values stay lowercase for the Android app; v1 create, edit, assign and return behave as before, and responses only gain fields."
+  },
+  {
+    "id": "C48",
+    "status": "Fixed",
+    "summary": "HR issue types were a hard-coded list written for TRUE HR (My Vision Login, MSIL Portal…), so every organisation saw them. Issue types are now stored per organisation. TRUE HR keeps its existing list. Any other organisation starts with neutral defaults (Salary / Payslip, Leave & Attendance, PF, ESIC, Insurance, Other…). Admins can add, rename and remove types and details under Support Desk > Issue types.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "backend/src/db/migrations_v2/50_org_support.js",
+      "web/app/admin/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin of a non-TRUE HR organisation > Support Desk > Issue types. Expected: HR, IT and Admin lists with no 'My Vision Login'. 2. Click 'Add issue type': Desk HR, Issue type 'Canteen card', details 'Lost' and 'Not working' (one per line) > Save. 3. As an Employee of that org > Support > Create Ticket > HR. Expected: 'Canteen card' is listed, and choosing it asks for an Issue detail. 4. Back as admin, click Remove on it and confirm. Expected: it disappears from the employee list.",
+    "negativeTests": "1. Add 'canteen CARD' again under HR. Expected: '“canteen CARD” is already an issue type under HR.' 2. Save with an empty Issue type. Expected: 'Issue type is required'.",
+    "automated": "scripts/v2/test-org-support.js — 'new org gets neutral defaults, no TKF items', 'admin adds an issue type', 'duplicate issue type (case-insensitive) → 409', 'another org cannot edit it → 404', 'removed type disappears from the employee list'",
+    "v1Impact": "v1 GET /support/catalog returns the stored list exactly as before (TRUE HR keeps ADMIN \"Others\" and IT has no \"Other\" type); a v1 ticket with \"Others\" still saves and lists. The consistent \"Other\" spelling and extra \"Other\" entries are applied on v2 output only (supportController.v2Catalog). Other organisations get their own neutral list on both versions (data-isolation fix)."
+  },
+  {
+    "id": "C49",
+    "status": "Fixed",
+    "summary": "An employee whose login had no organisation set saw and downloaded every tenant's policy files, because the query treated a missing organisation as 'all'. The employee's organisation is now taken from their employee record (only the platform owner is ever cross-tenant), the list is built from the caller's own organisation's entries, and another organisation's file id answers 404.",
+    "files": [
+      "backend/src/controllers/policyController.js"
+    ],
+    "testSteps": "1. Log in as an employee of the Company Admin organisation (e.g. TH5001). 2. Open Policies. Expected: only that organisation's uploaded documents; none of TRUE HR's (no Holiday Calendar / Reimbursement Form unless this org uploaded its own). 3. Company Super Admin > Policies shows the same set.",
+    "negativeTests": "1. As TH5001, request a TRUE HR policy file id directly (/api/policies/<id>/file). Expected: 404 'Policy not found'.",
+    "automated": "scripts/v2/test-org-policies.js — 'new org employee sees no TRUE HR titles (v1)', 'new org employee cannot download TRUE HR file (v1) → 404', '… nor on v2 → 404', 'account with NULL org: no other tenant policies (v1)', 'account with NULL org: TRUE HR file → 404'",
+    "v1Impact": "Applies to v1 too — cross-tenant leak fix; shapes unchanged."
+  },
+  {
+    "id": "H5",
+    "status": "Fixed",
+    "summary": "Tickets could be resolved with no resolution note. On v2, moving a ticket to Resolved or Closed now needs a resolution note of at least 5 characters, and the employee sees it. The employee is also notified in the app.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "web/app/admin/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Support Desk > Open & respond on a ticket. 2. Change status to Resolved with the note empty > Save status. Expected: 'Resolution note is required' under the note. 3. Enter 'Payslip re-published' > Save status. Expected: status Resolved, and the employee sees 'Resolution: Payslip re-published'.",
+    "negativeTests": "1. Note 'ok'. Expected: 'Resolution note must be at least 5 characters'.",
+    "automated": "scripts/v2/test-org-support.js — 'v2: resolve without a note → 400 \"Resolution note is required\"', 'resolve with note', 'v1: resolve without a note still works'",
+    "v1Impact": "None (v2 only). v1 /api/admin/support/:id/resolve still accepts an empty note."
+  },
+  {
+    "id": "H6",
+    "status": "Fixed",
+    "summary": "The Resolve/Update popup had no close button and ignored Esc. The ticket popup now uses the shared dialog, which has an X and closes on Esc, plus a Cancel button.",
+    "files": [
+      "web/app/admin/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Support Desk > Open & respond. 2. Press Esc. Expected: the popup closes. 3. Open it again and click X, then open again and click Cancel. Expected: both close it without saving.",
+    "negativeTests": "1. Type a note, then press Esc. Expected: the popup closes and nothing is saved (the status is unchanged).",
+    "automated": "None (UI only; the shared Modal provides X/Esc).",
+    "v1Impact": "None (web only)."
+  },
+  {
+    "id": "H7",
+    "status": "Fixed",
+    "summary": "Duplicate tickets with the same issue and text were accepted silently. On v2, raising the same issue again (same desk, type, detail and description, ignoring case and spaces) while one is still open now gives a warning naming the open ticket. The employee can choose 'Don’t raise it' or 'Raise anyway'. The desk also tags such tickets 'Possible duplicate of #N'. Phone numbers stored as '07586894901' or '+91…' are shown as a clean 10-digit mobile, and a number that is not a valid mobile is flagged '(invalid number on record)'. This is display-only: the stored value is not changed here.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "web/app/ess/support/page.jsx",
+      "web/app/admin/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as Employee > Support > Create Ticket: HR > Salary Slip, Subject 'Slip', Description 'Salary slip not visible' > Create. 2. Repeat with the same values. Expected: 'You already have an open ticket #N for this same issue. Add a reply there instead, or confirm to raise it again.' with 'Raise anyway'. 3. Click Raise anyway. 4. Log in as HR > Support Desk. Expected: the second ticket shows 'Possible duplicate of #N'. 5. For an employee whose phone is 07586894901, the card shows 7586894901.",
+    "negativeTests": "1. Same issue but different description. Expected: no warning. 2. Employee with phone '12345'. Expected: '12345 (invalid number on record)'.",
+    "automated": "scripts/v2/test-org-support.js — 'same open issue again → 409 naming the open ticket', 'confirming raises it anyway', 'v1: no duplicate block', 'desk flags the possible duplicate', '11-digit 0-prefixed phone shown as a clean 10-digit mobile', 'invalid stored phone is flagged'",
+    "v1Impact": "None (v2 only)."
+  },
+  {
+    "id": "H8",
+    "status": "Fixed",
+    "summary": "The desk had only Pending and Resolved. Tickets now move through Open, In progress, Resolved, Closed, Reopened and Cancelled. A reply or an assignment moves an Open ticket to In progress. The employee can reopen a resolved ticket or cancel an open one. The status and every update (who, when, what) are shown to the employee. HR can filter by each status. 'Awaiting verification' was not added as a separate state: Resolved is that step, and the employee either reopens or the desk closes.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "backend/src/db/migrations_v2/50_org_support.js",
+      "web/app/admin/support/page.jsx",
+      "web/app/ess/support/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Support Desk, filter 'Open'. 2. Open a ticket, change status to In progress > Save status. 3. Change to Resolved with a note. 4. As the Employee > My Tickets > View. Expected: status Resolved and the updates listed with dates. Type a reason > Reopen. Expected: Reopened. 5. As HR, change to Closed with a note and confirm. Expected: Closed, and the employee can no longer reopen or reply.",
+    "negativeTests": "1. Reopen a Closed ticket through the API. Expected: 400 'Only a resolved ticket can be reopened.' 2. Reply on a Closed ticket. Expected: 'This ticket is closed. Raise a new ticket instead.'",
+    "automated": "scripts/v2/test-org-support.js — 'v2: move to In progress', 'employee sees status, assignee and thread', 'employee reopens a resolved ticket', 'a closed ticket cannot be reopened', 'v1: In progress is reported as PENDING', 'closed ticket shows as RESOLVED on v1', 'v1: only PENDING/RESOLVED accepted'",
+    "v1Impact": "Safe for v1: new states are stored, but v1 responses fold IN_PROGRESS/REOPENED to PENDING and CLOSED/CANCELLED to RESOLVED, and the v1 'Pending' filter returns all still-open tickets."
+  },
+  {
+    "id": "H55",
+    "status": "Fixed",
+    "summary": "Hierarchy counted people with a different rule from the org chart and reports. Level, designation and department counts on Hierarchy & Levels now use the one shared 'active employee' rule (onboarded, has an employee ID, not past an approved last working day), and the tile now reads 'Employees placed on a level — of N active employees (same count as the org chart and reports)'. Delete protection still counts every record (candidates, leavers), shown as 'in use (N records)'.",
+    "files": [
+      "backend/src/controllers/levelController.js",
+      "web/app/admin/hierarchy/page.jsx",
+      "web/components/StructureEditor.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. People > Hierarchy & Levels. Expected: 'Employees placed on a level' shows a number with caption 'of N active employees'; N matches the active employee count on the HRMIS report / dashboard. 3. Compare a level's 'x titles · y people' with the employees holding those titles who are active. Expected: candidates (offer sent / filling details) and people past an approved last working day are not counted.",
+    "negativeTests": "1. A designation held only by a candidate shows 'in use (1 record)' and its tick-box is disabled (cannot be deleted), but counts 0 employees.",
+    "automated": "scripts/v2/test-org-structure.js — 'a designation counts only active employees (1 of 3 records)', '…while holders (what blocks a delete) counts all 3', 'a level counts only active employees', 'v1 hierarchy uses the same corrected count'",
+    "v1Impact": "Applies to v1 too — wrong data shown; counts only change value, no field renamed. New fields holders/totalEmployees/standardLevelNames are additive. Note: the org chart's 'Placed on a level 15/23' comes from employeeController.orgChart (people area) and must use activeEmployeeSql there too for the two screens to match."
+  },
+  {
+    "id": "H56",
+    "status": "Fixed",
+    "summary": "Level names accepted any text, including person names ('Mr tripathy'). Now (v2) every level name must contain letters, use only normal characters, be unique (any letter case) and must not start with an honorific (Mr, Mrs, Ms, Miss, Dr, Shri, Smt …); each bad row gets its own message under the field. The name box suggests standard labels (Board, Leadership, Senior Management, Management, …) and the presets remain.",
+    "files": [
+      "backend/src/controllers/levelController.js",
+      "web/app/admin/hierarchy/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. People > Hierarchy & Levels > The ladder. 3. Click 'Four rungs' (or type L1 Board / Leadership / Management) and Save hierarchy. Expected: 'Hierarchy saved.' 4. Click in a level name. Expected: standard labels are suggested.",
+    "negativeTests": "1. Rename L1 to 'Mr tripathy' and Save. Expected under the row: 'Level 1: \"Mr tripathy\" looks like a person's name. A level names a rung (e.g. \"L1 Board\", \"Management\"), not a person'. 2. Two levels 'Board' and 'board'. Expected: 'Level 2: \"board\" is already used by level 1'. 3. Level '!!!'. Expected: 'Level 1: \"!!!\" is not a valid level name …'. The error clears as soon as the row is edited.",
+    "automated": "scripts/v2/test-org-structure.js — 'person names refused with a message per level', 'case-insensitive duplicate levels refused', 'junk level name refused', 'standard level labels are offered', 'sensible names are accepted', 'v1 keeps accepting free text (v2-only rule)'",
+    "v1Impact": "None (v2 only)."
+  },
+  {
+    "id": "H57",
+    "status": "Fixed",
+    "summary": "Same root cause as C16: /api/admin/org-masters returned 500 because of an undefined table alias in the department query. Fixed on both API versions; Master data now loads for every organisation.",
+    "files": [
+      "backend/src/controllers/orgMasterController.js",
+      "web/app/admin/org-masters/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Open People > Master Data. Expected: the page loads the reference lists (Bank, Branch, Sub-Department, Asset brand, Asset category, Policy type, Grade) with counts — no 'Internal server error'.",
+    "negativeTests": "1. As HR of another organisation, open Master Data. Expected: only that organisation's rows and departments are listed.",
+    "automated": "scripts/v2/test-org-structure.js — 'GET /admin/org-masters → 200 (was 500: undefined alias c)', 'v1 hub also loads (crash fix applies to both)'",
+    "v1Impact": "Applies to v1 too — a 500 fix; the response shape is unchanged apart from the added ASSET_CATEGORY list."
+  },
+  {
+    "id": "H64",
+    "status": "Fixed",
+    "summary": "Wishes listed a 'work anniversary' (0 years) on the employee's joining date. Anniversaries now start from the first completed year and show the count, for example 'Work anniversary · 1 year'. 'Today' now means today in India rather than the server's UTC date, dates are shown as dd-mm-yyyy, and only employees are listed (active with an employee ID, not past their last working day), never candidates.",
+    "files": [
+      "backend/src/controllers/wishesController.js",
+      "web/app/admin/wishes/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. People > Wishes > Next 7 days. Expected: someone who joined exactly a year ago today shows 'Today · Work anniversary · 1 year'. Someone who joined today (e.g. DOJ = today) is not listed as an anniversary.",
+    "negativeTests": "1. An employee whose DOJ is today. Expected: no anniversary row. 2. A candidate whose offer is still pending. Expected: not listed.",
+    "automated": "scripts/v2/test-org-ops.js — 'joining day itself is not a work anniversary', '1st completed year listed with years = 1', 'v1 gets the same fix (wrong data) and keeps its fields'",
+    "v1Impact": "Applies to v1 too. It is a wrong-data fix: the response keeps every field (type, inDays, date, name, code, email, years) and only adds employeeId, occasion and sentToday."
+  },
+  {
+    "id": "H65",
+    "status": "Fixed",
+    "summary": "HR could not send greetings from Wishes. Each row whose occasion is today now has a 'Send wishes' button. It opens an editable message (pre-filled from the organisation's template; {name}, {years} and {company} are filled in) and sends an in-app notification plus an email to the employee. The row then shows '✓ Sent today'. A second send for the same person and occasion the same day is refused. Rows for future dates show 'On the day'.",
+    "files": [
+      "backend/src/controllers/wishesController.js",
+      "backend/src/services/notificationScheduler.js",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/wishes/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. People > Wishes. 3. On a 'Today' row press Send wishes, keep or edit the message > Send. Expected: 'Wishes sent to <name> (app notification and email).' and the row shows '✓ Sent today'. 4. Log in as that employee. Expected: the notification 'Happy birthday!' or 'Happy work anniversary!' with the message; the email is in their inbox.",
+    "negativeTests": "1. Clear the message and press Send. Expected: 'Message is required'. 2. Send again to the same person the same day (API). Expected: 'Wishes were already sent to <name> today.' 3. Send an anniversary wish for someone with less than a year (API). Expected: 'This employee has not completed a year yet.' 4. Another organisation's admin sends to this employee id. Expected: 404 'Employee not found.'",
+    "automated": "scripts/v2/test-org-ops.js — 'send wishes → 201 with the rendered message', 'in-app notification written', 'email queued to the employee', 'second send the same day blocked 409', 'another org cannot send to my employee (404)', 'HR can send a custom birthday message'",
+    "v1Impact": "None (new v2-only endpoint POST /api/v2/admin/wishes/send)"
+  },
+  {
+    "id": "H66",
+    "status": "Fixed",
+    "summary": "There was no setting for automatic greetings. The Wishes page now has an 'Automatic greetings' block: Birthdays on/off, Work anniversaries on/off, Also email on/off, a send-from hour (IST), and editable birthday and anniversary messages with placeholders. Settings are saved per organisation. Unknown placeholders are rejected, and a Discard button reverts unsaved changes. The existing 5-minute background job sends each greeting once per employee per day after the chosen hour. If HR already sent the same wish by hand, the job does not send it again.",
+    "files": [
+      "backend/src/controllers/wishesController.js",
+      "backend/src/services/notificationScheduler.js",
+      "backend/src/db/migrations_v2/50_org_ops.sql",
+      "backend/src/routes/v2/org.js",
+      "web/app/admin/wishes/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. People > Wishes > Automatic greetings: tick Birthdays and Work anniversaries, Send from 09:00 > Save settings > confirm 'Turn on'. Expected: 'Greeting settings saved.' 3. On an employee's birthday after 09:00 IST, that employee receives 'Happy birthday!' in the app (and by email), only once.",
+    "negativeTests": "1. Change the birthday message to 'Hi {nam}' > Save. Expected: 'Unknown placeholder {nam} — use {name}, {years} or {company}'. 2. Clear the anniversary message > Save. Expected: 'Anniversary message is required'. 3. Another organisation's settings are unaffected (each organisation starts with greetings off).",
+    "automated": "scripts/v2/test-org-ops.js — 'settings default off with default messages', 'bad hour, unknown placeholder and blank message all reported', 'settings saved', 'settings are per organisation', 'daily job greets the birthday employee once', 'job does not repeat an anniversary HR already sent by hand'",
+    "v1Impact": "None. These are new v2 endpoints; the job only acts for organisations that switch the setting on (off by default)."
+  },
+  {
+    "id": "H100",
+    "status": "Fixed",
+    "summary": "GSTIN, CIN and PAN accepted any text and printed it on every letterhead. On v2 they are validated (GSTIN 15 characters like 21ABCDE1234F1Z5, CIN 21 characters like U72900OR2020PTC123456, PAN like ABCDE1234F), checked in the browser before submit and again on the server, and stored upper-case.",
+    "files": [
+      "backend/src/controllers/docProfileController.js",
+      "web/app/admin/branding/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Documents and Comms > Document Branding > Identity & letterhead. 3. Enter GSTIN 21abcde1234f1z5, CIN U72900OR2020PTC123456, PAN abcde1234f and Save. Expected: saved; the fields show 21ABCDE1234F1Z5 / ABCDE1234F and the preview tax line shows them.",
+    "negativeTests": "1. GSTIN 'jasksfjloesifakfjkavsjfkasvjf' → 'GSTIN is not valid (15 characters, like 21ABCDE1234F1Z5)'. 2. PAN 'nbsdvasdbvcasnmdnbsad' → 'PAN is not valid (like ABCDE1234F)'. 3. CIN 'abc' → 'CIN is not valid (21 characters)'. Nothing is saved while any error remains.",
+    "automated": "scripts/v2/test-org-branding.js — 'field error for gstin', 'field error for pan', 'field error for cin', 'statutory ids stored upper-case'",
+    "v1Impact": "None (v2 only)"
+  },
+  {
+    "id": "H101",
+    "status": "Fixed",
+    "summary": "Unsaved branding edits could be lost without warning. The form already keeps edits across its tabs (an 'Unsaved' badge shows); now switching tab while there are unsaved changes asks 'Save your changes?' (Save now / Not yet — 'Not yet' keeps the edits in the form), switching the 'Editing' company asks 'Discard unsaved changes?' (Stay here / Discard changes), and refreshing, closing the tab or clicking a sidebar link asks the browser's leave-page confirmation. The Payslip components page mentioned in the note belongs to the payroll area and is not changed here.",
+    "files": [
+      "web/app/admin/branding/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Document Branding. 2. Change Legal name, then click the 'Colours & paper' tab. Expected: dialog 'Save your changes?'; 'Save now' saves and switches; 'Not yet' switches and the change is still there (Unsaved badge). 3. Change a field, pick another company in 'Editing'. Expected: 'Discard unsaved changes?' — 'Stay here' keeps you and the edit. 4. Change a field and press F5 / click 'Dashboard' in the sidebar. Expected: the browser asks to confirm leaving.",
+    "negativeTests": "1. With no changes, switching tabs/companies or refreshing shows no prompt. 2. In the dialog press Esc or X: nothing is lost (for a tab switch the edits stay in the form; for a company switch you stay on the current company).",
+    "automated": "Not automatable in the API suite (browser behaviour); web/scripts/check-jsx.mjs passes for the page.",
+    "v1Impact": "None (web only)"
+  },
+  {
+    "id": "H102",
+    "status": "Fixed",
+    "summary": "Letterhead problems in generated PDFs. Fixed in the shared PDF code: (a) the logo is now fitted into a fixed box and the company name starts after the logo's actual width, and the name is truncated before it can run into the contact text on the right (HR letters, F&F statement, Form 16, branding samples); (b) the address is assembled once — city/state/PIN already contained in address line 1 are no longer repeated (applies to every PDF: offer letter, payslip, letters, information sheet); (c) no signature image is ever invented: without an uploaded signature the block is a signature line plus the signatory's name, an uploaded one is fitted into a 160×40 signature box (offer letter and letters both use this), and v2 refuses a photo-shaped signature upload ('The signature should be a cropped scan of the signature itself — at least twice as wide as it is tall. This image looks like a photo.'). Not done here: the offer letter's and payslip's own letterhead code (services/offerLetterPdf.js, paySlipPdf.js — other areas' files) still draws the logo by height only; a new exported helper drawLogo() is ready and the lead is asked to switch those two calls to it. An existing stock-photo signature already saved by a tenant still prints (fitted small) until HR removes or replaces it on the Logo & signature tab. Follow-up: the offer letter (services/offerLetterPdf.js), payslip (services/paySlipPdf.js) and personal info sheet (services/personalInfoSheet.js) now also draw the logo with docPdf.drawLogo (fitted box, text starts after it) - verified in code, so the overlap fix covers every generated PDF.",
+    "files": [
+      "backend/src/services/docPdf.js",
+      "backend/src/services/docProfile.js",
+      "backend/src/controllers/docProfileController.js",
+      "web/app/admin/branding/page.jsx",
+      "backend/src/services/offerLetterPdf.js (people agent)",
+      "backend/src/services/paySlipPdf.js (payroll agent)",
+      "backend/src/services/personalInfoSheet.js (people agent)"
+    ],
+    "testSteps": "1. Log in as HR > Document Branding > Logo & signature. Upload a wide logo (e.g. 400×120 PNG) and a cropped signature scan; Save. 2. Identity: Address line 1 'A-11, Sector-67, Bhubaneswar, Odisha 751001', City Bhubaneswar, State Odisha, PIN 751001; Save. 3. Click Proof-read > Letter. Expected: logo on the left, company name starts to its right without overlapping; address appears once as 'A-11, Sector-67, Bhubaneswar, Odisha 751001'; signature image is small above the line with the signatory name. 4. Remove the signature image and Save; Proof-read > Offer. Expected: a plain signature line with the signatory name, no picture.",
+    "negativeTests": "1. Upload a square photo as the signature and Save. Expected: 'The signature should be a cropped scan of the signature itself — at least twice as wide as it is tall. This image looks like a photo.' 2. Upload a GIF/other file as logo. Expected: 'Choose a PNG or JPEG image.'",
+    "automated": "scripts/v2/test-org-branding.js — 'a photo-shaped signature is refused on v2', 'a wide signature scan and a wide logo are accepted', 'sample letter/offer/payslip renders a PDF with the wide logo', 'drawLogo fits a wide logo inside its box (no overlap with the name)', 'address printed once (no duplicated city/state/PIN)', 'signature can be removed (no stock image is substituted)'",
+    "v1Impact": "PDF layout fixes apply to v1 too (they only change how existing documents render). The photo-shaped signature check is v2 only."
+  },
+  {
+    "id": "H103",
+    "status": "Fixed",
+    "summary": "Policy uploads from the web portal now accept PDF, DOC or DOCX only. The file picker is limited to those types, and both browser and server reject anything else with 'Policies must be PDF, DOC or DOCX files' (file content is also checked against its claimed type).",
+    "files": [
+      "backend/src/controllers/policyController.js",
+      "web/app/admin/policies/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Policies & formats > Upload on any policy. 2. Choose a PDF. Expected: uploaded. 3. Choose a DOCX. Expected: uploaded.",
+    "negativeTests": "1. Choose a .jpg (e.g. via 'All files' in the picker) and Upload. Expected: 'Policies must be PDF, DOC or DOCX files'. 2. An .xlsx file. Expected: same message. 3. Upload without a file. Expected: 'Choose a PDF, DOC or DOCX file to upload'.",
+    "automated": "scripts/v2/test-org-policies.js — 'v2 upload of a JPG refused with a field message', 'v2 upload of an XLSX refused', 'v2 DOCX upload accepted', 'v1 upload of a JPG still accepted'",
+    "v1Impact": "None (v2 only) — v1 (Android/old tab) still accepts its previous file types."
+  },
+  {
+    "id": "H104",
+    "status": "Fixed",
+    "summary": "HR now has 'Add policy' / 'Add format' on the Policies page, plus Edit (rename, category, description, acknowledgement), Upload/Replace with version and effective date, View, Remove file, and Delete from the list (with confirmation). See C30.",
+    "files": [
+      "web/app/admin/policies/page.jsx",
+      "backend/src/controllers/policyController.js",
+      "backend/src/routes/v2/org.js"
+    ],
+    "testSteps": "1. Log in as HR > Policies & formats. 2. Click 'Add policy', Title 'Work From Home Policy', Save. 3. Click Upload on it, choose a PDF, Version '1.0', Upload. Expected: 'Uploaded <date>', View works. 4. Remove file (confirm) — entry stays as 'Not uploaded'. 5. Delete (confirm) — entry removed.",
+    "negativeTests": "1. Add policy with an existing title in different case. Expected: '“…” is already on your list'. 2. Delete asks for confirmation; Cancel keeps the entry.",
+    "automated": "scripts/v2/test-org-policies.js — 'add a new policy', 'upload against the new slot', 'renamed slot shows with its file', 'remove a policy from the list', 'removed one is gone'",
+    "v1Impact": "None (v2 only — new endpoints)."
+  },
+  {
+    "id": "H106",
+    "status": "Fixed",
+    "summary": "Two identical schedules (same title, message, audience, cadence and time) could both be active, so employees got the announcement twice. Creating an identical active schedule is now refused, case-insensitively: 'An identical active schedule already exists (\"<title>\"). Pause or delete it first.' Resuming a paused copy of an active schedule is refused the same way.",
+    "files": [
+      "backend/src/controllers/notificationScheduleController.js",
+      "web/app/admin/notification-scheduler/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Scheduler > New schedule: Title 'Weekend Get-Together', Message 'Join us', Everyone, Weekly, Saturday, 06:00 > Create. Expected: created.",
+    "negativeTests": "1. Create the same schedule again, even with the title in different case. Expected: error 'An identical active schedule already exists (\"Weekend Get-Together\"). Pause or delete it first.' and the modal stays open.",
+    "automated": "scripts/v2/test-org-ops.js — 'identical active schedule (case-insensitive) blocked 409', 'v1 still allows a duplicate'",
+    "v1Impact": "None (v2 only)"
+  },
+  {
+    "id": "H107",
+    "status": "Fixed",
+    "summary": "The time field was hour-only, weekdays were numbers (0 = Sunday) and nothing warned about clashing times. The form now has an HH:MM time picker, a Sunday-Saturday weekday dropdown, a day-of-month dropdown (1-28) and a date picker for one-time schedules. If another active schedule goes out at the same time, the schedule is still created and a heads-up names the other one ('\"X\" is also scheduled at 09:30'). Identical schedules are blocked (see H106).",
+    "files": [
+      "backend/src/controllers/notificationScheduleController.js",
+      "web/app/admin/notification-scheduler/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Scheduler > New schedule 'A', Daily at 09:30 > Create. 3. New schedule 'B', Daily at 09:30 > Create. Expected: B is created and the page shows 'Schedule created. Heads-up: \"A\" is also scheduled at 09:30.' 4. Choose Weekly. Expected: the Day of week dropdown lists Sunday to Saturday.",
+    "negativeTests": "1. Send minutes 75 through the API. Expected: 'Minutes must be between 00 and 59'. 2. Choose Weekly without a day (API). Expected: 'Choose the day of the week'. 3. Choose Monthly with day 31 (API). Expected: 'Day of month cannot be more than 28'.",
+    "automated": "scripts/v2/test-org-ops.js — 'same time, different schedule → created with an overlap warning', 'weekday accepted by name', 'weekly next run lands on a Monday 18:05 IST', 'list carries a readable run_time'",
+    "v1Impact": "None (v2 only). v1 rows get run_at_minute 0."
+  },
+  {
+    "id": "H138",
+    "status": "Fixed",
+    "summary": "Brand said 'From the Brand Master' but was free text, and Category and Vendor were free text. Brand and Category are now dropdowns from the organisation's Master data lists (Brand Master — Assets, and Asset categories). Vendor is a dropdown of the organisation's approved vendor registrations. The server refuses a brand or category not on the master list and a vendor that isn't an approved registration of this organisation. While a master list is still empty the field stays free text, with a hint to add entries under Master data.",
+    "files": [
+      "backend/src/controllers/assetController.js",
+      "web/app/admin/assets/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Master data > Brand Master — Assets: add 'Dell'. 3. Asset management > Add asset. Expected: Brand is a dropdown with 'Dell'; Vendor lists approved vendor registrations.",
+    "negativeTests": "1. Send brand 'Acme' (not on the list) through the API. Expected: 'Brand must be one from the Brand master'. 2. Send a vendor id that isn't an approved registration of this organisation. Expected: 'Choose an approved vendor from your vendor registrations'. 3. Another organisation's Add asset form does not list 'Dell'.",
+    "automated": "scripts/v2/test-org-ops.js — 'brand outside the Brand master rejected', 'vendor must be an approved registration', 'options list brands, categories, vendors, statuses', 'another org does not see my brand master', 'valid asset saved with purchase/warranty dates' (brand 'dell' stored as 'Dell')",
+    "v1Impact": "None (v2 only)"
+  },
+  {
+    "id": "H139",
+    "status": "Fixed",
+    "summary": "Add Asset lacked purchase date and warranty expiry, and the status filter was lowercase. The form now has Purchase date (not in the future), Warranty expiry (not before purchase), Invoice no., Condition and Notes. The table shows Cost and 'Warranty till', and 'Held by' shows the assignee with the assignment date and condition. Assignment is done with the Assign action, which records the date and condition. The status filter and badges read In stock / Assigned / In repair / Retired / Lost, and an empty filtered list says 'No assets found'.",
+    "files": [
+      "backend/src/controllers/assetController.js",
+      "backend/src/db/migrations_v2/50_org_ops.sql",
+      "web/app/admin/assets/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR. 2. Asset management > Add asset: Purchase date 10-01-2026, Warranty expiry 10-01-2029 > Save. Expected: 'Warranty till 10-01-2029'. 3. Open the status filter. Expected: In stock, Assigned, In repair, Retired, Lost.",
+    "negativeTests": "1. Purchase date tomorrow. Expected: 'Purchase date cannot be in the future'. 2. Warranty expiry before purchase. Expected: 'Warranty expiry cannot be before the purchase date'. 3. Duplicate tag in another case (qa-lap-001). Expected: 'That asset tag already exists'.",
+    "automated": "scripts/v2/test-org-ops.js — 'future purchase date rejected', 'warranty before purchase rejected', 'duplicate tag (case-insensitive) rejected', 'status filter accepts the label code', 'assignment date and condition stored'",
+    "v1Impact": "None (v2 only); new columns are nullable."
+  },
+  {
+    "id": "E39",
+    "status": "Fixed",
+    "summary": "My Assets only listed assigned assets. Employees can now 'Request an asset' (asset type + reason), and on each held asset 'Report an issue' or 'Request return'. 'My requests' shows the status (Open / Approved / Rejected / Closed / Cancelled) with HR's note, and an open request can be cancelled. HR sees open requests at the top of Asset management, can Approve, Reject (reason required) or Close them, and the employee gets a notification. Recording the return closes an open return or issue request on that asset.",
+    "files": [
+      "backend/src/controllers/assetController.js",
+      "backend/src/db/migrations_v2/50_org_ops.sql",
+      "backend/src/routes/v2/org.js",
+      "web/app/ess/assets/page.jsx",
+      "web/app/admin/assets/page.jsx"
+    ],
+    "testSteps": "1. Log in as Employee. 2. My Assets > Request an asset: Asset type 'Monitor', Reason 'Need a second screen' > Send to HR. Expected: 'New asset request sent to HR.' and it appears under My requests as 'Open'. 3. On an assigned asset press Report an issue > 'Battery drains fast' > Send. Expected: the card shows 'Issue reported — Open'. 4. Log in as HR > Asset management > Employee requests > Approve with a note. Expected: the employee sees 'Approved · HR: <note>' and gets a notification.",
+    "negativeTests": "1. Send without asset type and reason. Expected: 'Asset type is required' and 'Reason is required'. 2. Send the same request again while it is open (API). Expected: 'You already have an open request like this one.' 3. HR presses Reject with no reason. Expected: 'Reason is required'. 4. Raise a return on an asset not assigned to you (API). Expected: 'That asset is not assigned to you'. 5. Another organisation's admin actions this request. Expected: 404 'Request not found.'",
+    "automated": "scripts/v2/test-org-ops.js — 'request needs asset type and reason', 'employee requests a new asset', 'duplicate open request blocked', 'employee reports an issue on a held asset', 'cannot raise a return on an asset not held', 'HR sees open requests', 'another org cannot action them (404)', 'reject needs a reason', 'HR approves', 'employee sees the status and HR note', 'employee cancels an open request', 'v1 /me/assets keeps its fields'",
+    "v1Impact": "None. These are new v2 endpoints; v1 /me/assets only gains fields (assigned_on, assigned_condition, open_request)."
+  },
+  {
+    "id": "E40",
+    "status": "Fixed",
+    "summary": "Create Ticket had no validation messages, no subject or attachment, and inconsistent 'Other'/'Others'. The form now has a required Subject and a required Description (10–2000 characters) and an optional attachment for every desk (PNG/JPG/WEBP/GIF/PDF, 5MB). Every missing or invalid field is shown at once ('Please select an issue type', 'Please select an issue detail', 'Subject is required', 'Description is required'), and the server checks the same rules. Every desk now ends with 'Other'. Follow-up: \"Other\" everywhere is a v2 view; the stored TRUE HR list (and so v1/Android) is unchanged.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "web/app/ess/support/page.jsx",
+      "backend/src/db/migrations_v2/50_org_support.js"
+    ],
+    "testSteps": "1. Log in as Employee > Support > Create Ticket. 2. Choose ADMIN and leave Issue type as Select > Create Ticket. Expected: 'Please select an issue type', 'Subject is required', 'Description is required' shown together. 3. Choose HR > Other, Subject 'Need letter', Description 'Please issue an address proof letter', attach a PDF > Create Ticket. Expected: 'Ticket #N created.' 4. Check the IT and Admin issue types. Expected: each has 'Other'.",
+    "negativeTests": "1. Description 'hi'. Expected: 'Description must be at least 10 characters'. 2. Attach a .docx. Expected: 'The attachment must be a PNG, JPG, WEBP, GIF or PDF file'. 3. Admin > Hygiene Issues with no detail. Expected: 'Please select an issue detail'.",
+    "automated": "scripts/v2/test-org-support.js — 'v2: empty form → every field error at once', 'v2: missing issue detail → message', 'v2: issue type not on the org list → 400', 'v2: too-short description rejected', 'v2: valid IT ticket with attachment created', 'v1: ticket without subject/description still accepted'",
+    "v1Impact": "v1 GET /support/catalog returns the stored list exactly as before (TRUE HR keeps ADMIN \"Others\" and IT has no \"Other\" type); a v1 ticket with \"Others\" still saves and lists. The consistent \"Other\" spelling and extra \"Other\" entries are applied on v2 output only (supportController.v2Catalog). Other organisations get their own neutral list on both versions (data-isolation fix)."
+  },
+  {
+    "id": "E41",
+    "status": "Fixed",
+    "summary": "Same root cause as C48: employees of any organisation saw TRUE HR's 'My Vision Login' issue type. The list now comes from the employee's own organisation.",
+    "files": [
+      "backend/src/controllers/supportController.js",
+      "backend/src/db/migrations_v2/50_org_support.js"
+    ],
+    "testSteps": "1. Log in as Employee TH5001 (Company Admin org) > Support > Create Ticket > HR > Issue type. Expected: no 'My Vision Login'. The list ends with 'Other'.",
+    "negativeTests": "1. Log in as an Employee of TRUE HR. Expected: TRUE HR's own list (including My Vision Login) is unchanged.",
+    "automated": "scripts/v2/test-org-support.js — 'existing org keeps its own list (My Vision Login)', 'new org gets neutral defaults, no TKF items'",
+    "v1Impact": "v1 GET /support/catalog returns the stored list exactly as before (TRUE HR keeps ADMIN \"Others\" and IT has no \"Other\" type); a v1 ticket with \"Others\" still saves and lists. The consistent \"Other\" spelling and extra \"Other\" entries are applied on v2 output only (supportController.v2Catalog). Other organisations get their own neutral list on both versions (data-isolation fix)."
+  },
+  {
+    "id": "E42",
+    "status": "Fixed",
+    "summary": "My Tickets showed no ticket number or date and had no reply or cancel. A 5,042-character description was accepted, and long unbroken text pushed the page sideways. Each ticket now shows #number, date, status, subject and resolution. View opens the full ticket with its updates, a reply box, 'Cancel ticket' (while open) and 'Reopen' (after it is resolved). The description is limited to 2000 characters with a live counter, enforced on the server too. All ticket text wraps.",
+    "files": [
+      "web/app/ess/support/page.jsx",
+      "backend/src/controllers/supportController.js"
+    ],
+    "testSteps": "1. Log in as Employee > Support > My Tickets. Expected: each card shows '#N', date dd-mm-yyyy and a status chip. 2. Click View on an open ticket, type a reply > Send reply. Expected: it appears under Updates. 3. Click 'Cancel ticket' and confirm. Expected: status Cancelled. 4. On a Resolved ticket, type a reason > Reopen. Expected: status Reopened. 5. Paste a 3000-character word with no spaces into Description. Expected: the box stops at 2000 and the card text wraps with no horizontal scroll.",
+    "negativeTests": "1. Send an empty reply. Expected: 'Reply is required'. 2. Reopen with no reason. Expected: 'Reason for reopening is required'. 3. Cancel an already cancelled ticket through the API. Expected: 400 'Only an open ticket can be cancelled.'",
+    "automated": "scripts/v2/test-org-support.js — 'My Tickets carries ticket number and date', 'v2: 5,042-character description → limit message', 'employee reopens a resolved ticket', 'employee cancels an open ticket; second cancel refused', 'empty reply rejected'",
+    "v1Impact": "None (v2 only); v1 list gains only the additive 'ticketNo' field."
+  },
+  {
+    "id": "E43",
+    "status": "Partially fixed",
+    "summary": "Formats can now be filled and handed back in the system: on ESS > Policies & Formats > Formats each format has 'Upload filled form' (PDF/DOC/DOCX/JPG/PNG, max 5MB, optional note). HR sees them in Admin > Policies & formats > Submitted forms (filter by status/format), opens the file and Accepts or Rejects (reason required). The employee sees the status and HR's note under 'My submitted forms'. Not done: routing a nomination into a dedicated R&R module or turning a reimbursement form into an NFA — the submission is a generic HR review queue.",
+    "files": [
+      "backend/src/controllers/policyController.js",
+      "backend/src/db/migrations_v2/50_org_policies.sql",
+      "backend/src/routes/v2/org.js",
+      "web/app/ess/policies/page.jsx",
+      "web/app/admin/policies/page.jsx"
+    ],
+    "testSteps": "1. Log in as Employee (TRUE HR). 2. Policies & Formats > Formats > Reimbursement Form > 'Upload filled form', choose a PDF, note 'March travel', 'Submit to HR'. Expected: shown under 'My submitted forms' as 'Awaiting HR review'. 3. Log in as HR > Policies & formats > Submitted forms. Expected: the row with employee, format, date. Click Open (file opens), then Reject without a reason (error), then Accept with note 'Forwarded to finance'. 4. Back as Employee. Expected: status Accepted, 'HR: Forwarded to finance'.",
+    "negativeTests": "1. Submit without choosing a file. Expected: 'Choose the filled form to upload (PDF, DOC, DOCX or an image)'. 2. Choose a .txt/.xlsx file. Expected: 'The filled form must be a PDF, DOC, DOCX, JPG or PNG file'. 3. HR clicks Reject with an empty reason. Expected: 'Reason is required'. 4. Another organisation's HR cannot see/open/review the submission (404).",
+    "automated": "scripts/v2/test-org-policies.js — 'submit without file refused', 'submit against a policy (not a format) refused', 'submit filled format (image)', 'org B employee cannot submit to TRUE HR format → 404', 'HR sees the submission for the format', 'org B cannot open the file → 404', 'org B cannot review → 404', 'reject without a reason refused', 'accept', 'employee sees accepted + note'",
+    "v1Impact": "None (v2 only — new endpoints)."
+  },
+  {
+    "id": "E44",
+    "status": "Fixed",
+    "summary": "ESS Policies & Formats is split into Policies, Formats and My submitted forms tabs. Each policy shows its category, version and effective date (HR enters them on upload), has View (opens in a browser tab) and Download, and where HR ticked 'acknowledgement required' an 'I have read and accept' button that records the acknowledgement (shown afterwards as 'Acknowledged'). Uploading a new file needs a fresh acknowledgement. HR sees 'N acknowledged' per document with the list of who and when.",
+    "files": [
+      "web/app/ess/policies/page.jsx",
+      "web/app/admin/policies/page.jsx",
+      "backend/src/controllers/policyController.js",
+      "backend/src/db/migrations_v2/50_org_policies.sql",
+      "backend/src/routes/v2/org.js"
+    ],
+    "testSteps": "1. HR > Policies & formats > Edit 'Leave Policy', tick 'Employees must acknowledge', Save; Upload a PDF with Version '2.0', Effective date 01-04-2026. 2. Log in as Employee > Policies & Formats. Expected: Policies tab shows 'Leave Policy', 'Version 2.0 · Effective 01-04-2026', View / Download / 'I have read and accept'. 3. Click View. Expected: PDF opens in a new tab. 4. Click 'I have read and accept', confirm. Expected: badge 'Acknowledged'. 5. HR: Status column shows '1 acknowledged'; click it. Expected: employee name, ID and date.",
+    "negativeTests": "1. HR upload with Effective date 30-02-2026 (typed). Expected: 'Effective date is not a valid date'. 2. Employee of another organisation acknowledging this document id via API. Expected: 404.",
+    "automated": "scripts/v2/test-org-policies.js — 'v2 PDF upload with version + effective date', 'replace-on-upload: one current file, version/effective date shown', 'employee sees kind/version/requiresAck', 'employee can open the PDF', 'acknowledge', 'acknowledge twice is idempotent', 'HR sees who acknowledged', 'employee of org B cannot ack TRUE HR file → 404', 'v2 invalid effective date refused'",
+    "v1Impact": "None for behaviour (v2 endpoints); v1 list items gain extra keys (kind, version, effectiveDate, requiresAck, acknowledged…) only."
+  },
+  {
+    "id": "E45",
+    "status": "Fixed",
+    "summary": "Same root cause and fix as C49: employees only ever see and download their own organisation's documents; a missing organisation on the login no longer means 'all organisations'.",
+    "files": [
+      "backend/src/controllers/policyController.js"
+    ],
+    "testSteps": "1. Log in as Company Admin org employee TH5001. 2. Policies & Formats. Expected: no TRUE HR files (02_Holiday_Calendar_2026.pdf, 08_Reimbursement_Form.pdf are not listed); empty state 'No policies published yet' until that org uploads its own.",
+    "negativeTests": "1. Open /api/policies/<TRUE HR file id>/file as TH5001. Expected: 404 'Policy not found'.",
+    "automated": "scripts/v2/test-org-policies.js — 'account with NULL org: no other tenant policies (v1)', 'account with NULL org: TRUE HR file → 404', 'new org employee cannot download TRUE HR file (v1) → 404'",
+    "v1Impact": "Applies to v1 too — cross-tenant leak fix; shapes unchanged."
+  },
+  {
+    "id": "E62",
+    "status": "Fixed",
+    "summary": "Contact TrueHR now names the invalid field. Email 'abc' shows 'Email is not a valid email address' under Email, and phone '12' shows 'Phone is not a valid phone number (at least 8 digits, e.g. +91 98765 43210)' under Phone. 'Leave an email or a phone number' appears only when both are blank. Errors clear as each field is corrected. The server returns the same per-field messages on v2.",
+    "files": [
+      "web/components/MasterTicket.jsx",
+      "backend/src/controllers/platformTicketController.js"
+    ],
+    "testSteps": "1. Log in as Employee (or any role) > Contact TrueHR. 2. Enter a Subject and a description, Email 'abc', Phone '12'. Click Send to TrueHR. Expected: both messages above, each under its own field. Nothing is sent. 3. Fix the email to a valid address and clear the phone. Expected: the errors clear and the ticket is sent with a reference code.",
+    "negativeTests": "1. Clear both email and phone. Expected: 'Leave an email or a phone number so we can reach you'. 2. Blank subject and description. Expected: 'Subject is required' and 'Description is required'.",
+    "automated": "scripts/v2/test-org-platform.js — 'v2: invalid email AND phone both reported by field', 'v2: both blank → \"Leave an email or a phone number\"', 'v2: subject and description required together', 'v1 unchanged: old single message'",
+    "v1Impact": "None (v2 only). v1 keeps its single-message errors."
+  },
+  {
+    "id": "_meta",
+    "leadRequests": [
+      "utils/validate.js + web/lib/validate.js mobile(): the regex /^\\+?91[-\\s]?/ strips a leading '91' even from a plain 10-digit number such as 9123456780, which then fails as 8 digits. Suggest stripping +91/91 only when the remaining digits are 10 (e.g. /^(\\+?91[-\\s]?)(?=\\d{10}$)/). The platform part works around it locally (normMobile in organisationController.js and organisations/page.jsx).",
+      "people area: employeeController.orgChart ('Placed on a level x/y') should count with activeEmployeeSql so it matches Hierarchy (H55).",
+      "Payslip components page (payroll area) needs the same unsaved-changes guard as Document Branding (H101 mentions it).",
+      "lib/labels.js: add NEW: 'New', GOOD: 'Good', FAIR: 'Fair', DAMAGED: 'Damaged' (the generic fallback already gives the same text, so this is cosmetic)"
+    ],
+    "migrations": [
+      "backend/src/db/migrations_v2/50_org_platform.sql (platform_tickets.assigned_to, assigned_at; organisations.archived_at)",
+      "backend/src/db/migrations_v2/50_org_branding.js (repairs non-home tenants' document_profiles that stored the deployment's TRUE HR name/Noida address/phone/website; idempotent)",
+      "backend/src/db/migrations_v2/50_org_policies.sql — new tables policy_slots (+ unique (org, lower(title))), policy_acks, policy_submissions, policy_slots_seeded; policies gains slot_id, version, effective_date; seeds TRUE HR's 8 entries once (first organisation, behind a marker) and links existing uploads to slots",
+      "backend/src/db/migrations_v2/50_org_support.js (support_issue_types table seeded with TRUE HR's current list for the first organisation; support_tickets.organisation_id/org_ticket_no/subject/assigned_to/updated_at with idempotent per-org number backfill and a partial unique index; support_ticket_comments table)",
+      "backend/src/db/migrations_v2/50_org_ops.sql (scheduled_notifications.run_at_minute/run_on_date/ist_fixed + one-time IST shift of pending runs; wishes_settings; wishes_sent; assets.warranty_expiry/vendor_id; asset_assignments.assigned_on/assigned_condition/return_notes; asset_requests)",
+      "backend/src/db/migrations_v2/50_org_structure.sql (designations.department_id, nullable FK ON DELETE SET NULL + index; H12/H127)",
+      "backend/src/db/migrations_v2/50_org_branding_stamp.sql (document_profiles.stamp_image; H26)",
+      "50_org_support.js now seeds TRUE HR's list exactly as the old CATALOG and repairs rows written by its earlier draft (only rows still exactly as that draft wrote them); idempotent"
+    ],
+    "newEndpoints": [
+      "GET /api/v2/admin/organisations/:id",
+      "DELETE /api/v2/admin/organisations/:id",
+      "POST /api/v2/admin/organisations/:id/admins",
+      "POST /api/v2/admin/platform-tickets",
+      "GET /api/v2/admin/platform-tickets/assignees",
+      "POST /api/v2/admin/platform-tickets/:id/assign",
+      "GET /api/v2/admin/organisations?q=&status= (new query params)",
+      "GET /api/v2/admin/platform-tickets?assignee=me|none (new query param)",
+      "None. GET /admin/branding additionally returns offerPlaceholders (additive). New service exports: docProfile.joinAddress, startingProfile, deploymentProfile; docPdf.drawLogo; shapeProfile takes an optional 3rd arg. All existing exports/signatures unchanged.",
+      "POST /api/v2/policies/:id/ack",
+      "POST /api/v2/policies/slots/:slotId/submissions",
+      "GET /api/v2/me/policy-submissions",
+      "GET /api/v2/me/policy-submissions/:id/file",
+      "POST /api/v2/admin/policy-slots",
+      "PATCH /api/v2/admin/policy-slots/:id",
+      "DELETE /api/v2/admin/policy-slots/:id",
+      "GET /api/v2/admin/policies/:id/acks",
+      "GET /api/v2/admin/policy-submissions",
+      "GET /api/v2/admin/policy-submissions/:id/file",
+      "POST /api/v2/admin/policy-submissions/:id/review",
+      "GET /api/v2/admin/support/types",
+      "POST /api/v2/admin/support/types",
+      "PUT /api/v2/admin/support/types/:id",
+      "DELETE /api/v2/admin/support/types/:id",
+      "GET /api/v2/admin/support/staff",
+      "GET /api/v2/admin/support/:id",
+      "POST /api/v2/admin/support/:id/comments",
+      "POST /api/v2/admin/support/:id/assign",
+      "GET /api/v2/support/:id",
+      "POST /api/v2/support/:id/comments",
+      "POST /api/v2/support/:id/cancel",
+      "POST /api/v2/support/:id/reopen",
+      "GET/PUT /api/v2/admin/wishes/settings",
+      "POST /api/v2/admin/wishes/send",
+      "GET /api/v2/admin/assets/options",
+      "GET /api/v2/admin/assets/employees",
+      "DELETE /api/v2/admin/assets/:id",
+      "GET /api/v2/admin/asset-requests",
+      "POST /api/v2/admin/asset-requests/:id/action",
+      "GET/POST /api/v2/me/asset-requests",
+      "POST /api/v2/me/asset-requests/:id/cancel",
+      "PUT /api/v2/admin/designations/:id/department { departmentId|null } (STRUCTURE manage)",
+      "GET /meta/designations, GET /admin/hierarchy, GET /admin/companies/:id/structure, POST /admin/companies/:id/designations: add departmentId (both versions, additive); POST designations accepts optional departmentId"
+    ],
+    "testRun": "Fresh truehr_org (setup-db + second migrate): node scripts/v2/test-org.js => platform 64/0, structure 70/0, branding 52/0, policies 60/0, support 62/0, ops 96/0 = 404 passed, 0 failed. Also support part on a fresh single-migrate DB: 62 passed, 0 failed. Existing suites: test-companies 49/0, test-org-structure 31/0, test-tenancy 24/0, test-platform-tickets 42/0, test-banners 12/0, test-demo-requests 32/0, test-permissions 44/0, unit-letters 7/0 (test-user-roles 12/0, test-vendors 10/0, test-greenhr-gaps 14/0 in the previous run). check-jsx on all changed web files: ok, 0 failed.",
+    "notes": [
+      "test-org.js runs each part (scripts/v2/test-org-<part>.js) in its own process because the in-memory login rate limit (20/15 min) is exceeded by the whole suite in one process; ORG_ONLY=part1,part2 runs selected parts in-process.",
+      "C38 root also fixed in organisationController.create (both versions): a new org's first company prefix comes from its code or name initials, suffixed with a number if already taken - never TH.",
+      "platform: Raw fetch('/api/...') calls in MasterTicket.jsx and platform-tickets/page.jsx were replaced with downloadFile(). Contact TrueHR's form uses noValidate, so the browser's native email popup no longer pre-empts our messages. Deleting an organisation runs in one transaction and is refused (409, 'Archive it instead') if any record still references it. Changing an organisation's short code does not renumber existing Employee IDs; companies keep their own prefix.",
+      "structure: No v2 route overrides were needed: all changes are in the shared handlers gated with isV2(req). Added ASSET_CATEGORY to org masters (KINDS) for the assets work; ASSET_BRAND kept. /meta/companies employee counts and the /meta/managers picker now use activeEmployeeSql (D7) on both versions. Departments in the master-data hub's parent picker no longer carry the organisation name as a fake 'company'.",
+      "branding: The deployment's own organisation is the first one (MIN(id)); only it falls back to the COMPANY_NAME/ADDRESS/PHONE/WEBSITE env values. Brand.jsx/LegalDoc.jsx (portal/legal page chrome) were not changed — no branding point needed them.",
+      "policies: GET /policies and GET /admin/policies keep their v1 shapes; items gain slotId, kind, description, requiresAck, sortOrder, version, effectiveDate, ackCount, acknowledged; admin adds pendingSubmissions. POLICY_CATALOG is still exported. Mobile (Android) policies screen unaffected except that it now shows only the org's own list. A fresh install whose organisations table is empty when migrate runs gets TRUE HR's 8 entries on the next migrate (seed creates the org after migrate).",
+      "support: GET /support/:id/attachment for another employee's ticket now answers 404 instead of 403 on both versions (enumeration fix). Other organisations get neutral default issue types lazily on first read (ensureCatalog). Removing an issue type deactivates it, so old tickets keep their text. Notifications use services/notify.js (in-app/push), fire-and-forget.",
+      "ops: Scheduler times are IST throughout. Automatic greetings run inside the existing notification-scheduler tick (every 5 min). Feb-29 birthdays are not greeted in non-leap years. HR approving a 'new asset' request does not auto-assign: HR uses Assign on an in-stock asset, and the assign endpoint accepts an optional requestId to close the request, but the portal does not pass it yet. The Android app is untouched: assets keep their lowercase status values.",
+      "Follow-up H12/H127: designations.department_id added; HR sets 'Belongs to department' per designation on Hierarchy & Levels (blank = any department), or passes departmentId when creating one. Field name matches services/peopleRules.js and bulkController.js (designations.department_id); the API returns it as departmentId.",
+      "Follow-up: metaController.getManagers lists only activeEmployeeSql employees on both versions (asserted on v1 and v2: a candidate is not offered).",
+      "Follow-up: components/Brand.jsx Logo is neutral TrueHR branding (initial mark + 'TrueHR' / 'HR platform') instead of True Kind Foundation; it accepts optional orgName/logoSrc props for pages that have an org context.",
+      "Follow-up H26: signatory name validated on v2 (letters only, at least 2 letters; client and server); optional Company stamp image (Branding > Marks) drawn by docPdf.signature() beside the signature in a 72x72 box. v1 unchanged (short name still accepted).",
+      "Follow-up v1 support catalog: GET /api/support/catalog for TRUE HR is byte-for-byte the old list; v2 normalises to 'Other'. ensureCatalog also seeds the legacy list (not neutral defaults) for the first organisation when migrate ran before the org existed."
+    ]
+  }
+]

@@ -1,0 +1,360 @@
+[
+  {
+    "id": "M7",
+    "status": "Fixed",
+    "summary": "The module catalogue and the sidebar didn't match. Now: Attendance has its page (/admin/attendance, in the sidebar under People). Settlements opens the NFA queue, where settlements are reviewed. Wishes and Notification Scheduler are now modules of their own, so a plan or role can switch them off. A one-time migration gave them to every role and organisation that could open them before. Companies, Users & Accounts, Roles & Permissions and Audit Log are in the sidebar for roles that hold them; HR Admin doesn't hold them by default.",
+    "files": [
+      "backend/src/config/modules.js",
+      "backend/src/db/migrations_v2/10_auth_accounts.js",
+      "backend/src/routes/v2/auth.js",
+      "web/app/admin/layout.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations > open TRUE HR subscription. Expected: Wishes and Notification Scheduler appear in the module list. 2. Untick Wishes and save. 3. Log in as HR. Expected: Wishes is gone from the People section, and /app/admin/wishes says Restricted. 4. Log in as Company Super Admin. Expected: Attendance, Wishes, Scheduler, Companies, Users, Roles and Audit are all in the sidebar.",
+    "negativeTests": "1. As HR with a custom role that has Employees but not Wishes, open /app/admin/wishes. Expected: 'You do not have access to wishes…' (403).",
+    "automated": "scripts/v2/test-auth.js — 'every module now has a page', 'HR Admin holds the new Wishes and Scheduler modules', 'v2: Wishes needs the WISHES module now → 403'",
+    "v1Impact": "v1 keeps the EMPLOYEES/BANNERS guards on Wishes/Scheduler. Only the new module keys and paths were added to the catalogue."
+  },
+  {
+    "id": "M8",
+    "status": "Fixed",
+    "summary": "Switch to (decision D1) now opens the chosen organisation's admin console with that tenant's full sidebar. An amber banner reads 'Working inside <org> (<code>) as Master', with a 'Back to Organisations' link. Opening the organisation list leaves the tenant console.",
+    "files": [
+      "web/lib/perms.jsx",
+      "web/app/admin/layout.jsx"
+    ],
+    "testSteps": "1. Log in as Master > Organisations > 'Switch to' on TRUE HR. Expected: the Dashboard of TRUE HR opens with the tenant sidebar and the amber banner. 2. Open Employees. Expected: it loads (no redirect). 3. Click 'Back to Organisations'. Expected: the Master console opens with only Organisations and Master tickets.",
+    "negativeTests": "1. As Master without switching, type /app/admin/employees. Expected: redirected to Organisations (platform console).",
+    "automated": "scripts/v2/test-auth.js — 'Master creates a role inside tenant B', 'tenant B sees the Master's change in its own log'",
+    "v1Impact": "Web only; no API change."
+  },
+  {
+    "id": "M9",
+    "status": "Fixed",
+    "summary": "The organisation switcher now shows each organisation's short code next to the name, so 'Sriram Industries' and 'Sriram industries' can be told apart. The header label always reads 'Master Admin · <page>' on Master screens; it used to switch between 'Master Admin' and 'Admin Console'. The org agent made the code mandatory and shows it in the Organisations list.",
+    "files": [
+      "web/app/admin/layout.jsx",
+      "backend/src/middleware/auth.js",
+      "backend/src/controllers/roleController.js"
+    ],
+    "testSteps": "1. Log in as Master. Open the organisation switcher (top right). Expected: each row shows the code, e.g. 'TRUEHR · 18 employees'. 2. Open Organisations, then Master tickets. Expected: the header reads 'Master Admin · Organisations' and 'Master Admin · Master tickets'. 3. Organisations > Create organisation without a short code. Expected: 'Short code is required' (org area). The list shows each code.",
+    "negativeTests": "1. An organisation without a code shows 'no code' in the switcher.",
+    "automated": "scripts/v2/test-auth.js — 'organisation name + code in the permissions payload'",
+    "v1Impact": "Additive field organisationCode on /me/permissions."
+  },
+  {
+    "id": "C1",
+    "status": "Fixed",
+    "summary": "The Pending approvals tile and card now read 'Leave · OD · Miss-punch · Comp-off', which matches the number shown. Each line (Leave requests, On-duty, Miss-punch, Comp-off) and the tile itself open the Attendance screen filtered to pending items of that type. The note now says managers approve these and HR can open them to act when no manager is available. Attendance opens on the requested tab (leave / on-duty / miss-punch / comp-off) filtered to Pending.",
+    "files": [
+      "web/app/admin/page.jsx",
+      "backend/src/controllers/dashboardController.js"
+    ],
+    "testSteps": "1. As TH5001, apply for CL (10-11 Nov) and a miss-punch (2 Nov). 2. Log in as Company Super Admin > Dashboard. Expected: Pending approvals = 2, labelled 'Leave · OD · Miss-punch · Comp-off'. 3. Click 'Miss-punch'. Expected: Attendance opens on the Miss-punch requests, filtered to Pending. 4. Click 'Leave requests'. Expected: the leave requests tab, Pending.",
+    "negativeTests": "1. A role without Attendance access sees the counts but not as links.",
+    "automated": "scripts/v2/test-auth.js — 'v1 keeps every original key'",
+    "v1Impact": "Counts unchanged in shape; scoped by company for a company-scoped admin."
+  },
+  {
+    "id": "C2",
+    "status": "Fixed",
+    "summary": "The Dashboard has a new 'Waiting on HR' card with a count and a link for each queue: onboarding submissions, profile change requests, NFAs pending, NFAs on query, vendor registrations, agreements, investment declarations to verify, resignations, KPIs awaiting manager rating, and PMS ratings awaiting approval. Each role sees only the queues for modules it can open.",
+    "files": [
+      "backend/src/controllers/dashboardController.js",
+      "web/app/admin/page.jsx"
+    ],
+    "testSteps": "1. As TH5001, raise an NFA, a change request, a vendor, a tax declaration and a KPI. 2. Log in as HR > Dashboard. Expected: 'Waiting on HR' shows 1 against each line. 3. Click 'NFAs on query'. Expected: the NFA queue opens filtered to Query.",
+    "negativeTests": "1. Another organisation's pending items never appear in these counts.",
+    "automated": "scripts/v2/test-auth.js — 'every HR approval queue has a count and a link', 'resignation queue counts the pending resignation'",
+    "v1Impact": "Additive keys queues/queuesTotal on /admin/stats."
+  },
+  {
+    "id": "C39",
+    "status": "Fixed",
+    "summary": "Users & accounts now lists every login in the organisation, including employee logins created by onboarding approval without an organisation (TH5001). There are filter chips (All / Staff / Employees) and a search box. Rows show the person's name (employee name, or a name set for a staff login) instead of the email local part. A 'Set name' / 'Rename' action covers existing staff logins. In Add user, Full name is required, the Temporary password is masked with a Show/Hide button, every error shows at once, and the form stays open on an error. Disabling a login asks for confirmation.",
+    "files": [
+      "backend/src/controllers/userController.js",
+      "backend/src/routes/v2/auth.js",
+      "backend/src/db/migrations_v2/10_auth_accounts.js",
+      "web/app/admin/users/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin > Administration > Users & accounts. Expected: TH5001 is listed as 'QA Onboard', with an Employee tag and the Employee role. 2. Click Add user. Expected: the Temporary password shows dots. 3. Enter Full name 'Priya Sharma', a new email, 'Temp1234', role HR Admin > Create user. Expected: the user is listed as 'Priya Sharma'. 4. On subhrajit.tripathy.ts, click 'Set name', enter 'Subhrajit Tripathy' and save.",
+    "negativeTests": "1. Leave every field blank > Create. Expected: 'Full name is required', 'Email is required', 'Temporary password is required', 'Choose a role'. 2. Use an existing email. Expected: 'A user with this email already exists'. 3. Password 'abcdefgh'. Expected: 'Password must contain at least one letter and one digit'. 4. Name '123'. Expected: 'Full name should contain letters only'.",
+    "automated": "scripts/v2/test-auth.js — 'employee login without organisation_id is listed', 'listed with the person's name…', 'v2 create: every field error at once', 'rename: another tenant → 404'",
+    "v1Impact": "Listing employee logins that have a NULL organisation_id applies to v1 too (wrong data shown). Name and validation are v2 only; v1 create without a name still works."
+  },
+  {
+    "id": "C40",
+    "status": "Fixed",
+    "summary": "The Employee role's People count now includes employee logins that only have the enum role (it showed 0 before). On v2, a role name may not repeat case-insensitively, on create or rename ('A role named \"hr admin\" already exists'). A custom role cannot be based on Super Admin; the option is removed and the server refuses it. The level must be 1-100. Roles now read 'Based on HR Admin' with the code shown small, instead of 'SUPER_ADMIN · behaves as super admin'. Deleting a role asks for confirmation. A non-numeric role id now returns 404 instead of a 500.",
+    "files": [
+      "backend/src/controllers/roleController.js",
+      "web/app/admin/roles/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin > Roles & Permissions. Expected: Employee shows People = number of employee logins. Super Admin reads 'Full access to this organisation'; HR Admin reads 'Based on HR Admin'. 2. New role 'Regional HR' / REGIONAL_HR, level 40. Expected: created.",
+    "negativeTests": "1. New role named 'hr admin'. Expected: 'A role named \"hr admin\" already exists'. 2. The 'Based on' list has no Super Admin option; an API attempt returns 'Only the built-in Super Admin role can behave as Super Admin'. 3. Level 500. Expected: 'Level must be a whole number from 1 to 100'. 4. Rename a role to 'IT Admin'. Expected: the duplicate-name error.",
+    "automated": "scripts/v2/test-auth.js — 'v2: duplicate role name (case-insensitive) → 400', 'v2: custom role cannot behave as Super Admin', 'Employee role counts employee logins…', 'v1: old behaviour kept'",
+    "v1Impact": "The duplicate and Super Admin checks are v2 only (v1 still accepts them). The People count is fixed on both versions; the 404 on a bad id applies to both."
+  },
+  {
+    "id": "C43",
+    "status": "Partially fixed",
+    "summary": "The audit log now records the organisation on every row (new column, backfilled from the actor). A Master working inside a tenant is logged against that tenant. The page used to fetch 200 rows and show 15 per page, so yesterday's entries seemed to vanish behind today's sign-ins. It is now paged on the server across the full history, with filters: search, action, record type, by, date range and hide sign-ins. Records show readable names (e.g. 'Role · Regional HR', 'Employee · Subham Tripathy (TH5001)') instead of 'org_role #68'. A Details row shows the values. Every successful /admin write on v2 that the handler didn't audit itself is now logged generically as Created/Updated/Deleted/Published with the submitted values; passwords, PII and files are hidden. Partial because 'before' values aren't captured generically, only the new values sent.",
+    "files": [
+      "backend/src/utils/audit.js",
+      "backend/src/controllers/userController.js",
+      "backend/src/routes/v2/auth.js",
+      "backend/src/db/migrations_v2/10_auth_accounts.js",
+      "web/app/admin/audit/page.jsx"
+    ],
+    "testSteps": "1. Log in as Company Super Admin. Edit a leave type, add a holiday, publish a payslip. 2. Open Audit log. Expected: each change is listed with a readable record name and who did it; Details shows the values. 3. Filter Action = 'Created role'. Expected: only role creations. 4. Tick 'Hide sign-ins'. Page through with Older/Newer. Expected: older entries are still there.",
+    "negativeTests": "1. Set From after To. Expected: '“From” date cannot be after “To” date'. 2. Another organisation's admin never sees these rows. 3. Details never show a password, Aadhaar or PAN ('[hidden]').",
+    "automated": "scripts/v2/test-auth.js — 'audit rows now carry the organisation', 'filter by action + readable entity name', 'another organisation does not see it', 'tenant B sees the Master's change', 'generic trail logs an unaudited admin write', '…never PII', 'an explicitly audited write is logged once'",
+    "v1Impact": "audit() signature is backward compatible. The org scoping fix applies to v1 too (still an array, max 200). Paging, filters and the generic trail are v2 only."
+  },
+  {
+    "id": "C52",
+    "status": "Fixed",
+    "summary": "After changing the temporary password, the change-password page always went to /admin, so an employee landed on 'Restricted section' with an empty sidebar. It now goes to the role's home (/ess for employees). The admin shell also sends any employee login to /ess. The ESS header shows the employee's own organisation name. (The people agent makes approval set the account's organisation.)",
+    "files": [
+      "web/app/change-password/page.jsx",
+      "web/app/admin/layout.jsx",
+      "web/app/ess/layout.jsx",
+      "backend/src/controllers/authController.js"
+    ],
+    "testSteps": "1. Sign in as TH5001 with the emailed credentials and set a new password. Expected: the Employee Self-Service dashboard opens; the header reads '<company> · Employee Self-Service'. 2. Type /app/admin. Expected: redirected to /app/ess.",
+    "negativeTests": "1. New password 'abcdefgh'. Expected: 'Password must contain at least one letter and one digit'. 2. Confirmation different. Expected: 'The two passwords do not match'.",
+    "automated": "scripts/v2/test-auth.js — 'an employee's base role is EMPLOYEE', 'Change password — v2 rules'",
+    "v1Impact": "/me gains additive name/organisationName; the v2 password rule is v2 only."
+  },
+  {
+    "id": "H1",
+    "status": "Fixed",
+    "summary": "The Headcount tile now counts active employees only (activeEmployeeSql: ACTIVE, has a code, not past an approved last working day) and says 'Active employees'. Candidates are counted separately ('+ N candidates in onboarding').",
+    "files": [
+      "backend/src/controllers/dashboardController.js",
+      "web/app/admin/page.jsx"
+    ],
+    "testSteps": "1. Log in as HR > Dashboard. Expected: Headcount equals the HRMIS Active count (e.g. 18), not 30.",
+    "negativeTests": "1. Offer-sent, rejected and inactive people never raise Headcount.",
+    "automated": "scripts/v2/test-auth.js — 'headcount counts active employees only', 'candidates counted separately'",
+    "v1Impact": "Applies to v1 too (wrong data shown); same keys."
+  },
+  {
+    "id": "H2",
+    "status": "Fixed",
+    "summary": "The Payroll card's denominator and published count now use active employees only, so pending = active employees without a published slip. The month is taken in IST.",
+    "files": [
+      "backend/src/controllers/dashboardController.js"
+    ],
+    "testSteps": "1. HR > Dashboard. Expected: 'Payroll · <month>' shows published / active employees, consistent with the Payroll page.",
+    "negativeTests": "1. A candidate or exited person never appears in the /N denominator.",
+    "automated": "scripts/v2/test-auth.js — 'payroll denominator = active employees'",
+    "v1Impact": "Applies to v1 too (wrong data shown)."
+  },
+  {
+    "id": "H3",
+    "status": "Fixed",
+    "summary": "Each onboarding pipeline stage (Offer sent, Filling details, In review, Active employees), each Pending approvals line, and every 'Waiting on HR' queue now opens its list, already filtered: Employees ?status=, Attendance ?tab=&status=, and the queue pages' ?status=. Candidate statuses on the dashboard use the shared StatusBadge vocabulary (H20).",
+    "files": [
+      "web/app/admin/page.jsx"
+    ],
+    "testSteps": "1. HR > Dashboard > click 'Offer sent'. Expected: Employees opens filtered to Offer sent. 2. Click 'Active employees'. Expected: the Active filter. 3. Click 'Leave requests'. Expected: Attendance > Leave, Pending. 4. Click 'Investment declarations to verify'. Expected: Tax declarations filtered to Submitted. 5. Recent employees shows 'Offer sent', not OFFER_SENT.",
+    "negativeTests": "1. A role without the module sees no link for that queue.",
+    "automated": "scripts/v2/test-auth.js — 'every HR approval queue has a count and a link'",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "H4",
+    "status": "Fixed",
+    "summary": "The sidebar was declared inside the shell's render, so every navigation remounted it and reset its scroll. It is now a stable component, so its scroll position is kept, and the active item is scrolled into view when it would be hidden.",
+    "files": [
+      "web/app/admin/layout.jsx"
+    ],
+    "testSteps": "1. HR > scroll the sidebar to Administration > click Audit log. Expected: the sidebar stays where it was, with Audit log highlighted and visible.",
+    "negativeTests": "1. Reload on a deep page (e.g. /app/admin/audit). Expected: the sidebar opens scrolled to the active item.",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "H36",
+    "status": "Fixed",
+    "summary": "The staff reset email used the whole {subject, html} welcome object as its body, so it showed raw JSON. It now sends a proper 'Your password has been reset' email (both versions). On v2 (D3) no password is generated or shown: the old password stops working, and a one-time set-password link (valid 7 days) goes to the address the sign-in code uses. The response says where it was sent.",
+    "files": [
+      "backend/src/controllers/userController.js",
+      "backend/src/services/setPassword.js"
+    ],
+    "testSteps": "1. HR > Employees > open an employee > Reset password. Expected: a message that a set-password link was emailed to the masked address. 2. Open the email. Expected: a formatted 'Your password has been reset' with a 'Set my new password' button. 3. Open the link, set 'Newpass123'. Expected: 'Your password is set. You can sign in now.'",
+    "negativeTests": "1. Sign in with the old password after the reset. Expected: 'Invalid credentials'. 2. Reset an employee of another organisation (API). Expected: 404.",
+    "automated": "scripts/v2/test-auth.js — 'v1: email body is HTML, not a stringified object', 'v2: link sent, no password in the response', 'v2: the old password no longer works', 'another tenant's employee → 404'",
+    "v1Impact": "v1 still returns tempPassword (contract unchanged) but the email body is fixed. The link flow is v2 only."
+  },
+  {
+    "id": "H46",
+    "status": "Fixed",
+    "summary": "Decision D4: the sign-in code (and the forgot-password code) goes to the employee's personal email until the official mailbox is confirmed, and always when the official address is a placeholder (example.com, *.example, *.test, *.invalid, *.local). The official mailbox counts as confirmed once a code sent to it has been used; accounts that signed in before this change are treated as confirmed. The code screen names the address ('your personal email s****9@gmail.com'). It offers 'Resend code' and 'Send it to my official/personal email instead'. On v2 the personal email can also be used as the sign-in ID (H44), when it belongs to exactly one active employee with a login.",
+    "files": [
+      "backend/src/services/setPassword.js",
+      "backend/src/controllers/authController.js",
+      "backend/src/db/migrations_v2/10_auth_accounts.js",
+      "web/app/login/page.jsx",
+      "web/lib/auth.jsx",
+      "web/app/forgot-password/page.jsx"
+    ],
+    "testSteps": "1. With sign-in codes on, log in as TKF9009 (official subhrajit.qa1@truehr.example). Expected: 'We emailed a 6-digit sign-in code to your personal email s***@gmail.com'. 2. Enter the code from the personal inbox. Expected: signed in. 3. On the code screen, click 'Send it to my official email instead' (real domains only). Expected: the code goes to the official mailbox.",
+    "negativeTests": "1. A wrong code. Expected: 'Invalid or expired code'. 2. A personal email shared by two employees, or belonging to a candidate. Expected: 'Invalid credentials'.",
+    "automated": "scripts/v2/test-auth.js — 'v2: placeholder official → code to personal email', 'unconfirmed official → personal, alternate official offered', 'official mailbox now confirmed → next code goes there by default', 'forgot-password code also goes to the personal email', 'v2: personal email signs in (case-insensitive)', 'v2: personal email shared by two employees → Invalid credentials', 'sign-in code email is branded with the organisation'",
+    "v1Impact": "Routing applies to v1 too, so the Android app's stuck new joiners can sign in. The v1 response shape is unchanged; only the masked address differs."
+  },
+  {
+    "id": "H47",
+    "status": "Partially fixed",
+    "summary": "On v2 the sign-in code is sent immediately inside the request. If the mail provider fails, the user sees \"We couldn't send your sign-in code to …\" (502) instead of 'code emailed', and the code is voided. The failure is recorded in email_queue and the audit log. The mailer now logs every send/failure, reports SendGrid's actual rejection reason, and warns when MAIL_FROM doesn't match the Gmail SMTP login (a common cause of silent drops). New Master-only diagnostics: GET /api/v2/admin/email-health and POST /api/v2/admin/email-health/test. Partial because production delivery itself (the personal-Gmail sender) can't be verified from here; ops should check it with the diagnostic.",
+    "files": [
+      "backend/src/services/emailQueue.js",
+      "backend/src/services/mailer.js",
+      "backend/src/controllers/authController.js",
+      "backend/src/routes/v2/auth.js",
+      "web/app/login/page.jsx"
+    ],
+    "testSteps": "1. As Master, call GET /app/api/v2/admin/email-health. Expected: provider, from address, warnings, 7-day counts and recent failures. 2. POST /api/v2/admin/email-health/test {\"to\":\"you@gmail.com\"}. Expected: ok, or the provider's exact error. 3. Log in as TKF9009. Expected: either the code arrives, or an on-screen error saying it couldn't be sent.",
+    "negativeTests": "1. With mail failing, sign in. Expected: \"We couldn't send your sign-in code to …\". 2. Company Super Admin calling email-health. Expected: 403.",
+    "automated": "scripts/v2/test-auth.js — 'v2: send failure → 502 with a clear message', 'failed send recorded as FAILED', 'Master: provider description + queue health', 'Company Super Admin → 403'",
+    "v1Impact": "v1 keeps queued delivery (no new errors); diagnostics are v2 only."
+  },
+  {
+    "id": "H105",
+    "status": "Fixed",
+    "summary": "The ESS dashboard now has a banner carousel showing the organisation's uploaded App Banners. It auto-rotates every 6 seconds and has previous/next arrows and dots.",
+    "files": [
+      "web/app/ess/page.jsx"
+    ],
+    "testSteps": "1. HR > App Banners > upload flower.jpg. 2. Log in as an employee > Dashboard. Expected: the banner shows at the top; with 2+ banners it rotates.",
+    "negativeTests": "1. No banners: no empty box. 2. Another organisation's banners never appear (server-scoped).",
+    "automated": "scripts/v2/test-auth.js — n/a (UI); banners scoping covered by scripts/test-banners.js",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "E1",
+    "status": "Fixed",
+    "summary": "The ESS dashboard now has a card for every header menu, in menu order, including Tax, Letters, My Assets, Request a change and Contact TrueHR. The Monthly Performance strip opens Performance, and the NFA Ledger card opens My NFAs.",
+    "files": [
+      "web/app/ess/page.jsx"
+    ],
+    "testSteps": "1. Log in as TKF9010 > Dashboard. Expected: 19 cards (18 sections, with NFA split into Create NFA and My NFAs, plus the NFA ledger); each opens its module. 2. Click the performance strip. Expected: /ess/pms.",
+    "negativeTests": "1. An employee with no NFA history sees 'No NFA activity yet.'",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "E2",
+    "status": "Fixed",
+    "summary": "Team wording on the ESS dashboard cards shows only for employees with reportees (from /me/team, via the shared useHasTeam() hook in lib/perms.jsx). The leave and workflow agents use the same hook to hide the team tabs in Leave (Team Approvals), Performance (Team Approvals), Tasks (Team Tasks) and Resignation (Team).",
+    "files": [
+      "web/app/ess/page.jsx",
+      "web/lib/perms.jsx",
+      "web/app/ess/leave/page.jsx (leave agent)",
+      "web/app/ess/pms/page.jsx, web/app/ess/tasks/page.jsx, web/app/ess/resignation/page.jsx (workflow agent)"
+    ],
+    "testSteps": "1. Log in as TKF9010 (no reportees) > Dashboard. Expected: no 'team' wording on Leave, Tasks, Resignation, Profile or Performance. 2. Open Leave, Performance, Tasks and Resignation. Expected: no team tabs. 3. Log in as a manager. Expected: the team wording and tabs appear.",
+    "negativeTests": "1. If /me/team fails, the employee wording (no team) is used.",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "E3",
+    "status": "Fixed",
+    "summary": "The Monthly Performance strip no longer shows 'Pending-RPT'. It shows readable states: 'Pending with reporting manager', 'Rating pending approval', 'Discuss with manager', 'Not started', or the grade.",
+    "files": [
+      "web/app/ess/page.jsx"
+    ],
+    "testSteps": "1. TKF9010 > Dashboard > Monthly Performance. Expected: Oct/Dec read 'Pending with reporting manager'.",
+    "negativeTests": "1. A month with no KPI reads 'Not started'.",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "E63",
+    "status": "Fixed",
+    "summary": "The ESS and admin headers now show the person's name ('Subham Tripathy') and initials from the name ('ST'), with the email as a tooltip/second line. The ESS menu wraps onto a second line on wide screens, so 'Contact TrueHR' is no longer cut off, and scrolls sideways on phones.",
+    "files": [
+      "web/app/ess/layout.jsx",
+      "web/app/admin/layout.jsx",
+      "web/lib/perms.jsx",
+      "backend/src/controllers/authController.js"
+    ],
+    "testSteps": "1. TKF9010 > look at the top bar. Expected: 'Subham Tripathy' and 'ST'. 2. Narrow the window. Expected: menu items wrap; 'Contact TrueHR' is fully visible.",
+    "negativeTests": "1. A staff login without a name falls back to its email.",
+    "automated": "scripts/v2/test-auth.js — '/me returns the person's name and organisation'",
+    "v1Impact": "/me fields are additive."
+  },
+  {
+    "id": "E64",
+    "status": "Fixed",
+    "summary": "Sign out now asks 'Are you sure you want to sign out?' (Cancel / Sign out) in the ESS header, the admin user menu and the admin sidebar.",
+    "files": [
+      "web/app/ess/layout.jsx",
+      "web/app/admin/layout.jsx"
+    ],
+    "testSteps": "1. Click Sign out. Expected: the confirmation dialog. 2. Click Sign out in it. Expected: the login page.",
+    "negativeTests": "1. Click Cancel or press Esc. Expected: still signed in.",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only."
+  },
+  {
+    "id": "E65",
+    "status": "Fixed",
+    "summary": "An unknown ESS address now shows a branded 404 inside the ESS header and menu, with 'Go to my dashboard'. Any other unknown address shows a branded 404 page with a link to the right dashboard (or sign-in) and Go back.",
+    "files": [
+      "web/app/ess/not-found.jsx",
+      "web/app/ess/[...missing]/page.jsx",
+      "web/app/not-found.jsx"
+    ],
+    "testSteps": "1. As an employee, open /app/ess/nonexistent-page. Expected: '404 · This page doesn't exist' with the ESS menu and a 'Go to my dashboard' button. 2. Open /app/xyz. Expected: the branded 404.",
+    "negativeTests": "1. Real pages such as /app/ess/nfa/create still open normally.",
+    "automated": "scripts/v2/test-auth.js — n/a (UI)",
+    "v1Impact": "Web only. web/app/ess/[...missing]/page.jsx is a new file outside the listed set; it was needed for the in-shell 404."
+  },
+  {
+    "id": "E66",
+    "status": "Fixed",
+    "summary": "Same root cause and fix as C52. Employees land on /ess after the first password change; the admin shell sends employee logins to /ess; the header shows their own organisation.",
+    "files": [
+      "web/app/change-password/page.jsx",
+      "web/app/admin/layout.jsx",
+      "web/app/ess/layout.jsx"
+    ],
+    "testSteps": "1. Sign in as TH5001 and complete the password change. Expected: the ESS dashboard with the company name in the header.",
+    "negativeTests": "1. Typing /app/admin as an employee redirects to /app/ess.",
+    "automated": "scripts/v2/test-auth.js — see C52",
+    "v1Impact": "see C52"
+  },
+  {
+    "id": "_meta",
+    "leadRequests": [
+      "app.js: add '/auth/set-password' to the authLimiter path list (public token endpoint).",
+      "people (web/app/admin/employees/[id]/page.jsx): on v2, reset-password returns { linkSent, sentTo, message } and no tempPassword. Show `message` instead of the temp-password modal, and confirm with useConfirm.",
+      "people (approveOnboarding / welcome mail): send the set-password link to deliveryAddress(user) from services/setPassword.js, so a placeholder official mailbox doesn't swallow it. isPlaceholderEmail() is exported for validating the official email domain at onboarding (H46 note).",
+      "Pre-existing (migrate.js): every deploy re-inserts all SELLABLE_MODULES into organisation_modules, which undoes a Master's plan removals. Worth an org-area look.",
+      "Optional: app/admin/not-found.jsx + app/admin/[...missing]/page.jsx for an in-shell admin 404 (unknown admin URLs currently get the branded root 404).",
+      "org (organisationController.create): store admin.name into user_accounts.display_name, if not already done."
+    ],
+    "migrations": [
+      "backend/src/db/migrations_v2/10_auth_accounts.js (audit_log.organisation_id + index + backfill; user_accounts.display_name, email_confirmed_at (one-shot backfill from last_login_at); password_reset_otps.sent_to; one-shot WISHES/SCHEDULER grants via v2_auth_markers)",
+      "backend/src/db/migrations_v2/10_auth_login.sql (lead scaffold, unchanged)"
+    ],
+    "newEndpoints": [
+      "GET /api/v2/auth/set-password?token=",
+      "POST /api/v2/auth/set-password {token,newPassword}",
+      "POST /api/v2/admin/users/:id/name {name}",
+      "GET /api/v2/admin/email-health (platform owner)",
+      "POST /api/v2/admin/email-health/test {to} (platform owner)",
+      "v2 guard overrides: /admin/wishes → WISHES, /admin/notification-schedules* → SCHEDULER",
+      "v2 GET /admin/audit returns {rows,total,page,pageSize,actions,entities} with q/action/entity/actor/from/to/hideLogins/page/pageSize",
+      "Login (v2) accepts otpTo:'personal'|'official'; response adds sentTo/alternate (also on v1, additive)",
+      "GET /api/v2/me/profile masks bank/PAN/Aadhaar (last 4); ?reveal=1 returns the full values"
+    ],
+    "testRun": "scripts/v2/test-auth.js: 99 passed, 0 failed (fresh truehr_auth DB). Existing suites on truehr_auth: approval-engine 20/0, attendance-payroll 42/0, banners 12/0, companies 49/0, demo-requests 32/0, greenhr-gaps 14/0, login-otp 13/0, nfa 22/0, org-structure 31/0, password-reset 10/0, payroll-run 16/0, permissions 44/0, platform-tickets 42/0, pms 21/0, reports 9/0, resignation-block 11/0, resignation-chain 8/0, settlement 17/0, tenancy 24/0, termination 25/0, user-roles 12/0, vendors 10/0 (test-masters: known baseline crash). check-jsx: 17 ok (follow-up: 4 re-checked ok), 0 failed.",
+    "notes": "Both versions: login refuses login_from > today (IST) with 403 'Your account opens on DD-MM-YYYY'; sign-in/reset code routing (D4); H36 email body; audit org scoping; dashboard counts; Employee role count; listing employee logins without organisation_id. v2 only: set-password, immediate OTP send with error, password rules (8+ chars, letter + digit), role/user validation, audit paging and generic trail, reset-by-link. Test hook MAIL_SIMULATE_FAILURE=1 forces mailer failure outside production only. The generic audit trail covers /admin/* writes only and records submitted values (sensitive keys hidden), not before-values. Follow-up: (1) OTP, reset-code and staff-reset emails are branded with the user's own organisation (services/peopleBrand.js emailBrand). Both versions, since this was wrong data. (2) H44 personal-email sign-in is v2 only. It matches only one ACTIVE employee with a login; an ambiguous or non-active match gives 'Invalid credentials'. verify-otp and forgot-password accept the same ID on v2. (3) H20: dashboard statuses render through StatusBadge. (4) GET /me/profile: on v2, bank account number, PAN and Aadhaar are masked to the last 4 characters unless ?reveal=1 (the signed-in owner's own data). v1 STILL RETURNS THEM UNMASKED for the Android app; the owner should decide whether to mask v1 too.",
+    "v1PiiDecision": "GET /api/me/profile (v1) still returns unmasked bank account number, PAN and Aadhaar for the Android app. Owner to decide."
+  }
+]

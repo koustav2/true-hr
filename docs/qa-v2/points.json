@@ -1,0 +1,2722 @@
+[
+ {
+  "id": "M1",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "Duplicate organisations are allowed: 'Sriram Industries Pvt Ltd' and 'Sriram industries Pvt Ltd' both exist (only the letter case differs). The New organisation form also keeps 'Create organisation' enabled for the name 'true hr' (same as the existing TRUE HR) with no warning.",
+  "testData": "Org name: true hr; existing Sriram Industries / Sriram industries",
+  "note": "Organisation name and short code should be unique (case-insensitive).",
+  "area": "org"
+ },
+ {
+  "id": "M2",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "The New organisation form has no inline validation: Short code 'X' (help text says 2-16 characters), Contact email 'bad@' and Contact phone 'abcxyz' are accepted and 'Create organisation' stays enabled. Short code is optional, and two organisations already exist with no code (shown as '-') although the code is used for employee IDs.",
+  "testData": "Short code: X, Email: bad@, Phone: abcxyz (not submitted)",
+  "note": "Make Short code mandatory and validate code length, email and phone before enabling Create.",
+  "area": "org"
+ },
+ {
+  "id": "M3",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "An organisation can be created without its first Super Admin (the checkbox can be unticked), leaving a tenant with no login to manage it - e.g. 'Sriram Industries Pvt Ltd' shows 0 logins.",
+  "testData": "New organisation > untick 'Create this organisation's first Super Admin'",
+  "note": "Require at least one org Super Admin, or flag organisations with no admin.",
+  "area": "org"
+ },
+ {
+  "id": "M4",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "There is no way to view, edit or delete an organisation: clicking a row opens nothing, the only actions are Suspend/Restore, and the test tenant 'ZZ ESS SANDBOX (delete me)' cannot be removed. There is no search or filter on the list.",
+  "testData": "Organisations list",
+  "note": "Add org detail/edit (name, code, contact), delete/archive for test tenants, and search.",
+  "area": "org"
+ },
+ {
+  "id": "M5",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "The Employees count for TRUE HR is 32 on the Organisations page, while TRUE HR's own HRMIS report shows 37 on record and 20 active; the 'Employees across all tenants' card (33) uses the same inconsistent count.",
+  "testData": "TRUE HR row: 32 vs HRMIS: 37 on record / 20 active",
+  "note": "Define the count (active employees) and use the same rule as the tenant reports.",
+  "area": "org"
+ },
+ {
+  "id": "M6",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "In 'subscription & modules', Status ACTIVE can be combined with an Expires-on date in the past (01-01-2020) without any warning, and status options are shown as raw values (TRIAL, ACTIVE, PAST_DUE, EXPIRED).",
+  "testData": "TRUE HR > 36 modules - manage > Expires on 01-01-2020 (not saved)",
+  "note": "Block or warn on past expiry for an Active plan, auto-move to Expired, and use readable labels.",
+  "area": "org"
+ },
+ {
+  "id": "M7",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "The plan lists modules that the tenant HR Admin never sees in the sidebar (Attendance, Settlements, Companies, Users & Accounts, Roles & Permissions, Audit Log), while pages that do exist for HR (Wishes, Notification Scheduler) are not in the module list, so they cannot be switched off by plan.",
+  "testData": "TRUE HR - Enterprise, 36 of 36 modules vs HR Admin sidebar",
+  "note": "Module list and sidebar should match. (Verify with an org Super Admin login - some may be role-restricted.)",
+  "area": "auth"
+ },
+ {
+  "id": "M8",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "Switch to' only changes the header label to the selected organisation ('WORKING HERE'); the Master Admin is still redirected to Organisations when opening tenant pages (e.g. /app/admin/employees), so 'You work inside one at a time' has no usable effect.",
+  "testData": "Switch to TRUE HR, then open /app/admin and /app/admin/employees",
+  "note": "Either open the tenant workspace after switching or remove/rename the action.",
+  "area": "auth"
+ },
+ {
+  "id": "M9",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "The two organisations 'Sriram Industries Pvt Ltd' and 'Sriram industries Pvt Ltd' differ only by letter case and both have no short code, so in the organisation switcher and the Organisations list they look almost identical and are easy to confuse. The header label also changes between 'Master Admin' (Organisations) and 'Admin Console' (Master tickets) for the same user.",
+  "testData": "Top-right organisation switcher / Organisations list",
+  "note": "Show the organisation short code next to the name in the switcher and list (make code mandatory), and keep the header label consistent.",
+  "area": "auth"
+ },
+ {
+  "id": "M10",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Organisations",
+  "bug": "The same contact phone (+917586894901) is used for two different organisations (BREATHE AGAIN INDIA PRIVATE LIMITED and Nishi Org), and personal Gmail addresses are accepted as organisation contact emails without any check.",
+  "testData": "Organisations > Contact column",
+  "note": "Warn on duplicate contact details across tenants; prefer company-domain contact emails.",
+  "area": "org"
+ },
+ {
+  "id": "M11",
+  "sheet": "Super Admin",
+  "module": "Super Admin",
+  "menu": "Master tickets",
+  "bug": "With Show = 'Everything' and no tickets, the empty state still says 'Nothing waiting'; there is a 'Closed' filter but no Closed summary card, and the Master Admin cannot create or assign a ticket.",
+  "testData": "Master tickets > Show: Everything",
+  "note": "Use 'No tickets found', add a Closed card, and allow assigning tickets.",
+  "area": "org"
+ },
+ {
+  "id": "C1",
+  "sheet": "Company",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "The Pending approvals card is labelled Leave · OD · Comp-off but shows 2, which includes the Miss-punch (Leave 1 + Miss-punch 1); the card and its Leave requests / On-duty / Miss-punch / Comp-off lines are not clickable and only say Managers action these in the employee app, so HR cannot open or act on them.",
+  "testData": "Dashboard after TH5001 applied CL (10-11 Nov) and miss-punch (2 Nov)",
+  "note": "Label the card correctly and link each line to a screen where HR can view/act (or escalate when there is no manager).",
+  "area": "auth"
+ },
+ {
+  "id": "C2",
+  "sheet": "Company",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "The Dashboard has no widget for other pending HR work - the NFA on query (NFA20260005), change requests, vendor registrations/agreements, investment declarations, resignations and KPIs awaiting approval are not shown, so HR must open every menu to find pending items.",
+  "testData": "Dashboard with pending NFA, change requests, vendor, tax declaration and KPI raised by TH5001",
+  "note": "Add pending counts with links for all approval queues.",
+  "area": "auth"
+ },
+ {
+  "id": "C3",
+  "sheet": "Company",
+  "module": "Support Desk",
+  "menu": "",
+  "bug": "The Support Desk shows ticket number #10 for the first ticket of this new organisation (numbering shared with other organisations); the only action is Resolve - no reply/comment, assign or reopen.",
+  "testData": "TH5001 ticket: HR > Salary Slip",
+  "note": "Per-organisation ticket numbers; allow replies, assignment and reopening.",
+  "area": "org"
+ },
+ {
+  "id": "C4",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "The Onboard employee form accepts invalid data: phone 0000000000, Date of birth in the future (01-01-2030), Date of joining 01-01-1990, Annual CTC -100, Location xyz and the same email as both Personal and Official email; Department, Designation and Date of joining are optional, and only one error is shown at a time.",
+  "testData": "QA Onboard: phone 0000000000, DOB 2030-01-01, DOJ 1990-01-01, CTC -100, Location xyz, personal = official = subhrajit.tripathy.ts+caemp1@gmail.com",
+  "note": "DOB must be past (18+), DOJ within a sensible range, CTC positive, Department/Designation/DOJ mandatory, personal and official email different, all errors shown together.",
+  "area": "people"
+ },
+ {
+  "id": "C5",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "The offer email for the new organisation Company Admin is branded as True HR Pvt Ltd (company name, Noida address, support no. +91-7370067005, website truekindfoundation.org) and is sent from a personal Gmail (maitykoustav2000@gmail.com); it offers the position “—”, based out of xyz, with joining date 01/01/1990 (already past), and says the link is valid for 3 days while also saying valid till your date of joining.",
+  "testData": "Offer email to subhrajit.tripathy.ts+caemp1@gmail.com - subject Welcome to True HR Pvt Ltd!",
+  "note": "Offer email should use the organisation own branding and a system sender, and must not be sent without designation or with a past joining date.",
+  "area": "people"
+ },
+ {
+  "id": "C6",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "The offer acceptance and e-joining pages show TRUE KIND FOUNDATION · HR branding instead of Company Admin; the work email is shown in Title Case (Subhrajit.Tripathy.Ts+Caemp1@Gmail.Com); the text says role of your new position when no designation is set; an offer with a past joining date (01/01/1990) can still be accepted.",
+  "testData": "Offer link > Accept offer & continue",
+  "note": "Use the organisation branding, show email exactly as entered, block acceptance of expired offers.",
+  "area": "people"
+ },
+ {
+  "id": "C7",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "E-joining accepts junk values: Place of birth 123 and Emergency contact name @@; State, District and City are free text and accept @@@, 123 and 456; only one error is shown at a time (Bank step shows only the account number error while Account holder name is also empty). The form was also submitted without the Signature image, although the offer email lists it as a required document.",
+  "testData": "Step 1: Place of birth 123, Contact name @@; Step 2: State @@@, District 123, City 456",
+  "note": "Validate names as letters, use State/District/City dropdowns, show all errors together.",
+  "area": "people"
+ },
+ {
+  "id": "C8",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "The employee profile shows the raw value FULL_TIME; Date of birth, Gender, CTC, Blood group, Marital status and Emergency contact (filled in onboarding/e-joining) are not shown; the address omits the District; the Edit form has no Date of birth or Gender field, so the wrong DOB (2030) cannot be corrected.",
+  "testData": "Employees > QA Onboard (TH5001)",
+  "note": "Show all captured details with readable labels and allow HR to correct DOB and Gender.",
+  "area": "people"
+ },
+ {
+  "id": "C9",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "Profile: On an ACTIVE employee, Generate offer + Annexure A regenerates the offer letter immediately with no confirmation (replacing the offer the employee already accepted and e-signed), and Reset password resets the login immediately with no confirmation.",
+  "testData": "Employees > TH5001 > Generate offer + Annexure A; Reset password",
+  "note": "Confirm before regenerating or resetting; block offer regeneration after joining or keep version history.",
+  "area": "people"
+ },
+ {
+  "id": "C10",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "Edit employee accepts Date of joining 31-12-2099 and Annual CTC Rs 99,999,999,999 for an active employee; when a validation error occurs (phone 12) the edit panel closes and all other changes made in that edit are lost.",
+  "testData": "Edit TH5001: DOJ 2099-12-31, CTC 99999999999; phone 12",
+  "note": "Validate DOJ and CTC ranges; keep the form open with the user changes when there is an error.",
+  "area": "people"
+ },
+ {
+  "id": "C11",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Employees",
+  "bug": "The status filter has no Filling details option although the employee list shows that status, and the 1 total count does not change when a filter shows 0 rows. Export CSV gives only 7 columns (Employee ID, Name, Designation, Department, Official email, Status, Date of joining) - no phone, company, managers, location or CTC.",
+  "testData": "Employees > All statuses / Active / Offer sent; Export CSV",
+  "note": "Add all statuses to the filter and update the count with the filter. Export should include all key employee fields.",
+  "area": "people"
+ },
+ {
+  "id": "C12",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Review Queue",
+  "bug": "An onboarding submission can be approved without Department, Designation and Reporting manager and with Date of joining 01-01-1990; the employee became ACTIVE as TH5001.",
+  "testData": "Review queue > QA Onboard > Approve & create account",
+  "note": "Approval should require department, designation, reporting manager and a valid joining date.",
+  "area": "people"
+ },
+ {
+  "id": "C13",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Change Requests",
+  "bug": "Change requests show only the proposed values, not the current values, so HR cannot compare before approving; Approve applies the change immediately with no confirmation (Reject correctly requires a reason).",
+  "testData": "TH5001: Personal details (DOB 1995-05-10, phone 9000000002, gender) approved; Address rejected",
+  "note": "Show current vs proposed values and confirm before approving.",
+  "area": "people"
+ },
+ {
+  "id": "C14",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Org Chart",
+  "bug": "The Org chart offers an Operational manager line type, but the employee onboarding and edit forms have no Operational manager field, so that view can never be filled.",
+  "testData": "Org chart > Line type: Operational manager",
+  "note": "Add the Operational manager field or remove the option.",
+  "area": "people"
+ },
+ {
+  "id": "C15",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Hierarchy & Levels",
+  "bug": "Departments accept junk names (!!!, 1234, <b>QA</b>), and the Hierarchy page says departments and designations belong to the whole organisation while the Companies page says each company keeps its own departments and designations.",
+  "testData": "Add departments: !!!, 1234, <b>QA</b>",
+  "note": "Validate names and make the department/designation scope consistent across pages.",
+  "area": "org"
+ },
+ {
+  "id": "C16",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Master Data",
+  "bug": "The Master data page shows only Internal server error for the new organisation on every load.",
+  "testData": "Master data (Company Admin org)",
+  "note": "Master data lists (banks etc.) should load and be editable.",
+  "area": "org"
+ },
+ {
+  "id": "C17",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "The Holidays list of the new organisation shows holidays of another organisation (QA Test Holiday 24-12-2026, Lalita 06-10-2026 Uttar Pradesh, demo 31-08-2026 Odisha, demo leave 26-08-2026 Odisha, Independence Day 15-08-2026), and the company admin can delete them - Delete removes a holiday immediately with no confirmation.",
+  "testData": "Leave config > Holidays (Company Admin org)",
+  "note": "Each organisation should see and manage only its own holidays; delete should ask for confirmation.",
+  "area": "leave"
+ },
+ {
+  "id": "C18",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "Holidays: A duplicate holiday on the same date is accepted (QA duplicate Independence Day on 15-08-2026, National); the Applies-to/state list has both Odisha and ODISHA with different entitlements (EL/CL/SL 6/5/7 vs 15/12/6) and many states are missing (e.g. Kerala, Rajasthan, Punjab, Madhya Pradesh, Assam); the Add/override form shows raw field names el, cl, sl, elAccum, clAccum, slAccum.",
+  "testData": "Add holiday 15-08-2026 QA duplicate; State Entitlements tab",
+  "note": "Block duplicate holidays, keep one entry per state, list all states, use readable labels.",
+  "area": "leave"
+ },
+ {
+  "id": "C19",
+  "sheet": "Company",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "Maternity and Menstrual leave have no gender/eligibility setting, and Sick Leave is marked Certificate required although the employee leave form has no attachment option. A second leave type can be created with the same name as an existing one (Earned Leave for codes EL and PAT_L), and an annual quota of 500 days is accepted.",
+  "testData": "Leave config > Leave Types; Add leave type PAT_L, quota 500, renamed Earned Leave (deleted after test)",
+  "note": "Add eligibility (gender) settings and a certificate upload in the employee leave form.",
+  "area": "leave"
+ },
+ {
+  "id": "C20",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "Set structure uses a fixed template (Basic, HRA, LTA, Personal allowance, PF, PT...) that ignores the Payslip components configured for the company (Basic 50% + Special Allowance balance); Monthly CTC is not pre-filled from the annual CTC; a structure was saved with Monthly CTC Rs -1,000, Basic 150% of CTC and PF -5%; payroll also lists and allows a structure for a candidate still in onboarding.",
+  "testData": "Payroll > QA Onboard > Set structure: CTC -1000, Basic 150, PF -5",
+  "note": "Structure should follow configured components, pre-fill CTC, validate ranges and list only active employees.",
+  "area": "payroll"
+ },
+ {
+  "id": "C21",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "Generate draft accepts Days paid 45 of 30, Arrears -1000 and TDS 9,99,99,999, giving Net pay Rs -9,99,75,999; Publish works without confirmation even for negative net pay; a published payslip can be Unpublished although the page says published payslips are locked; draft Delete has no confirmation; the Year dropdown has only 2024-2026.",
+  "testData": "Payroll Nov 2026 > TH5001 > Generate: days 45, arrears -1000, TDS 99999999 > Publish > Unpublish > Delete",
+  "note": "Validate days (max of month), non-negative values and net pay; confirm before publish/delete; keep published slips locked.",
+  "area": "payroll"
+ },
+ {
+  "id": "C22",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Increment",
+  "bug": "The same admin can record, approve and apply a revision (no maker-checker); a revision effective 01-12-2026 applied on 03-11-2026 immediately changed the November payroll CTC to Rs 30,000; on a validation error the New revision form collapses and looks closed; the Apply and Cancel confirmation panels open below the table, out of view, so the buttons seem to do nothing.",
+  "testData": "Increment TH5001: Rs 25,000 to Rs 30,000 w.e.f. 01-12-2026 > Approve > Apply now",
+  "note": "Require a different approver, apply only from the effective date (or warn), keep the form open on errors, show confirmations next to the row.",
+  "area": "payroll"
+ },
+ {
+  "id": "C23",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Payslip components",
+  "bug": "A fixed deduction of Rs 60,000 against a monthly CTC of Rs 50,000 is saved without any warning; the preview shows Net pay Rs -10,000.",
+  "testData": "Deduction PFX Provident Fund, Fixed Rs 60,000 (removed after test)",
+  "note": "Warn or block when deductions exceed gross pay.",
+  "area": "payroll"
+ },
+ {
+  "id": "C24",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Statutory",
+  "bug": "UAN abc, PF number p and ESI number e were saved in the employee Bank & statutory card, but the Statutory page shows UAN/PF/ESIC empty for the same employee (two separate places for the same identifiers); a nominee with Share 150%, name 123 and relation @@ is accepted; a nominee is removed with no confirmation.",
+  "testData": "Employee Bank & statutory: UAN abc, PF p, ESI e; Statutory > TH5001 > Add nominee 150%",
+  "note": "Keep one source for statutory IDs, validate formats, nominee shares must total 100%, names valid, confirm removal.",
+  "area": "payroll"
+ },
+ {
+  "id": "C25",
+  "sheet": "Company",
+  "module": "Pay and Compliance",
+  "menu": "Investment Declaration",
+  "bug": "Status tabs are shown as raw lowercase values (submitted, verified, rejected, draft). Verify & lock happens with no confirmation; the Approved amount column stays blank after verification; there are no proofs to review because the employee cannot upload any.",
+  "testData": "Investment decl.; Review TH5001 declaration (80C Rs 50,000) > Verify & lock",
+  "note": "Use readable labels (Submitted, Verified, Rejected, Draft). Confirm before locking, save approved amounts, support proof upload.",
+  "area": "payroll"
+ },
+ {
+  "id": "C26",
+  "sheet": "Company",
+  "module": "Separation",
+  "menu": "Terminations",
+  "bug": "A candidate still in onboarding (status Filling details, no employee ID) can be selected for termination.",
+  "testData": "Record a termination > search QA (before approval)",
+  "note": "Only active employees should be selectable.",
+  "area": "workflow"
+ },
+ {
+  "id": "C27",
+  "sheet": "Company",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "An F&F settlement draft can be saved for an ACTIVE employee who has not resigned; Last working date 01-10-2026 (before the joining date 02-11-2026) still pays 1 day Rs 968; negative bonus (-100) is accepted; leave balance -5 and notice shortfall -10 are silently ignored; leave balance and LWD are not pre-filled; the assigned laptop is not flagged for asset recovery; a draft cannot be deleted.",
+  "testData": "New settlement: TH5001, LWD 2026-10-01, leave -5, shortfall -10, bonus -100 > Save draft",
+  "note": "Allow F&F only for approved exits, validate LWD after DOJ and non-negative values, pre-fill leave balance and assets, allow deleting drafts.",
+  "area": "payroll"
+ },
+ {
+  "id": "C28",
+  "sheet": "Company",
+  "module": "Documents and Comms",
+  "menu": "Letters",
+  "bug": "A Relieving Letter was issued to an active employee who has not resigned, with Last working date abc (free-text field); the raw error Missing: signatoryName is shown but the letter is still issued (TH/LTR/2026/857922); issued letters cannot be revoked or deleted and the reference number is random. All letter fields are free text (dates, CTC, designation) and nothing is pre-filled from the employee record or the applied increment; a Promotion Letter was issued with designation Chief Executive Officer (not in the designation list), CTC abc and effective date xyz, and the employee record was not updated.",
+  "testData": "Issue a letter > TH5001 > Relieving Letter, LWD abc, Signatory blank; Promotion Letter: CEO, CTC abc, effective xyz",
+  "note": "Relieving/experience letters only after an approved exit; LWD as date; block on missing signatory; allow revoke; sequential reference numbers.",
+  "area": "payroll"
+ },
+ {
+  "id": "C29",
+  "sheet": "Company",
+  "module": "Documents and Comms",
+  "menu": "Document Branding",
+  "bug": "The new organisation inherits TRUE HR PVT LTD letterhead (name, Noida address, website, phone) by default - the cause of the wrong branding in offer emails; after saving Legal name Company Admin Pvt Ltd the letterhead still prints TRUE HR PVT LTD; PIN 12ab, Website xyz, Phone 12, GSTIN abc and PAN 123 are accepted. The offer letter salutation accepts an unknown placeholder (badPlaceholder) without warning; an invalid accent colour shows the raw message accentColor must be a hex colour and the error stays even after the value is corrected.",
+  "testData": "Document branding > Organisation default: Legal name Company Admin Pvt Ltd, PIN 12ab, Website xyz, Phone 12, GSTIN abc, PAN 123",
+  "note": "A new organisation should start blank/with its own name; brand name should follow legal name; validate PIN, phone, website, GSTIN and PAN.",
+  "area": "org"
+ },
+ {
+  "id": "C30",
+  "sheet": "Company",
+  "module": "Documents and Comms",
+  "menu": "Policies",
+  "bug": "Policies is a fixed list of 8 TRUE HR-specific documents (e.g. Star Of The Month Nomination Form, Local Conveyance Policy); the company admin cannot add, rename or remove policy types.",
+  "testData": "Policies page",
+  "note": "Allow each organisation to manage its own policy/format list.",
+  "area": "org"
+ },
+ {
+  "id": "C31",
+  "sheet": "Company",
+  "module": "Documents and Comms",
+  "menu": "Scheduler",
+  "bug": "Hour of day -3 is accepted and saved as 00:00; the ONCE cadence has no date selection; values are shown raw (ALL, ONCE, active, paused).",
+  "testData": "New schedule: QA test schedule, hour -3",
+  "note": "Validate hour 0-23, add a date for one-time schedules, readable labels.",
+  "area": "org"
+ },
+ {
+  "id": "C32",
+  "sheet": "Company",
+  "module": "NFA & Finance",
+  "menu": "NFA Queue",
+  "bug": "NFA filters show raw values (PENDING, PAYMENT RELEASED, ADVANCE SELF, REIMB SELF, PPS CANDIDATE...). HR override Approve on NFA20260005 marked Finance Initiator, Project Leader and Business Leader as System bypass with no confirmation; the HR Query was recorded under the Finance approver's name (QA Onboard - the requester himself); once in Query the admin has no actions and the employee has no way to attach the requested bill.",
+  "testData": "NFA queue filters; NFA20260005 > Approve > Query / Hold",
+  "note": "Use readable labels. Confirm overrides, record actions under the user who took them, allow the employee to respond with attachments.",
+  "area": "workflow"
+ },
+ {
+  "id": "C33",
+  "sheet": "Company",
+  "module": "NFA & Finance",
+  "menu": "Masters",
+  "bug": "NFA Masters allow case-only duplicates (Staffing and staffing) and junk names (!!!); Location types (CITY, OFFICE, CENTER, SPECIAL) and Client types (CLIENT, VENDOR, BOTH) are raw values; Expense hierarchy action buttons are labelled off and del.",
+  "testData": "Business Operations: Staffing, staffing, !!!",
+  "note": "Block case-insensitive duplicates and junk; readable labels for types and buttons (Deactivate/Delete).",
+  "area": "workflow"
+ },
+ {
+  "id": "C34",
+  "sheet": "Company",
+  "module": "NFA & Finance",
+  "menu": "Approvers",
+  "bug": "The Approvers stage list has no Reporting Manager, Functional Manager, Office Admin or Human Resource stage (shown in the employee resignation chain), so those stages can never be assigned; one employee can be approver for every stage; saving the same Finance approver twice is silently ignored but logged as a separate save in the Audit log.",
+  "testData": "Approvers: Finance x2, Business Head - QA Onboard",
+  "note": "Include all chain stages, warn on self/duplicate assignment, show a duplicate message.",
+  "area": "workflow"
+ },
+ {
+  "id": "C35",
+  "sheet": "Company",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "The help text says employees register vendors from NFA > Vendor Registration, but in the employee app it is a separate Vendors menu; the admin has no option to add a vendor directly. A vendor with no PAN, GST, ESIC or PF was approved without confirmation, and an agreement was rejected without any reason being captured, so the employee cannot see why.",
+  "testData": "Vendors & agreements; Approve QA Vendor CompanyAdmin; Reject SERVICE agreement",
+  "note": "Correct the guidance and allow admin to add vendors. Require statutory details before approval and a reason on rejection.",
+  "area": "workflow"
+ },
+ {
+  "id": "C36",
+  "sheet": "Company",
+  "module": "Performance",
+  "menu": "PMS/KPI",
+  "bug": "The Grade system (OAT, SAT, AT, BT, SBT and their % ranges) is read-only; the company admin cannot change grades or ranges for their organisation. TH5001's November KPI is stuck at RM PENDING (no reporting manager); Team KPI approvals and the Rating queue stay empty and HR has no override to approve it.",
+  "testData": "PMS / KPI > Grade system; TH5001 November KPI",
+  "note": "Allow each organisation to configure its grade ladder. Allow HR override or route to HR when no RM is assigned.",
+  "area": "workflow"
+ },
+ {
+  "id": "C37",
+  "sheet": "Company",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Bulk utilities only update existing employees (salary, contact, reporting lines, transfers, leave balances); there is no bulk import/onboarding of new employees, so a new company must onboard every employee one by one. The salary bulk upload also accepts New Monthly CTC Rs 99,999,999,999 (preview says WOULD CHANGE) - no upper limit; negative values, non-numbers and unknown employee codes are correctly rejected.",
+  "testData": "Bulk utilities; Salary template with New Monthly CTC 99999999999 (preview only, not applied)",
+  "note": "Add a bulk employee import template. Add a sensible maximum for CTC in bulk upload.",
+  "area": "payroll"
+ },
+ {
+  "id": "C38",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Companies",
+  "bug": "The company was given employee ID prefix TH (TRUE HR prefix) and the prefix is locked as existing employee IDs were issued from it while the company had 0 employees; GSTIN abc, PAN 123, PF p and ESIC e are accepted; a second company named company admin (differs only by case) is allowed; creating a company with standard departments silently adds departments/designations to the whole organisation (3 to 6 departments, 5 to 12 roles).",
+  "testData": "Companies > Edit: GSTIN abc, PAN 123, PF p, ESIC e; New company: company admin / QA",
+  "note": "Let the admin set the prefix until the first ID is issued, validate statutory IDs, block duplicate names, keep standard departments per company or warn.",
+  "area": "org"
+ },
+ {
+  "id": "C39",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Users & Accounts",
+  "bug": "The approved employee QA Onboard (TH5001), whose login was created, is not listed in Users & accounts; the Temporary password field in Add user is plain text (visible on screen); the admin is listed as subhrajit.tripathy.ts instead of a name.",
+  "testData": "Users & accounts; Add user",
+  "note": "List all logins including employees, mask password fields, show the person name.",
+  "area": "auth"
+ },
+ {
+  "id": "C40",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Roles & Permissions",
+  "bug": "The built-in Employee role shows People 0 although one active employee exists; a second role named HR Admin (different code) can be created; a custom role can be set to behave as Super Admin at level 30 with 0 modules; codes are shown raw (SUPER_ADMIN · behaves as super admin).",
+  "testData": "New role: HR Admin / QA_HR_ADMIN_COPY, level 30, behaves as Super Admin (deleted after test)",
+  "note": "Count employees correctly, block duplicate role names, restrict Super Admin behaviour to the built-in role, readable labels.",
+  "area": "auth"
+ },
+ {
+  "id": "C41",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Roles & Permissions",
+  "bug": "The role permission editor lists Attendance and Settlements modules, but the admin console has no Attendance screen at all - HR cannot view daily attendance, punches or approve miss-punch/regularisation (the dashboard says managers action these in the employee app). TH5001's Casual Leave (10-11 Nov) and miss-punch (2 Nov) show on the Dashboard as Pending approvals - Awaiting managers - with no way for HR to act; the employee has no manager, so they can never be approved.",
+  "testData": "Roles & permissions > HR Admin > Edit; Dashboard > Pending approvals: Leave 1, Miss-punch 1",
+  "note": "Add an Attendance management screen for HR or remove the unused permissions.",
+  "area": "leave"
+ },
+ {
+  "id": "C42",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Asset Management",
+  "bug": "An asset can be saved with a negative cost (-50000); there is no edit or delete action for an asset; the assign dialog has no assignment date or condition field; statuses are raw lowercase (in stock, assigned). Return has no condition/notes field and an asset status cannot be changed to repair, retired or lost.",
+  "testData": "Add asset QA-LAP-001 Laptop, cost -50000; Assign to TH5001",
+  "note": "Validate cost, allow edit/delete, capture assignment date/condition, readable statuses.",
+  "area": "org"
+ },
+ {
+  "id": "C43",
+  "sheet": "Company",
+  "module": "Administration",
+  "menu": "Audit Log",
+  "bug": "The Audit log recorded only 15 actions; company edit, departments/designations, hierarchy, holiday add/delete, leave type edits, employee onboarding/edit/approval, payslip components, salary structure, payslip generate/publish/unpublish/delete, branding, scheduler, letters and assets were not logged; entries show raw table names (org_role #68, cost_zones #290) with no details of what changed, and there is no search or filter. It also loses older entries: the next day the previous 15 entries (role, masters, approver saves) were gone and only 15 entries were shown although the page says 200 most recent; the increment, leave-type, payslip-component, letter and offer-regeneration actions of that day were not logged (approvals of NFA, vendor, change request, tax and support were logged).",
+  "testData": "Audit log after the full Company Admin test; Audit log on 03-11-2026",
+  "note": "Log every create/update/delete with readable entity names and before/after values; add search and filters.",
+  "area": "auth"
+ },
+ {
+  "id": "C44",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Attendance",
+  "bug": "TRUE HR's QA Test Holiday (24-12-2026) is shown as a Holiday in the attendance calendar of this organisation's employee.",
+  "testData": "TH5001 > Attendance > December 2026",
+  "note": "Only the organisation's own holidays should apply.",
+  "area": "leave"
+ },
+ {
+  "id": "C45",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Leave balances (EL 6, CL 5, SL 7) come from the Odisha state-entitlement row, not from the Leave types annual quota configured by the admin (EL 10, CL 12, SL 12), and the full yearly quota is given to an employee who joined on 02-11-2026 without proration.",
+  "testData": "TH5001 > Leave > My Balances",
+  "note": "Make the quota source clear and prorate for mid-year joiners.",
+  "area": "leave"
+ },
+ {
+  "id": "C46",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "The Create NFA and Upload Agreement dropdowns mix another organisation's masters (BJP Call Center, True Kind Foundation, True Jobs, cvf, Dmeo, Noida...) with Company Admin's own; Staffing and Bhubaneswar appear twice; the NFA number NFA20260005 continues the other organisation's sequence; the approval chain lists the requester himself as Finance approver and is stuck at Reporting Manager although the Approvers page says empty stages are skipped.",
+  "testData": "TH5001 > Create NFA NFA20260005 (Rs 550, QA Project, Travel > Local Conveyance > Cab)",
+  "note": "Show only the organisation's own masters, per-organisation NFA numbering, block self-approval, skip unassigned stages as stated.",
+  "area": "workflow"
+ },
+ {
+  "id": "C47",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Tax",
+  "bug": "The Tax page shows Gross annual Rs 3,60,000 (12 x Rs 30,000) for an employee who joined on 02-11-2026 instead of projecting only the remaining months of the financial year.",
+  "testData": "TH5001 > Tax",
+  "note": "Tax projection should use the remaining months of the financial year.",
+  "area": "payroll"
+ },
+ {
+  "id": "C48",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Support",
+  "bug": "Support HR issue types include the TRUE HR-specific My Vision Login in this new organisation (Company Admin).",
+  "testData": "TH5001 > Support > HR issue types",
+  "note": "Issue types should be configurable per organisation.",
+  "area": "org"
+ },
+ {
+  "id": "C49",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Policies",
+  "bug": "The employee app shows Download for all 8 policies and downloads TRUE HR's files (02_Holiday_Calendar_2026.pdf, 08_Reimbursement_Form.pdf) although the Company Admin Policies page shows every policy as Not uploaded - another organisation's documents are exposed.",
+  "testData": "TH5001 > Policies > Holiday Calendar / Reimbursement Form > Download",
+  "note": "Employees should only see their own organisation's uploaded documents.",
+  "area": "org"
+ },
+ {
+  "id": "C50",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The resignation approval chain of this organisation's employee shows TRUE HR employees as approvers (Business Head TKF5002 Debasis Panigrahi, Finance TKF1009 Arjun Pillai) instead of the approvers set in Company Admin's Approvers page - a resignation would be routed to another company.",
+  "testData": "TH5001 > Resignation > Approvals card (not submitted)",
+  "note": "Use only the organisation's own approver matrix.",
+  "area": "workflow"
+ },
+ {
+  "id": "C51",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Request a change",
+  "bug": "Gender is empty in Request a change although Male was selected at onboarding; the Address form is not pre-filled with the address submitted in e-joining; the request shows the raw value MALE.",
+  "testData": "TH5001 > Request a change > Personal details / Address",
+  "note": "Pre-fill current values and show readable labels.",
+  "area": "people"
+ },
+ {
+  "id": "C52",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "After signing in, the employee lands on /app/admin with a Restricted section message and an empty sidebar instead of the Employee Self-Service dashboard; the header shows True HR · Dashboard instead of the employee's company.",
+  "testData": "Sign in as TH5001",
+  "note": "Employees should land on /app/ess; header should show their own company.",
+  "area": "auth"
+ },
+ {
+  "id": "C53",
+  "sheet": "Company",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "The welcome/credentials email sent on approval shows literal \\n characters throughout, is branded True HR Pvt Ltd with True Kind Foundation mission text (positive social impact), has the typo Employee I'D, and sends the login password in plain text.",
+  "testData": "Approval email to subhrajit.tripathy.ts+caemp1@gmail.com (TH5001)",
+  "note": "Use the organisation branding, proper line breaks, correct label Employee ID, and a set-password link instead of a plain-text password.",
+  "area": "people"
+ },
+ {
+  "id": "H1",
+  "sheet": "HR login",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "The Headcount card shows 30 'Total employees', but it counts candidates (Offer sent, Filling details, Rejected) and inactive employees; only 18 are active.",
+  "testData": "Headcount: 30 vs HRMIS Active: 18",
+  "note": "Headcount should count active employees only.",
+  "area": "auth"
+ },
+ {
+  "id": "H2",
+  "sheet": "HR login",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "The 'Payroll - October' card shows 2/30 payslips published with 28 pending, but the Payroll page lists 26 employees; the card counts candidates and inactive employees.",
+  "testData": "Dashboard: 2/30 vs Payroll page: 26 employees",
+  "note": "The pending count should be based on active employees on payroll.",
+  "area": "auth"
+ },
+ {
+  "id": "H3",
+  "sheet": "HR login",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "The Dashboard Onboarding pipeline stages and the Pending approvals rows (Leave requests, On-duty, Miss-punch, Comp-off) are not clickable, so HR cannot open the related candidate/request records; it only says 'Managers action these in the employee app'.",
+  "testData": "Offer Sent, Filling Details, In Review, Active; Pending approvals",
+  "note": "Make counts clickable and link to the filtered list.",
+  "area": "auth"
+ },
+ {
+  "id": "H4",
+  "sheet": "HR login",
+  "module": "Dashboard",
+  "menu": "",
+  "bug": "General (Sidebar): when switching between modules, the sidebar scrolls back to the top instead of keeping its position and the selected module visible.",
+  "testData": "NA",
+  "note": "Sidebar should retain scroll position and keep the active menu visible.",
+  "area": "auth"
+ },
+ {
+  "id": "H5",
+  "sheet": "HR login",
+  "module": "Support Desk",
+  "menu": "",
+  "bug": "Support tickets can be marked Resolved without any resolution note; tickets #7, #4, #3 and #1 are Resolved with no 'Resolution' shown to the employee.",
+  "testData": "Ticket #7 (IT - Email issue)",
+  "note": "Resolution note should be mandatory when resolving.",
+  "area": "org"
+ },
+ {
+  "id": "H6",
+  "sheet": "HR login",
+  "module": "Support Desk",
+  "menu": "",
+  "bug": "The Resolve / Update ticket popup has no Close (X) or Cancel button, and pressing Esc does not close it; it closes only by clicking outside.",
+  "testData": "Ticket #6 > Resolve",
+  "note": "Add Cancel/X and support Esc.",
+  "area": "org"
+ },
+ {
+  "id": "H7",
+  "sheet": "HR login",
+  "module": "Support Desk",
+  "menu": "",
+  "bug": "The Support Desk allows duplicate tickets with the same issue and text (Ticket #3 and #4 'Salary Slip'), and shows an invalid 11-digit phone number for the employee (07586894901).",
+  "testData": "Tickets #3, #4; Koustav Maity TKF5001",
+  "note": "Warn on duplicate open tickets; validate stored phone numbers.",
+  "area": "org"
+ },
+ {
+  "id": "H8",
+  "sheet": "HR login",
+  "module": "Support Desk",
+  "menu": "",
+  "bug": "The Support Desk has only Pending and Resolved statuses and does not show ticket progress to employees.",
+  "testData": "Ticket",
+  "note": "Workflow enhancement: Open, In Progress, Awaiting Verification, Resolved, Closed, Reopened.",
+  "area": "org"
+ },
+ {
+  "id": "H9",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The mobile number validation should work before submitting the form",
+  "testData": "NA",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H10",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Personal Email field accepts an invalid email format",
+  "testData": "sanvi123@gmail",
+  "note": "Before submitting the form email id filed should be validated",
+  "area": "people"
+ },
+ {
+  "id": "H11",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Date of Birth field allows the user to enter a future date",
+  "testData": "2027-10-30 00:00:00",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H12",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "In roles the system allows designations that are not mapped to the selected department.",
+  "testData": "Department: Human Resource, Designation: Senior Software Engineer",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H13",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Official Email field contains an invalid email format (sanvi123@gmail) without displaying an immediate validation message.",
+  "testData": "sanvi123@gmail",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H14",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Location of Joining field is a free-text input instead of a dropdown. This allows users to enter inconsistent or invalid location names. The field should ideally provide a searchable dropdown containing predefined office locations.",
+  "testData": "",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H15",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Date of Joining can be in a back date but not earlier than the employee's Date of Birth.",
+  "testData": "",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H16",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The system provides an option to auto-generate the Offer Letter and Annexure A based on the entered Annual CTC, but no preview or verification option is available before sending the generated documents to the candidate. HR should be able to review the generated offer letter and compensation details before sending.",
+  "testData": "Auto generated OL",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H17",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The system allows an unrealistic Annual CTC value and successfully generates an offer letter without displaying any salary validation error.",
+  "testData": "Annual CTC: ₹55",
+  "note": "The system should validate Annual CTC against the organisation's configured salary rules, if applicable.",
+  "area": "people"
+ },
+ {
+  "id": "H18",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Offer Letter PDF preview modal is not properly responsive. The PDF viewer extends beyond the visible screen area, preventing users from viewing the complete document comfortably.",
+  "testData": "",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H19",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Personal Email field accepts an email that is already registered to another employee and creates a duplicate employee record.",
+  "testData": "subhrajit.tripathy.ts@gmail.com (already used by TKF9008)",
+  "note": "The system should block a personal email that already exists and show 'Email already registered'.",
+  "area": "people"
+ },
+ {
+  "id": "H20",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The candidate status is shown as 'OFFER SENT' on the Dashboard but as 'PENDING' on the Employees list for the same record.",
+  "testData": "Sanvi Malik, Rahul malik, lalita gupta",
+  "note": "The same status label should be used on all screens (matches the 'Offer sent' filter).",
+  "area": "people"
+ },
+ {
+  "id": "H21",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The '30 total' count in the Employees header does not change when a status filter or search is applied.",
+  "testData": "Filter: Offer sent (4 rows shown)",
+  "note": "The count should reflect the filtered result.",
+  "area": "people"
+ },
+ {
+  "id": "H22",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The status filter has no 'Filling details' option, so candidates in that stage (e.g. Susmita Das) cannot be filtered. Selecting 'Awaiting review' shows 'Onboard a new employee to get started' instead of a no-results message.",
+  "testData": "Status filter dropdown",
+  "note": "The filter should list every status shown in the table, and the empty state should say no records match.",
+  "area": "people"
+ },
+ {
+  "id": "H23",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The employee search does not trim leading/trailing spaces, so a valid name with spaces returns 'No matches'.",
+  "testData": "Search text: \"  subhrajit  \" (with spaces)",
+  "note": "Search input should be trimmed before matching.",
+  "area": "people"
+ },
+ {
+  "id": "H24",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The employee profile page does not show the Date of Birth and Gender entered during onboarding, and Employment type is shown as the raw value 'FULL_TIME'.",
+  "testData": "Employee #35 - DOB 10-05-1998, Gender Male",
+  "note": "All saved fields should be shown with readable labels (e.g. 'Full time').",
+  "area": "people"
+ },
+ {
+  "id": "H25",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The auto-generated Offer Letter PDF contains another candidate's/template data: 'Dear Rocky', position '{{Software Engineer}}', 'with [GS]', 'effective from [nsdjshgd]', instead of Subhrajit Tripathy, Operations Manager, DOJ 16-11-2026.",
+  "testData": "Candidate #35 - View Offer Letter (offer-letter-subhrajit.pdf)",
+  "note": "Placeholders must be replaced with the candidate's name, designation, company and DOJ.",
+  "area": "people"
+ },
+ {
+  "id": "H26",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Offer Letter signature block shows a garbage signatory name ('kjsabfksbasfbfhvafnbakf / mjksdbkasdbvawd') and a stock flower photo as the signature; there is no company stamp.",
+  "testData": "Offer letter PDF - signature section",
+  "note": "Verify the approved template: show a valid authorised signatory, signature and stamp.",
+  "area": "people"
+ },
+ {
+  "id": "H27",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "Annexure A (Compensation Structure) shows 'Date of Joining: —' although the DOJ (16-11-2026) was entered during onboarding.",
+  "testData": "Annexure A - page 2",
+  "note": "DOJ should be populated in the annexure.",
+  "area": "people"
+ },
+ {
+  "id": "H28",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The offer email is sent from a personal Gmail address (TRUE HR <maitykoustav2000@gmail.com>) instead of a company domain.",
+  "testData": "Offer email sender",
+  "note": "Use an official company sender address (e.g. hr@company domain).",
+  "area": "people"
+ },
+ {
+  "id": "H29",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The offer email content is contradictory: link 'valid for 3 days' vs 'joining formalities latest by 16/11/2026'; it says the e-joining link will be emailed after acceptance, but accepting opens the form directly; footer address is Noida, U.P. while branding address is Odisha; website is truekindfoundation.org.",
+  "testData": "Offer email - 27-10-2026 22:29",
+  "note": "Align validity/deadline text and use the branding address and website.",
+  "area": "people"
+ },
+ {
+  "id": "H30",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "On the offer acceptance page the Work email is displayed in Title Case ('Subhrajit.Qa1@Truehr.Example').",
+  "testData": "Onboarding > Accept page",
+  "note": "Emails should be shown exactly as entered (lowercase).",
+  "area": "people"
+ },
+ {
+  "id": "H31",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "E-joining Step 1 (Personal): no field is mandatory; Emergency contact name accepts digits/symbols ('12345@@') and contact phone accepts '0000000000'.",
+  "testData": "Contact name: 12345@@, Phone: 0000000000",
+  "note": "Validate name (letters only) and Indian mobile format (starts with 6-9).",
+  "area": "people"
+ },
+ {
+  "id": "H32",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "E-joining Step 2 (Address): State, District and City are free text; State 'xyz123' and PIN '000000' are accepted; Permanent address can be left blank without ticking 'same as present'; District is not shown in the saved address on the profile.",
+  "testData": "State: xyz123, PIN: 000000",
+  "note": "Use State/District dropdowns, validate PIN and make permanent address mandatory.",
+  "area": "people"
+ },
+ {
+  "id": "H33",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "E-joining accepts the same file for different documents (one PDF uploaded as 10th, 12th, Aadhaar, PAN and Bank passbook; the photo reused as signature image). Employee TKF9008 was approved/activated with missing Signature image and Relieving letter and before the DOJ (2026-10-29).",
+  "testData": "Candidate #35 documents; Employee TKF9008",
+  "note": "Flag duplicate files, enforce mandatory documents and keep status Pending until DOJ.",
+  "area": "people"
+ },
+ {
+  "id": "H34",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "Bank name is a free-text field and does not match the IFSC (IFSC SBIN0001234 saved with Bank 'Ghhh').",
+  "testData": "Employee TKF9008 - Bank & statutory",
+  "note": "Auto-fill bank/branch from IFSC or validate against it.",
+  "area": "people"
+ },
+ {
+  "id": "H35",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "In Edit employee, Annual CTC is blank even though CTC was given in the offer; Sub-department and Branch dropdowns are empty (Master data fails to load); Employment type options are in uppercase (FULL TIME) unlike the onboarding form.",
+  "testData": "Edit employee - TKF9008",
+  "note": "Prefill CTC, load masters and use consistent labels.",
+  "area": "people"
+ },
+ {
+  "id": "H36",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The 'TRUE HR - your password has been reset' email body shows raw JSON ({subject: Welcome to True HR Pvt Ltd! - E-Joining Completed, html: ...}) instead of a formatted reset message.",
+  "testData": "Employee > Reset password - email at 17:31",
+  "note": "Send a properly formatted email with reset instructions.",
+  "area": "auth"
+ },
+ {
+  "id": "H37",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The candidate status label differs across screens: 'OFFER SENT' / 'PENDING' / 'DETAILS PENDING' / 'DETAILS_PENDING' / 'Filling details' / 'AWAITING REVIEW' for the same stages.",
+  "testData": "Dashboard, Employees list, Org chart, Profile",
+  "note": "Use one consistent set of status names everywhere.",
+  "area": "people"
+ },
+ {
+  "id": "H38",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Employee Profile gives HR no quick actions to manage a candidate's onboarding status (Offer accepted, Offer rejected, On hold, Did not join, Onboarding completed); HR has to use the Separation module for candidates who never joined.",
+  "testData": "Candidate status",
+  "note": "Workflow enhancement: role-based status actions with reason and history.",
+  "area": "people"
+ },
+ {
+  "id": "H39",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The Employee Profile shows only limited information; details submitted in the onboarding Personal Information Sheet (blood group, marital status, emergency contact, etc.) are only in the Info Sheet PDF and cannot be edited by HR.",
+  "testData": "Employee Profile vs Info sheet (PDF)",
+  "note": "Add a View more section with HR editing (role-based, with audit trail).",
+  "area": "people"
+ },
+ {
+  "id": "H40",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The 'Generate offer + Annexure A' button does not visibly perform any action (stays on the same profile page) and is irrelevant after the offer was already generated at onboarding (also shown for Active employees).",
+  "testData": "Generate offer + Annexure A",
+  "note": "Fix the action or remove/hide it after the offer is sent.",
+  "area": "people"
+ },
+ {
+  "id": "H41",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "No email notification is sent to the employee when HR deactivates or terminates the account.",
+  "testData": "Employee status: Active > Deactivated / Terminated",
+  "note": "Send separate notification templates as per approval/communication policy.",
+  "area": "people"
+ },
+ {
+  "id": "H42",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "HR can 'Approve & create account' for an incomplete/duplicate onboarding: permanent address blank, no reporting/functional manager, no salary structure or CTC, and the same personal email as active employee TKF9008. A second active employee TKF9009 was created.",
+  "testData": "Candidate #35 approved 28-10-2026 -> TKF9009",
+  "note": "Block approval until mandatory data is complete and the personal email is unique.",
+  "area": "people"
+ },
+ {
+  "id": "H43",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "On approval the employee becomes ACTIVE and login credentials are emailed immediately, although the Date of Joining is 16-11-2026 (19 days later).",
+  "testData": "TKF9009 - DOJ 2026-11-16, status ACTIVE on 28-10-2026",
+  "note": "Keep status as 'Joining' and activate login on/after DOJ (or make it configurable).",
+  "area": "people"
+ },
+ {
+  "id": "H44",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The welcome email sends a permanent password in plain text, and the login ID is the official email (subhrajit.qa1@truehr.example) which the new joiner may not have access to yet.",
+  "testData": "E-Joining Completed email - 28-10-2026 11:00",
+  "note": "Send a one-time set-password link (or force password change on first login) and allow login with Employee ID/personal email until official email is active.",
+  "area": "people"
+ },
+ {
+  "id": "H45",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "The 'E-Joining Completed' email text has errors: 'Employee I'D', NGO-style wording ('mission of creating positive social impact and empowering communities') for a Pvt Ltd company, 'My True HR Pvt Ltd application', and the Noida, U.P. footer address.",
+  "testData": "E-Joining Completed email",
+  "note": "Correct the template text and use the branding address.",
+  "area": "people"
+ },
+ {
+  "id": "H46",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Employee",
+  "bug": "A newly approved employee cannot log in: the login sends the 6-digit sign-in code only to the official email (s***********1@truehr.example), which is not a real mailbox, and there is no option to receive the code on the personal email or phone. The welcome email password alone is not enough, so the user is stuck on 'Check your email'.",
+  "testData": "TKF9009 - login with subhrajit.qa1@truehr.example + emailed password",
+  "note": "Validate the official email domain at onboarding and allow the sign-in code to go to the verified personal email/phone (or skip OTP on first login with the emailed credentials).",
+  "area": "auth"
+ },
+ {
+  "id": "H47",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "",
+  "bug": "Even with a valid, deliverable official email, the employee sign-in code is never received: the screen says 'We emailed a 6-digit sign-in code to s****9@gmail.com', but no email arrives (checked Inbox, Spam and All Mail). The new employee cannot log in at all.",
+  "testData": "TKF9009 - login email subhrajit.tripathy.ts+tkf9009@gmail.com; code requested 11:50 and Resend at 12:01 on 28-10-2026 ('A new code has been emailed') - nothing received",
+  "note": "The sign-in code email must be delivered (check mail service / OTP template); show an error if sending fails.",
+  "area": "auth"
+ },
+ {
+  "id": "H48",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "",
+  "bug": "If HR wants to edit an email id and enter duplicate email the system is unable to make changes but it not showing the error.",
+  "testData": "",
+  "note": "",
+  "area": "people"
+ },
+ {
+  "id": "H48a",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "",
+  "bug": "Offers older than the stated 3-day link validity stay in 'OFFER_SENT' and are not auto-declined (e.g. Sanvi Malik with DOJ 04-10-2026, lalita gupta).",
+  "testData": "Employees / HRMIS People - Offer sent",
+  "note": "Auto-expire offers after the validity period as stated in the offer email.",
+  "area": "people"
+ },
+ {
+  "id": "H48b",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "",
+  "bug": "An offer can be sent without Department/Designation (not mandatory in Onboard employee); 3 Offer sent candidates have Department '(none)' in HRMIS Headcount.",
+  "testData": "Onboard employee form",
+  "note": "Make Department and Designation mandatory before sending an offer.",
+  "area": "people"
+ },
+ {
+  "id": "H49",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Review Queue",
+  "bug": "The Review queue list shows only name, designation and submitted date - no department, DOJ, document count or days pending; there is no search/sort and no history of approved or sent-back submissions.",
+  "testData": "Review queue",
+  "note": "Show key details and a Reviewed/Sent back history tab.",
+  "area": "people"
+ },
+ {
+  "id": "H50",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Review Queue",
+  "bug": "During review HR cannot verify or reject individual documents; each document only has View and Replace, so HR can overwrite a candidate's document with no audit trail and approve without document checks.",
+  "testData": "Candidate #35 review - E-joining documents",
+  "note": "Add per-document Verify/Reject with remarks and log any HR replacement.",
+  "area": "people"
+ },
+ {
+  "id": "H51",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Change Requests",
+  "bug": "When the Change requests status filter is set to 'All' and there is no data, the empty-state text reads 'No all requests'.",
+  "testData": "Status: All",
+  "note": "Use 'No change requests found'.",
+  "area": "people"
+ },
+ {
+  "id": "H52",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Org Chart",
+  "bug": "The Org chart shows candidates who have only been sent an offer as direct reports of employees, with the raw status 'OFFER_SENT'.",
+  "testData": "Aarav Sharma > lalita gupta, Rahul malik, Sanvi Malik",
+  "note": "Only joined employees should appear in the reporting tree.",
+  "area": "people"
+ },
+ {
+  "id": "H53",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Org Chart",
+  "bug": "The reporting line allows a higher-level employee to report to a lower-level one: Debasis Panigrahi (HR Manager, L1) reports to Koustav Maity (Software Engineer), and Sanvi Malik (L1) reports to Aarav Sharma (L2).",
+  "testData": "Org chart > Reporting manager",
+  "note": "Warn or block when the manager is at a lower level than the employee.",
+  "area": "people"
+ },
+ {
+  "id": "H54",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Org Chart",
+  "bug": "Koustav Maity TKF5001, whose resignation was approved with LWD 06/08/2026, still appears in the Org chart as a top-level manager with 2 direct reports.",
+  "testData": "Org chart > Expand all",
+  "note": "Exited employees should be removed and their reports re-assigned.",
+  "area": "people"
+ },
+ {
+  "id": "H55",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Hierarchy & Levels",
+  "bug": "People counts do not match across screens: Hierarchy shows 'People placed 11' and level L1 '4 people', while Org chart shows 'Placed on a level 15/23' and the L1 designations hold 10 people.",
+  "testData": "L1 = HR Manager (6) + Operations Lead (4)",
+  "note": "Counts should use the same rule (e.g. active employees only) everywhere.",
+  "area": "org"
+ },
+ {
+  "id": "H56",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Hierarchy & Levels",
+  "bug": "Hierarchy level names accept any free text, and person names are saved as level names (L1 'Mr tripathy', L2 'Mr Gudu', L3 'Mr subham').",
+  "testData": "Hierarchy > The ladder",
+  "note": "Validate level names (e.g. unique, no person names) or provide standard level labels.",
+  "area": "org"
+ },
+ {
+  "id": "H57",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Master Data",
+  "bug": "The Master data page fails to load and shows 'Internal server error' (API /api/admin/org-masters returns 500).",
+  "testData": "NA",
+  "note": "The page should load the reference lists (banks etc.).",
+  "area": "org"
+ },
+ {
+  "id": "H58",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "The state list in Leave config shows Odisha twice ('Odisha' and 'ODISHA'), in both the holiday 'Applies to' dropdown and State Entitlements.",
+  "testData": "Odisha / ODISHA",
+  "note": "State names should be unique (case-insensitive).",
+  "area": "leave"
+ },
+ {
+  "id": "H59",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "Leave Types define EL = 10, CL = 12, SL = 12 per year, while State Entitlements define different values (EL 15-21, CL 6-12, SL 0 for Delhi); it is not clear which entitlement applies.",
+  "testData": "Leave Types vs State Entitlements",
+  "note": "Use a single source or clearly show the override precedence.",
+  "area": "leave"
+ },
+ {
+  "id": "H60",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "Maternity Leave (182 days) and Menstrual Leave (12, half-day) have no gender eligibility setting, and Maternity Leave does not require a certificate while Sick Leave always does.",
+  "testData": "Leave Types: ML, MSL, SL",
+  "note": "Add gender/eligibility rules and certificate thresholds per leave type.",
+  "area": "leave"
+ },
+ {
+  "id": "H61",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "In Add holiday, the Date field does not properly validate the entered date, so invalid dates may be submitted.",
+  "testData": "Invalid date input",
+  "note": "Verify with invalid dates and confirm submission is blocked.",
+  "area": "leave"
+ },
+ {
+  "id": "H62",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "In Add holiday, the field label 'Name' should be 'Occasion' to make clear that the holiday/occasion name is expected.",
+  "testData": "Add holiday > Name",
+  "note": "UI text improvement.",
+  "area": "leave"
+ },
+ {
+  "id": "H63",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Leave Config",
+  "bug": "The Holidays list only has a Delete option; there is no Edit to change the date, occasion or state of an existing holiday.",
+  "testData": "Existing holiday",
+  "note": "Provide Edit for holidays.",
+  "area": "leave"
+ },
+ {
+  "id": "H64",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Wishes",
+  "bug": "Wishes shows a 'Work anniversary' on the employee's joining date itself (0 years), e.g. Subhrajit Tripathy TKF9008 with DOJ 2026-10-29 is listed as work anniversary on 2026-10-29.",
+  "testData": "Wishes > Next 7 days",
+  "note": "Anniversaries should start from the 1st completed year and show the year count.",
+  "area": "org"
+ },
+ {
+  "id": "H65",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Wishes",
+  "bug": "The Wishes & Reminders section lists upcoming birthdays and work anniversaries but gives HR no option to send wishes/greetings directly to employees.",
+  "testData": "Wishes list",
+  "note": "Enhancement: add a Send wishes action (email/app).",
+  "area": "org"
+ },
+ {
+  "id": "H66",
+  "sheet": "HR login",
+  "module": "People",
+  "menu": "Wishes",
+  "bug": "There is no visible option to configure reminder notifications or automated birthday/work anniversary greetings.",
+  "testData": "Wishes page",
+  "note": "Enhancement: check whether settings exist elsewhere; otherwise add configuration.",
+  "area": "org"
+ },
+ {
+  "id": "H67",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The Payroll list includes candidates who have not joined (Offer sent / Filling details, no Employee ID) and inactive employees, so the employee count shows 26 instead of 18 active.",
+  "testData": "Sanvi Malik, Rahul malik, Susmita Das, Koustav Maity (TKF9007, Inactive)",
+  "note": "Payroll should list active employees only.",
+  "area": "payroll"
+ },
+ {
+  "id": "H68",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The system allows October 2026 payslips to be generated and published before the month ends, showing 31/31 days paid while 23 days have no punch or approved leave.",
+  "testData": "Arjun Pillai (TKF1009), Oct 2026, published on/before 27-10-2026",
+  "note": "Payroll for a month should only be published after the month closes (or show a clear warning).",
+  "area": "payroll"
+ },
+ {
+  "id": "H69",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "Professional Tax of Rs 200 is deducted on a monthly gross of Rs 6,000, which is below the PT slab threshold.",
+  "testData": "Arjun Pillai (TKF1009) - CTC Rs 6,000, Net Rs 5,440",
+  "note": "PT should follow the state slab for the employee's work location (to be confirmed with payroll team).",
+  "area": "payroll"
+ },
+ {
+  "id": "H70",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The Salary structure accepts a negative allowance (Personal Allowance = -1) and silently increases Special Allowance to Rs 1,501.",
+  "testData": "Arjun Pillai TKF1009 - Personal Allowance -1",
+  "note": "Allowances should not accept negative values.",
+  "area": "payroll"
+ },
+ {
+  "id": "H71",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The Annual CTC entered while sending the offer (Rs 6,00,000) is not used to create the salary structure; after joining the employee shows 'Set structure' and Edit employee shows Annual CTC blank.",
+  "testData": "Subhrajit Tripathy - offer CTC 6,00,000",
+  "note": "Carry the offer CTC into the salary structure and employee record.",
+  "area": "people"
+ },
+ {
+  "id": "H72",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The Payroll Year dropdown only offers 2024, 2025 and 2026, so payroll for January 2027 cannot be selected.",
+  "testData": "Payroll > Year",
+  "note": "Years should be generated dynamically (current and next year).",
+  "area": "payroll"
+ },
+ {
+  "id": "H73",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payroll",
+  "bug": "The Grade on the salary structure is free text and differs from the designation grade (Arjun Pillai structure grade 'L2', designation Functional Lead = M2).",
+  "testData": "Arjun Pillai TKF1009",
+  "note": "Grade should come from the designation/hierarchy, not free text.",
+  "area": "payroll"
+ },
+ {
+  "id": "H74",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Increment",
+  "bug": "In Record a salary revision, the validation error 'That is a reduction, not an increment' is shown on the page behind the modal overlay, not inside the form, so the user cannot see why Record revision failed.",
+  "testData": "Arjun Pillai - Increment, New CTC 100",
+  "note": "Show validation messages inside the modal next to the field.",
+  "area": "payroll"
+ },
+ {
+  "id": "H75",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Increment",
+  "bug": "After selecting an employee in Record a salary revision, the current CTC is not shown even though the help text says it is read from the salary structure; past effective dates (01-01-2026) are allowed.",
+  "testData": "Arjun Pillai TKF1009",
+  "note": "Display current CTC/grade and warn on back-dated revisions.",
+  "area": "payroll"
+ },
+ {
+  "id": "H76",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Increment",
+  "bug": "While choosing the correction from dropdown of revision type, \"set the new pay by\" should not be active as its not an increment.",
+  "testData": "",
+  "note": "",
+  "area": "payroll"
+ },
+ {
+  "id": "H77",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Increment",
+  "bug": "while recording a salary revision, dropdown under\"set the new pay\" should show annual CTC rather than monthly CTC for better clarity",
+  "testData": "",
+  "note": "",
+  "area": "payroll"
+ },
+ {
+  "id": "H78",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payslip components",
+  "bug": "The payslip preview does not match the real payroll run: preview net pay for Rs 50,000 CTC is Rs 46,780 (with Welfare Trust Rs 20), but the published payslip shows Rs 46,800.",
+  "testData": "Debasis Panigrahi (TKF5002), Oct 2026, CTC Rs 50,000",
+  "note": "Preview and payroll run should use the same deduction rules.",
+  "area": "payroll"
+ },
+ {
+  "id": "H79",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payslip components",
+  "bug": "In Payslip components, Code, Payslip label and Value fields lose focus after every keystroke, so only one character can be typed (typing 150 in Basic % gives 1; typing 60 gives 6).",
+  "testData": "BASIC value: 150",
+  "note": "Fields should accept full input without losing focus.",
+  "area": "payroll"
+ },
+ {
+  "id": "H80",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Payslip components",
+  "bug": "Company set defines HRA as 40% of Basic, but the payroll Salary structure modal defaults HRA to 50% of Basic (Arjun Pillai), while Annexure A uses 40% - the same company uses two different HRA rules.",
+  "testData": "Arjun Pillai TKF1009 - Structure",
+  "note": "Salary structure should inherit the Company set component rules.",
+  "area": "payroll"
+ },
+ {
+  "id": "H81",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Statutory",
+  "bug": "The Statutory employee search lists candidates who have not joined (Rahul malik, shown as '(31)' internal ID) and allows UAN/PF/ESIC entry and Form 16 PDF for them.",
+  "testData": "Employee: 'Rahul'",
+  "note": "Only joined employees should appear; show Employee ID.",
+  "area": "payroll"
+ },
+ {
+  "id": "H82",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Statutory",
+  "bug": "The Statutory page says 'PF / ESIC / gratuity identifiers' but there are no gratuity fields.",
+  "testData": "Statutory records page",
+  "note": "Add gratuity details or correct the description.",
+  "area": "payroll"
+ },
+ {
+  "id": "H83",
+  "sheet": "HR login",
+  "module": "Pay and Compliance",
+  "menu": "Investment Declaration",
+  "bug": "Investment Declarations status tabs are shown in lowercase (submitted, verified, rejected, draft), inconsistent with the rest of the app.",
+  "testData": "Investment decl. status tabs",
+  "note": "UI text: use proper case labels.",
+  "area": "payroll"
+ },
+ {
+  "id": "H84",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Resignations",
+  "bug": "A resignation is approved with Last working day equal to the resignation date despite '30d notice', and no notice shortfall/recovery is shown.",
+  "testData": "Smruti Nanda TKF9004 - Resigned 22/07/2026, LWD 22/07/2026",
+  "note": "Enforce notice period or record shortfall for F&F recovery.",
+  "area": "workflow"
+ },
+ {
+  "id": "H85",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Resignations",
+  "bug": "Employees remain ACTIVE after their approved last working day: they still appear in Payroll, Org chart, Approvers and NFA lists.",
+  "testData": "Koustav Maity TKF5001 (LWD 06/08/2026), Smruti Nanda TKF9004 (LWD 22/07/2026)",
+  "note": "Status should change to Exited/Inactive after LWD and access should be revoked.",
+  "area": "workflow"
+ },
+ {
+  "id": "H86",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Resignations",
+  "bug": "Exited employees can still log in after their last working day: Smruti Nanda TKF9004 (LWD 22/07/2026) last login 31/07/2026; Koustav Maity TKF5001 (LWD 06/08/2026) last login 11/08/2026 (from HRMIS People sheet).",
+  "testData": "HRMIS workbook > People > Last Login",
+  "note": "Disable login automatically on/after the last working day.",
+  "area": "workflow"
+ },
+ {
+  "id": "H87",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Resignations",
+  "bug": "A resignation for TKF9008 was APPROVED with resignation date and LWD 10/10/2026, which is before his DOJ (29/10/2026), and he is still ACTIVE.",
+  "testData": "HRMIS Exits sheet - TKF9008",
+  "note": "Resignation date must be after DOJ; approved exits must update the employee status.",
+  "area": "workflow"
+ },
+ {
+  "id": "H88",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Terminations",
+  "bug": "After reversing an employee's termination, the employee does not reappear in the Record termination employee dropdown until the page is refreshed or the user switches module.",
+  "testData": "Reverse termination, then Record a termination",
+  "note": "The dropdown should refresh immediately after a reversal.",
+  "area": "workflow"
+ },
+ {
+  "id": "H89",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Terminations",
+  "bug": "The Record a termination employee search lists candidates who never joined (Rahul malik - Offer sent, Susmita Das - Filling details).",
+  "testData": "Employee: 'Rahul', 'Susmita'",
+  "note": "Only active employees should be listed for termination.",
+  "area": "workflow"
+ },
+ {
+  "id": "H90",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "A Full & Final settlement of Rs 1,43,500 was created and marked paid for a candidate who never joined (status Filling details, no Employee ID).",
+  "testData": "Susmita Das () - LWD 2026-10-27",
+  "note": "F&F should only be allowed for active employees with an approved resignation/termination.",
+  "area": "payroll"
+ },
+ {
+  "id": "H91",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "In Full & Final, the employee search lists all records including candidates who never joined (e.g. 'Rahul malik (31)', shown with internal ID instead of Employee ID); only terminated/exited employees with pending F&F should be listed.",
+  "testData": "New settlement > Employee: 'Rahul'",
+  "note": "Restrict the list to exited employees and show Employee ID.",
+  "area": "payroll"
+ },
+ {
+  "id": "H92",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "In Full & Final there is no Edit option for an existing settlement; to correct a mistake HR must create a new settlement for the same employee, which overwrites the old one.",
+  "testData": "Existing settlements list",
+  "note": "Provide Edit for settlements in Draft status.",
+  "area": "payroll"
+ },
+ {
+  "id": "H93",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "The generated F&F PDF does not show the settlement status (Draft / Finalised / Paid).",
+  "testData": "F&F PDF",
+  "note": "Show status in the PDF and update it when the status changes.",
+  "area": "payroll"
+ },
+ {
+  "id": "H94",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "Leave balance, Notice shortfall and Last working date must be typed manually in New settlement; they are not fetched from leave balances or the approved resignation/termination.",
+  "testData": "New settlement form",
+  "note": "Auto-fill LWD, leave balance and notice shortfall from system data.",
+  "area": "payroll"
+ },
+ {
+  "id": "H95",
+  "sheet": "HR login",
+  "module": "Separation",
+  "menu": "Full and Final",
+  "bug": "New settlement accepts invalid values: negative Arrears (-5000 gives 'Net recoverable Rs 5,000'), negative leave balance (-10, silently ignored) and a Last working date of 01-01-2020 (before joining). No final salary or gratuity is computed in Preview.",
+  "testData": "Arrears -5000, Leave -10, LWD 01-01-2020",
+  "note": "Validate non-negative amounts and LWD >= DOJ; compute final salary/gratuity.",
+  "area": "payroll"
+ },
+ {
+  "id": "H96",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Letters",
+  "bug": "The system allows a 'Confirmation of Employment' letter to be issued to a candidate who has only been sent an offer and has no Employee ID.",
+  "testData": "TH/LTR/2026/467514 - Rahul malik ()",
+  "note": "Employee letters should only be issuable to active employees.",
+  "area": "payroll"
+ },
+ {
+  "id": "H97",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Letters",
+  "bug": "While issuing a letter, invalid or garbage values are accepted in fields like Effective Date, Last working date, Signatory Name and Signatory Designation; Last working date on Relieving Letter is a free-text box, not a date picker.",
+  "testData": "Relieving Letter > Last working date (text box)",
+  "note": "Use date pickers and field-level validation; block Generate until all fields are valid.",
+  "area": "payroll"
+ },
+ {
+  "id": "H98",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Letters",
+  "bug": "Because input is not validated, the generated letter PDF prints the invalid/garbage data entered by the user.",
+  "testData": "Generated letter PDF",
+  "note": "Validate all inputs before generating so only correct, formatted data appears in the PDF.",
+  "area": "payroll"
+ },
+ {
+  "id": "H99",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Letters",
+  "bug": "A Relieving Letter / Experience Certificate can be issued to an active employee who has no approved resignation or termination.",
+  "testData": "Aarav Sharma (TKF1001) - Active",
+  "note": "Relieving/Experience letters should only be allowed after an approved exit.",
+  "area": "payroll"
+ },
+ {
+  "id": "H100",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Document Branding",
+  "bug": "The GSTIN, CIN and PAN fields in Document branding accept random text, which is then printed on every letterhead.",
+  "testData": "GSTIN: jasksfjloesifakfjkavsjfkasvjf, PAN: nbsdvasdbvcasnmdnbsad",
+  "note": "Validate GSTIN (15 chars), CIN (21 chars) and PAN (AAAAA9999A) before saving.",
+  "area": "org"
+ },
+ {
+  "id": "H101",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Document Branding",
+  "bug": "In Document Branding, if data is changed in a tab (Identity & Letterhead, Colours & Paper, etc.) and the user switches tab or refreshes without saving, no confirmation is shown and the changes are lost. (Same on Payslip components page.)",
+  "testData": "Edit any field, switch tab / refresh",
+  "note": "Show a Save / Discard confirmation for unsaved changes.",
+  "area": "org"
+ },
+ {
+  "id": "H102",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Document Branding",
+  "bug": "In generated PDFs (Offer letter, Letters, Payslips) the logo overlaps the company name in the letterhead, the address is printed twice, and a stock photo is used as the signature image.",
+  "testData": "offer-letter-subhrajit.pdf",
+  "note": "Fix logo alignment/sizing, de-duplicate address lines and use a proper signature image.",
+  "area": "org"
+ },
+ {
+  "id": "H103",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Policies",
+  "bug": "In Policies, JPEG images can be uploaded as policy documents, although policies should be PDF/DOC/DOCX only; no file-type error is shown.",
+  "testData": "Upload .jpg for a policy",
+  "note": "Restrict allowed file types and show an error for unsupported formats.",
+  "area": "org"
+ },
+ {
+  "id": "H104",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Policies",
+  "bug": "In Policies there is no option to add a new policy; HR can only upload files against the fixed list of 8 policies.",
+  "testData": "Policies list",
+  "note": "Provide 'Add new policy' so HR can create, upload and manage company policies.",
+  "area": "org"
+ },
+ {
+  "id": "H105",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "App Banners",
+  "bug": "In App Banners, after an image is uploaded successfully (flower.jpg), the banner is not displayed anywhere in the HRMS web app or employee portal.",
+  "testData": "flower.jpg (uploaded 2026-10-27)",
+  "note": "Uploaded/active banners should appear in the dashboard banner carousel.",
+  "area": "auth"
+ },
+ {
+  "id": "H106",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Scheduler",
+  "bug": "The Scheduler allows duplicate schedules with the same title, message, audience and cadence, so employees get the same announcement twice.",
+  "testData": "Title: Weekend Get-Together - ALL, WEEKLY @ 06:00 (2 entries)",
+  "note": "Warn or block when an identical active schedule exists.",
+  "area": "org"
+ },
+ {
+  "id": "H107",
+  "sheet": "HR login",
+  "module": "Documents and Comms",
+  "menu": "Scheduler",
+  "bug": "In the Notification Scheduler, the time field allows only the hour (no minutes) and weekdays are entered as numbers (0 = Sunday, 1 = Monday...), which is not user-friendly; multiple notifications can be scheduled at the same hour without any conflict warning.",
+  "testData": "New schedule form",
+  "note": "Provide date/day pickers, HH:MM time, weekday names and an overlap/duplicate warning.",
+  "area": "org"
+ },
+ {
+  "id": "H108",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "NFA Queue",
+  "bug": "The NFA queue shows raw system values (PAYMENT_RELEASED, ADVANCE VENDOR) and dates in d/m/yyyy, unlike the yyyy-mm-dd format used elsewhere.",
+  "testData": "NFA20260002 - 20/7/2026, PAYMENT_RELEASED",
+  "note": "Use readable labels (Payment released) and one date format across the app.",
+  "area": "workflow"
+ },
+ {
+  "id": "H109",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "NFA Queue",
+  "bug": "Advances of Rs 1,07,000 released to Smruti Nanda (NFA20260001/02) are still 'Settlement IN_PROGRESS' although her resignation was approved with LWD 22/07/2026; the outstanding advance is not linked to any Full & Final recovery.",
+  "testData": "Smruti Nanda TKF9004",
+  "note": "Open advances should block exit or flow automatically into F&F 'Advances / Loans' recovery.",
+  "area": "workflow"
+ },
+ {
+  "id": "H110",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Reports",
+  "bug": "The Settlements report shows NFA20260002 with amount Rs 10,000 raised 2026-07-22, while the NFA queue shows the same NFA as Rs 1,00,000 raised 20/7/2026; there is no column for advance vs settled amount or balance.",
+  "testData": "NFA20260002",
+  "note": "Amounts and dates should match the NFA, or the report should show advance, settled and balance separately.",
+  "area": "workflow"
+ },
+ {
+  "id": "H111",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Masters",
+  "bug": "The NFA Masters page shows 'No entries' for Projects and Zones, but existing NFAs and approver rules use project 'QA Test Project v2' and 'East Zone'.",
+  "testData": "Masters > Projects / Zones tabs",
+  "note": "Masters should list every project/zone used by NFAs and approvers.",
+  "area": "workflow"
+ },
+ {
+  "id": "H112",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Approvers",
+  "bug": "NFA Reports show a pending approval at stage 'Functional Head', but the Approvers stage list has no 'Functional Head' option (only Business Head, Business Leader, Final Approval, Finance, Finance Initiator, Admin, Project Leader), so that stage cannot be assigned.",
+  "testData": "Approvers > Stage / Role dropdown",
+  "note": "Every stage used in the NFA chain should be configurable in Approvers.",
+  "area": "workflow"
+ },
+ {
+  "id": "H113",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Approvers",
+  "bug": "The Approver dropdown lists employees whose resignation is approved and last working day has passed (Smruti Nanda TKF9004, Koustav Maity TKF5001), and Smruti Nanda is still assigned as 'Finance Initiator'.",
+  "testData": "Smruti Nanda - LWD 22/07/2026",
+  "note": "Exited employees should be removed from approver lists and their approver rows flagged for reassignment.",
+  "area": "workflow"
+ },
+ {
+  "id": "H114",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "The vendor registration accepts invalid PAN and GST numbers without format validation.",
+  "testData": "Vendor 'Green call' - PAN: 7980cxmuiop, GST: Gstn807599",
+  "note": "PAN should match AAAAA9999A and GSTIN the 15-character format.",
+  "area": "workflow"
+ },
+ {
+  "id": "H115",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "The system allows the same vendor to be registered and approved twice with the same PAN.",
+  "testData": "Sunrise Facility Services - PAN ABCDE1234F (2 entries)",
+  "note": "Duplicate PAN/GST should be blocked at registration.",
+  "area": "workflow"
+ },
+ {
+  "id": "H116",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "Vendor Registrations has no actions for HR (approve, reject, edit, deactivate), no search/filter and no approval details (who/when); the page says 'awaiting approval' but only approved vendors are listed.",
+  "testData": "Vendors & agreements > Vendor Registrations",
+  "note": "Add a pending queue with approve/reject, edit/deactivate and an approval trail.",
+  "area": "workflow"
+ },
+ {
+  "id": "H117",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "Vendor entity type is free text ('Propitership' vs 'Proprietorship'), and no vendor bank details or uploaded documents (PAN card, GST certificate) are shown for verification.",
+  "testData": "Green call, Sunrise Facility Services",
+  "note": "Use a dropdown for entity type and show bank details and documents.",
+  "area": "workflow"
+ },
+ {
+  "id": "H118",
+  "sheet": "HR login",
+  "module": "NFA & Finance",
+  "menu": "Vendors & Agreements",
+  "bug": "Agreements can only be uploaded by employees from the app (NFA > Upload Agreement); HR cannot add an agreement and there is no expiry/renewal tracking.",
+  "testData": "Agreements tab",
+  "note": "Enhancement: HR upload and expiry/renewal reminders for agreements.",
+  "area": "workflow"
+ },
+ {
+  "id": "H119",
+  "sheet": "HR login",
+  "module": "Performance",
+  "menu": "PMS/KPI",
+  "bug": "The PMS grade ranges have gaps: 'Achieved Target' is 90%-104% and 'Significantly Achieved Target' is 105%-119% (same for 60-89 / 90 and 0-59 / 60), so scores like 104.5% or 89.5% fall into no grade.",
+  "testData": "Achievement 104.5%, 89.5%",
+  "note": "Ranges should be continuous (e.g. >=105% and <120%; >=90% and <105%).",
+  "area": "workflow"
+ },
+ {
+  "id": "H120",
+  "sheet": "HR login",
+  "module": "Performance",
+  "menu": "PMS/KPI",
+  "bug": "In PMS / KPI, HR Admin only sees items 'waiting on you'. There is no view of all employees' KPI/PMS status, no option to start a PMS cycle, and the Grade system is read-only.",
+  "testData": "PMS / KPI tabs",
+  "note": "Enhancement: HR should be able to monitor all PMS submissions and configure grades/cycles.",
+  "area": "workflow"
+ },
+ {
+  "id": "H121",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Uploading a template of a different type is not rejected: a Salary template uploaded on the Leave balances tab is read as 20 rows and reported as 'Nothing filled in'.",
+  "testData": "Leave balances tab + salary template file",
+  "note": "Detect the template type and show 'This file is not a Leave balances template'.",
+  "area": "payroll"
+ },
+ {
+  "id": "H122",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Bulk templates have no dropdowns/data validation and no sheet protection: Employee Code and 'Current ...' columns are editable, and Department, Designation and Employment type must be typed by hand.",
+  "testData": "All 5 templates (.xlsx)",
+  "note": "Protect read-only columns and add dropdown lists for coded values.",
+  "area": "payroll"
+ },
+ {
+  "id": "H123",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Leave balances bulk accepts SL allocation 999 and Maternity Leave 182 for a male employee (Anil Verma TKF1006); the template omits LWP and WFH and only allows 'Allocated' (no used / carry-forward).",
+  "testData": "Preview: TKF1003 SL 999, TKF1006 ML 182",
+  "note": "Validate against leave type limits and gender eligibility; include all leave types.",
+  "area": "payroll"
+ },
+ {
+  "id": "H124",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Salary bulk accepts a monthly CTC of Rs 9,99,99,999 with no sanity check, while a normal value typed as '50,000' (with comma) is rejected as 'not a number'.",
+  "testData": "Preview: TKF1003 = 99999999, TKF1005 = 50,000",
+  "note": "Add a reasonable upper limit/warning and accept formatted numbers.",
+  "area": "payroll"
+ },
+ {
+  "id": "H125",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Reporting lines bulk accepts an INACTIVE employee as manager (TKF1002 -> TKF9007) and circular reporting (TKF1006 -> TKF1007 and TKF1007 -> TKF1006 in the same file).",
+  "testData": "Reporting lines template",
+  "note": "Only active employees can be managers; block reporting loops.",
+  "area": "payroll"
+ },
+ {
+  "id": "H126",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Contact bulk accepts phone '0000000000' and another employee's personal email (TKF1005 -> priya.nair@truehr.example); the employment-type error lists 'CONSULTANT', which does not exist in the UI.",
+  "testData": "Contact & employment details template",
+  "note": "Validate phone format and unique email; keep allowed values consistent with the UI.",
+  "area": "payroll"
+ },
+ {
+  "id": "H127",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "Bulk Utilities",
+  "bug": "Department & designation transfer accepts lowercase names ('engineering', 'senior software engineer') and the preview echoes them in lowercase; there is no effective date and no check that the designation belongs to the department.",
+  "testData": "Transfer template - TKF1003, TKF1004",
+  "note": "Map to the master name, add an effective date and validate the department-designation pairing.",
+  "area": "payroll"
+ },
+ {
+  "id": "H128",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "In the HRMIS workbook all dates are exported as text without the year and not as Excel dates: Date of Joining 'Sat Jul 03', Date of Birth 'Wed Nov 29', Structure Updated 'Sat Aug 15', Exits Raised On / Last Working Date 'Fri Oct 30'.",
+  "testData": "hrmis-all-2026-10-28.xlsx - People, Compensation, Exits sheets",
+  "note": "Export real Excel dates (dd-mm-yyyy) including the year so they can be sorted/filtered.",
+  "area": "payroll"
+ },
+ {
+  "id": "H129",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "The Last Login column in the HRMIS People sheet is corrupted: the first letter is missing and extra spaces are added (' ue Aug 11 2026 ' for Koustav Maity TKF5001).",
+  "testData": "People sheet > Last Login",
+  "note": "Export the full date-time correctly.",
+  "area": "payroll"
+ },
+ {
+  "id": "H130",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "HRMIS Compensation sheet shows wrong Annual CTC: Debasis Panigrahi TKF5002 Monthly CTC 50,000 but Annual CTC 4,20,000 (should be 6,00,000); TKF9009 shows Annual 6,00,000 with Monthly CTC blank.",
+  "testData": "Compensation sheet - TKF5002, TKF9009",
+  "note": "Annual CTC must equal Monthly CTC x 12 (or be derived from one source).",
+  "area": "payroll"
+ },
+ {
+  "id": "H131",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "HRMIS Compensation sheet shows HRA % of Basic = 50 and Welfare Trust = 0 for every employee, while the company Payslip components define HRA 40% and Welfare Trust Rs 20; grades are free text (E2, A, L2) and an invalid IFSC 'sbin000445' is stored for TKF5002.",
+  "testData": "Compensation sheet",
+  "note": "Use the company component rules, master grades and validate IFSC format.",
+  "area": "payroll"
+ },
+ {
+  "id": "H132",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "Statutory identifiers accept garbage text and are counted as 'recorded': UAN 'Gcshwhsvvs', PF 'Gvssvvs', ESIC 'Hhsgsbs' (TKF9003); UAN 'efnmbvhkjbf', PF 'fn kjhgbr325346436' (TKF9004).",
+  "testData": "Statutory sheet - TKF9003, TKF9004",
+  "note": "Validate UAN (12 digits), PF and ESIC (17 digits) formats.",
+  "area": "payroll"
+ },
+ {
+  "id": "H133",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "Only 7 of 20 active employees have leave balances in the workbook; 13 active employees (e.g. TKF1001-TKF1009, TKF9008, TKF9009) have no leave balances allocated at all.",
+  "testData": "Leave balances sheet",
+  "note": "Allocate leave balances automatically for every active employee on joining.",
+  "area": "leave"
+ },
+ {
+  "id": "H134",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "Male employees are allocated Maternity Leave (182 days) and Menstrual Leave (12 days), e.g. Koustav Maity TKF5001 (Gender: Male).",
+  "testData": "Leave balances sheet - TKF5001",
+  "note": "Gender-specific leave types should only be allocated to eligible employees.",
+  "area": "leave"
+ },
+ {
+  "id": "H135",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "Employee TKF9008 (Subhrajit Tripathy) is ACTIVE in Status but Login Status is DISABLED, so an active employee cannot sign in.",
+  "testData": "People sheet - TKF9008",
+  "note": "Employee status and login status should stay in sync (or show why login is disabled).",
+  "area": "payroll"
+ },
+ {
+  "id": "H136",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "The Exits sheet shows a resignation for TKF9008 with 'Raised On' Fri Oct 30 (a future date on 28-10-2026), and another APPROVED resignation raised and ending on Oct 10, before his DOJ (Oct 29) while he is still ACTIVE. Kind is shown as 'TERMINATION: TERMINATION' and status 'REVOKED' while the UI says 'Reversed'.",
+  "testData": "Exits sheet - TKF9008",
+  "note": "Raised date cannot be in the future or before DOJ; keep status names consistent with the UI.",
+  "area": "payroll"
+ },
+ {
+  "id": "H137",
+  "sheet": "HR login",
+  "module": "Data and Reports",
+  "menu": "HRMIS Reports",
+  "bug": "The Headcount sheet groups 6 records under Department '(none)', including 2 ACTIVE employees (Demo Manager, Demo Employee) with no department, designation or DOJ.",
+  "testData": "Headcount sheet",
+  "note": "Department/Designation/DOJ should be mandatory for active employees, and flagged in 'Worth fixing'.",
+  "area": "payroll"
+ },
+ {
+  "id": "H138",
+  "sheet": "HR login",
+  "module": "Adminstration",
+  "menu": "Asset Mangement",
+  "bug": "In Add Asset, the Brand field says 'From the Brand Master' but is a free-text box (no Brand master exists). Category and Vendor are also free text and not linked to the Vendor registrations.",
+  "testData": "Add asset form",
+  "note": "Brand, Category and Vendor should be dropdowns sourced from masters to avoid inconsistent names.",
+  "area": "org"
+ },
+ {
+  "id": "H139",
+  "sheet": "HR login",
+  "module": "Adminstration",
+  "menu": "Asset Mangement",
+  "bug": "The Add Asset form has no Purchase date, Warranty expiry or Assigned-to fields, and the status filter values are shown in lowercase (in stock, assigned, repair).",
+  "testData": "Add asset form / status filter",
+  "note": "Add lifecycle fields needed for an asset register and use proper case labels.",
+  "area": "org"
+ },
+ {
+  "id": "E1",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Dashboard",
+  "bug": "The Dashboard shows only 13 cards while the header has 18 menus; Tax, Letters, My Assets, Request a change and Contact TrueHR have no card, and the Monthly Performance strip and My NFA Ledger (FY 2026-2027) card are not clickable.",
+  "testData": "Login TKF9010 > Dashboard; click each card",
+  "note": "Every header module should have a dashboard card/shortcut and every card should open its module.",
+  "area": "auth"
+ },
+ {
+  "id": "E2",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Dashboard",
+  "bug": "Dashboard card descriptions mention team features to an employee who has no team: Leave card says Apply, balances, comp-off & team approvals; Tasks card says My tasks, assign & team; Resignation card says Apply, track & team approvals; My Profile card says Profile, team & address book. The same team tabs are shown inside Leave (Team Approvals), Performance (Team Approvals), Tasks (Team Tasks) and Resignation (Team).",
+  "testData": "Login TKF9010 (no reportees) > Dashboard card descriptions; Leave/Performance/Tasks/Resignation tabs",
+  "note": "Team text and team tabs should be shown only to employees who have reportees.",
+  "area": "auth"
+ },
+ {
+  "id": "E3",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Dashboard",
+  "bug": "The Monthly Performance strip shows the raw status code Pending-RPT (Oct and Dec 2026) instead of a readable status.",
+  "testData": "Dashboard > Monthly Performance - 2026",
+  "note": "Show readable status such as Pending with Reporting Manager.",
+  "area": "auth"
+ },
+ {
+  "id": "E4",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Attendance",
+  "bug": "The attendance calendar marks every working day as Absent for TKF9010 - Aug 2026 (25 Absent), Sep 2026 (26 Absent) and Oct 2026 (24 Absent) - including months/days before the employee was created; Saturdays are counted as working days and previous months can be opened without any limit.",
+  "testData": "Attendance > Monthly > Aug, Sep, Oct 2026",
+  "note": "Days before date of joining should show Not applicable; Saturday should follow the shift/week-off policy; navigation should stop at joining month.",
+  "area": "leave"
+ },
+ {
+  "id": "E5",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Attendance",
+  "bug": "Holidays configured in HR for 26-Aug-2026 (demo leave) and 31-Aug-2026 (demo) are shown as Absent in the employee calendar; only the 15-Aug national holiday shows as Holiday, the employee Office Location is blank so location-wise holidays cannot apply, and there is no Holiday count tile.",
+  "testData": "Attendance > Monthly > Aug 2026",
+  "note": "Configured holidays (national and location-wise) should show as Holiday and be counted in a Holiday tile.",
+  "area": "leave"
+ },
+ {
+  "id": "E6",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Attendance",
+  "bug": "TRUE HR's QA Test Holiday (24-12-2026) is shown as a Holiday in the attendance calendar of the Company Admin organisation's employee (TH5001).",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Attendance > December 2026",
+  "note": "Only the organisation's own holidays should apply.",
+  "area": "leave"
+ },
+ {
+  "id": "E7",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Attendance > Miss-Punch",
+  "bug": "Miss-Punch has no validation: invalid days 0,32,abc (Oct 2026), future dates (5-Nov-2026, 5-Dec-2026) and a very old date (10-Jan-2019) are accepted; the same day can be applied twice (two PENDING requests for 5-Dec-2026); Submit with empty days shows no message; Year is a free-text box and abcd gives days, month and year are required; there are no In/Out time fields and a pending request cannot be cancelled.",
+  "testData": "Days 0,32,abc - Oct 2026; 5 Nov 2026; 5 Dec 2026 (x2); 10 Jan 2019; Year abcd",
+  "note": "Allow only valid past days within the allowed period, block duplicates, capture In/Out time, show clear messages and allow cancelling a pending request.",
+  "area": "leave"
+ },
+ {
+  "id": "E8",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Full annual leave balances are given immediately to a new joiner (EL 10/10, CL 12/12, SL 12/12) without proration, and Maternity Leave (182) and Menstrual Leave (12) are shown and can be applied regardless of gender - Maternity Leave for 21-12-2026 was accepted for TKF9010 (Subham Tripathy).",
+  "testData": "TKF9010 > My Balances; Maternity Leave 21-12-2026",
+  "note": "Balances should be prorated from joining date and gender-specific leaves shown only to eligible employees.",
+  "area": "leave"
+ },
+ {
+  "id": "E9",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "A leave can be applied when the employee has no reporting manager (LWP for 03-11-2026 was accepted as PENDING) and My Leaves does not show who the approver is, so the request can never be approved.",
+  "testData": "Reporting Manager: Not assigned",
+  "note": "Block or route to HR when no approver exists, and show the pending approver.",
+  "area": "leave"
+ },
+ {
+  "id": "E10",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Leaves cannot be taken on adjacent days (You must keep at least one day gap between leaves), so e.g. CL on Monday + SL on Tuesday is blocked.",
+  "testData": "Any leave on the day next to an existing leave",
+  "note": "Adjacent leaves of different types should follow the leave policy (sandwich rule), not be blocked outright.",
+  "area": "leave"
+ },
+ {
+  "id": "E11",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Sick Leave can be applied for a past date (01-10-2026) and Restricted Holiday can be applied on a normal working day (18-11-2026) that is not in the RH list; both are accepted as PENDING.",
+  "testData": "SL 01-10-2026; RH 18-11-2026",
+  "note": "Back-dated leave should follow policy limits and RH should be allowed only on listed restricted holidays.",
+  "area": "leave"
+ },
+ {
+  "id": "E12",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Half day has no First half / Second half selection, and Half day can be ticked for a multi-day range: CL 07-12-2026 to 09-12-2026 with Half day was accepted and counted as only 0.5 day.",
+  "testData": "Apply Leave > Half day; CL 2026-12-07 to 2026-12-09",
+  "note": "Half day should be allowed only when From = To, with First/Second half selection.",
+  "area": "leave"
+ },
+ {
+  "id": "E13",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Leave balance cards do not change after a leave is applied and is pending (CL still shows 12/12), while applying CL for 01-12-2026 to 31-12-2026 says 'Insufficient balance - 11 day(s) available (pending requests reserved)'; the card and the actual available balance do not match.",
+  "testData": "CL 2026-12-01 to 2026-12-31 with one CL pending",
+  "note": "Balance cards should show available balance after reserving pending requests.",
+  "area": "leave"
+ },
+ {
+  "id": "E14",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Work From Home is accepted although its balance shows 0 / 0, and Reason is optional for all leave types (EL 14-12-2026 was applied with a blank reason).",
+  "testData": "WFH 24-11-2026; EL 14-12-2026 blank reason",
+  "note": "Balance display and validation should match, and Reason should be mandatory.",
+  "area": "leave"
+ },
+ {
+  "id": "E15",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Cancelling a pending leave happens immediately without a confirmation, and the Cancelled tab does not show the cancelled date or who cancelled it.",
+  "testData": "My Leaves > Cancel",
+  "note": "Cancel should ask for confirmation and the Cancelled tab should show cancelled date/by.",
+  "area": "leave"
+ },
+ {
+  "id": "E16",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "There is no attachment option while applying leave (e.g. medical certificate for Sick Leave or Maternity Leave), and no holiday / restricted-holiday list is shown in Leave; the holiday list is available only as a PDF under Policies, so the employee cannot see valid RH dates while applying.",
+  "testData": "Apply Leave > Sick Leave / Maternity Leave / Restricted Holiday",
+  "note": "Allow document upload for SL/ML (mandatory beyond policy days) and show the holiday and RH list in the Leave screen.",
+  "area": "leave"
+ },
+ {
+  "id": "E17",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave",
+  "bug": "Leave balances (EL 6, CL 5, SL 7) come from the Odisha state-entitlement row, not from the Leave types annual quota configured by the admin (EL 10, CL 12, SL 12), and the full yearly quota is given to an employee who joined on 02-11-2026 without proration.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Leave > My Balances",
+  "note": "Make the quota source clear and prorate for mid-year joiners.",
+  "area": "leave"
+ },
+ {
+  "id": "E18",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Leave > Comp-Off",
+  "bug": "Comp-Off shows no credits, clicking Apply with nothing selected gives no message, and there is no option in web ESS to apply OD / holiday work to earn comp-off.",
+  "testData": "Leave > Comp-Off > Apply (empty)",
+  "note": "Comp-off credits should be listed, empty apply should show a validation message and OD should be applicable from ESS.",
+  "area": "leave"
+ },
+ {
+  "id": "E19",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "Create NFA shows raw technical errors on submit: 'businessOperationId is required; groupCompanyId is required; projectId is required; expenseCategoryId is required; zoneId is required; locationId is required'.",
+  "testData": "Submit empty NFA",
+  "note": "Show user-friendly field-level messages (e.g. 'Business operation is required').",
+  "area": "workflow"
+ },
+ {
+  "id": "E20",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "NFA expense line amounts are not validated properly: negative NFA and logistic amounts (-500 / -100) are rejected with the misleading message Pick an expense header and enter an amount, yet a negative logistic amount (-1) with a positive NFA amount is accepted; Rs 0.001 and Rs 9,99,99,99,99,999 are accepted and the same header can be added twice (Grand Total Rs 9,99,99,99,99,999.001).",
+  "testData": "Create NFA > HR Expenses > Office Supplies: -500/-100; 0.001/0; 999999999999/-1",
+  "note": "Amounts should be positive, max 2 decimals and within a limit, with a correct message; duplicate headers should be blocked or merged.",
+  "area": "workflow"
+ },
+ {
+  "id": "E21",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "Create NFA dropdowns contain junk/test master values - Business Operation cvf, Client/Vendor Dmeo, Projects BJP Call Center / BJP Surveyor - and Location mixes a state (Odisha) with cities and Client-Side; in HR admin login the NFA Masters page shows No entries, so HR cannot see or clean these values.",
+  "testData": "ESS > NFA > Create NFA > Business Operation, Select Project, Location, Client/Vendor dropdowns",
+  "note": "Dropdown values should come from a maintained master that HR can view and edit; remove test data.",
+  "area": "workflow"
+ },
+ {
+  "id": "E22",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "NFA20260004 was created with settlement date 01-01-2020 (past date accepted).",
+  "testData": "Create NFA, settlement date 2020-01-01, amount 100",
+  "note": "Settlement date in the past should not be allowed.",
+  "area": "workflow"
+ },
+ {
+  "id": "E23",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "NFA20260004 approval chain is stuck at 1. REPORTING MANAGER - PENDING with no approver, and 3. PROJECT LEADER and 6. FINAL APPROVAL also have no approver (-); the employee has no option to cancel/withdraw, and the NFA detail popup has no close (X) button and does not close with Escape.",
+  "testData": "My NFAs > click NFA20260004",
+  "note": "An NFA should not be raised without approvers; employee should be able to withdraw; popup should have a close button.",
+  "area": "workflow"
+ },
+ {
+  "id": "E24",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "NFA detail page shows raw values (ADVANCE SELF, NON BILLABLE) and does not list the expense lines entered.",
+  "testData": "NFA > open NFA20260004",
+  "note": "Detail should show friendly labels and all expense lines with amounts.",
+  "area": "workflow"
+ },
+ {
+  "id": "E25",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "Purchase Request NFA type opens the same form as Expense NFA (no item, quantity or vendor quote fields).",
+  "testData": "Create NFA > type Purchase Request",
+  "note": "Purchase Request should have its own item/quantity/quote fields.",
+  "area": "workflow"
+ },
+ {
+  "id": "E26",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "Create NFA has no option to attach bills, invoices or quotations - even for payment types Reimbursement for self / Reimbursement for Vendor and for Purchase Request - and the Reimbursement Form under Policies cannot be uploaded here.",
+  "testData": "Create NFA > Payment type Reimbursement for self",
+  "note": "Allow bill/invoice/quotation and filled reimbursement form upload on the NFA.",
+  "area": "workflow"
+ },
+ {
+  "id": "E27",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "Status filters with no results (e.g. APPROVED) say Create your first NFA to see it here even though the employee already has an NFA.",
+  "testData": "My NFAs > APPROVED tab",
+  "note": "Empty filter should say No NFAs with this status.",
+  "area": "workflow"
+ },
+ {
+  "id": "E28",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "NFA",
+  "bug": "The Create NFA and Upload Agreement dropdowns mix another organisation's masters (BJP Call Center, True Kind Foundation, True Jobs, cvf, Dmeo, Noida...) with Company Admin's own; Staffing and Bhubaneswar appear twice; the NFA number NFA20260005 continues the other organisation's sequence; the approval chain lists the requester himself as Finance approver and is stuck at Reporting Manager although the Approvers page says empty stages are skipped.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Create NFA NFA20260005 (Rs 550, QA Project, Travel > Local Conveyance > Cab)",
+  "note": "Show only the organisation's own masters, per-organisation NFA numbering, block self-approval, skip unassigned stages as stated.",
+  "area": "workflow"
+ },
+ {
+  "id": "E29",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Performance",
+  "bug": "The KPI for October 2026 is stuck at RM PENDING because TKF9010 has no reporting manager; the system allows KPI submission without an RM and gives no warning.",
+  "testData": "Performance > KPI Oct 2026",
+  "note": "KPI submission should be blocked or routed to HR when no RM is assigned.",
+  "area": "workflow"
+ },
+ {
+  "id": "E30",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Performance",
+  "bug": "A KPI can be created for any month including future months - a KPI for December 2026 was created and is listed as RM PENDING; a submitted KPI has no edit/withdraw option and the KPI popup does not close with Escape.",
+  "testData": "Performance > Submit KPI > Month December",
+  "note": "Only the current/allowed month should be selectable; pending KPI should be editable/withdrawable.",
+  "area": "workflow"
+ },
+ {
+  "id": "E31",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Performance",
+  "bug": "Achievement bands show 120-infinity% and KPI rows have no Target / Actual fields.",
+  "testData": "Performance > KPI form",
+  "note": "KPI should capture target and actual; band labels should be readable.",
+  "area": "workflow"
+ },
+ {
+  "id": "E32",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Tasks",
+  "bug": "Assign Task is shown to an employee with no team: the Assign to dropdown is empty, clicking Assign Task with all fields empty does nothing and shows no message, and the field label AROUND TIME is unclear.",
+  "testData": "Tasks > Assign Task > submit empty",
+  "note": "Hide Assign Task for non-managers, show validation messages and rename the label (e.g. Due time).",
+  "area": "workflow"
+ },
+ {
+  "id": "E33",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Payslips",
+  "bug": "Payslips page shows only No published payslips yet with no month/year filter, salary structure/CTC or Form 16 section.",
+  "testData": "TKF9010 > Payslips",
+  "note": "Page should provide year/month filter, CTC view and Form 16 download.",
+  "area": "payroll"
+ },
+ {
+  "id": "E34",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Tax",
+  "bug": "No field in the Investment Declaration is mandatory: an empty declaration (no investment rows) and a row with a blank amount (saved as 0.00) are both submitted to HR; Gross annual and tax show Rs 0 because TKF9010 has no salary structure, yet submission is allowed.",
+  "testData": "Tax > remove all rows > Submit to HR; Add investment (blank amount) > Submit to HR",
+  "note": "At least one valid investment with amount should be required, and declaration should be blocked until a salary structure exists.",
+  "area": "payroll"
+ },
+ {
+  "id": "E35",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Tax",
+  "bug": "The investment declaration accepts amounts above section limits (80C Rs 3,00,000 vs max 1,50,000; 80TTA Rs 9,99,99,999 vs max 10,000), a negative amount (-5,000) and duplicate rows of the same section, and saves/submits to HR without error.",
+  "testData": "80C 300000, 80C -5000, 80TTA 99999999",
+  "note": "Section limits, negative values and duplicate sections should be validated.",
+  "area": "payroll"
+ },
+ {
+  "id": "E36",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Tax",
+  "bug": "After Submit to HR the declaration stays editable, and clicking Save draft changes the status back from submitted to draft; there is also no proof upload for any investment.",
+  "testData": "Tax > Submit to HR > Save draft",
+  "note": "Submitted declaration should be locked (or need HR reopen) and proofs should be uploadable.",
+  "area": "payroll"
+ },
+ {
+  "id": "E37",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Tax",
+  "bug": "The Tax page shows Gross annual Rs 3,60,000 (12 x Rs 30,000) for an employee who joined on 02-11-2026 instead of projecting only the remaining months of the financial year.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Tax",
+  "note": "Tax projection should use the remaining months of the financial year.",
+  "area": "payroll"
+ },
+ {
+  "id": "E38",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Letters",
+  "bug": "My Letters only lists letters issued by HR; the employee has no option to request a letter (e.g. experience, salary, address proof or employment certificate).",
+  "testData": "TKF9010 > Letters",
+  "note": "Add a Request letter option with letter type, purpose and HR approval tracking.",
+  "area": "payroll"
+ },
+ {
+  "id": "E39",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "My Assets",
+  "bug": "My Assets only shows assigned assets (No assets assigned); there is no option to request an asset or to report damage/return of an assigned asset.",
+  "testData": "TKF9010 > My Assets",
+  "note": "Add Request asset and Report issue / Return options with status tracking.",
+  "area": "org"
+ },
+ {
+  "id": "E40",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Support",
+  "bug": "Create Ticket validation is missing: a ticket can be created with an empty description (HR > Other), and leaving Issue type as Select and clicking Create Ticket shows no message; there is no subject or attachment field, ADMIN uses Others while HR uses Other, and IT has no Other issue type.",
+  "testData": "HR > Other > blank description; ADMIN > Issue type Select > Create Ticket",
+  "note": "Required fields should be validated with messages; add subject/attachment and consistent issue types.",
+  "area": "org"
+ },
+ {
+  "id": "E41",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Support",
+  "bug": "Support HR issue types include the TRUE HR-specific My Vision Login in the new Company Admin organisation.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Support > HR issue types",
+  "note": "Issue types should be configurable per organisation.",
+  "area": "org"
+ },
+ {
+  "id": "E42",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Support > My Tickets",
+  "bug": "My Tickets shows no ticket number, date or option to cancel/reply; the description has no character limit (5,042 characters accepted) and long text without spaces overflows the ticket card, causing horizontal page scroll.",
+  "testData": "ADMIN > Hygiene Issues > Water, 5000 x description",
+  "note": "Show ticket number/date, allow reply/cancel, limit description and wrap long text.",
+  "area": "org"
+ },
+ {
+  "id": "E43",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Policies",
+  "bug": "Formats under Policies (Star Of The Month Nomination Form, Reimbursement Form) can only be downloaded; there is no place anywhere in ESS to fill and upload them back - no Upload/Submit on Policies, no attachment in Create NFA or Support, and no R&R / nomination module - so the filled form cannot be submitted to HR in the system.",
+  "testData": "Policies > Star Of The Month Nomination Form / Reimbursement Form > Download; look for an upload option in Policies, NFA, Support",
+  "note": "Each format should have an Upload filled form / online form option linked to the right workflow (R&R nomination, reimbursement NFA) with HR approval status.",
+  "area": "org"
+ },
+ {
+  "id": "E44",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Policies",
+  "bug": "Policies and formats are mixed in one list with only a Download button: there is no Policies / Formats separation, no category, version or effective date, no view/preview in the browser and no I have read and accept acknowledgement.",
+  "testData": "Policies page",
+  "note": "Separate Policies and Formats, show version/effective date, allow in-browser view and capture employee acknowledgement.",
+  "area": "org"
+ },
+ {
+  "id": "E45",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Policies",
+  "bug": "The employee app shows Download for all 8 policies and downloads TRUE HR's files (02_Holiday_Calendar_2026.pdf, 08_Reimbursement_Form.pdf) although the Company Admin Policies page shows every policy as Not uploaded - another organisation's documents are exposed.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Policies > Holiday Calendar / Reimbursement Form > Download",
+  "note": "Employees should only see their own organisation's uploaded documents.",
+  "area": "org"
+ },
+ {
+  "id": "E46",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Vendors",
+  "bug": "Vendor registration accepts invalid PAN 123, GST abc, ESIC e1, PF p1, MSMED m1, NSIC n1 and is listed as PENDING; only phone is validated, and the row has no view/edit/withdraw.",
+  "testData": "QA Test Vendor (please reject), PAN 123, GST abc",
+  "note": "PAN (AAAAA9999A), GST (15 chars) and other IDs should be format-validated.",
+  "area": "workflow"
+ },
+ {
+  "id": "E47",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Vendors > Upload Agreement",
+  "bug": "An agreement can be submitted without Project, Location or Client and with an expired period (01-01-2000 to 02-01-2000); end date before start date shows a raw message endDate before startDate.",
+  "testData": "RENT, 2000-01-01 to 2000-01-02; reversed 2026-12-31 to 2026-01-01",
+  "note": "Project/Client should be required, expired periods blocked and messages user-friendly.",
+  "area": "workflow"
+ },
+ {
+  "id": "E48",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The moment a resignation is submitted, the employee's account is blocked from the whole system (as warned in the confirm box), so the employee cannot work, download payslips or withdraw during the notice period - yet Withdrawn resignations exist in HR.",
+  "testData": "Resignation confirm message - TKF9010",
+  "note": "Keep access during notice period (block on LWD) and allow withdrawal before approval.",
+  "area": "workflow"
+ },
+ {
+  "id": "E49",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The Employee Details section on the Resignation page shows very few details: Vertical, Office Location and Designation are blank (-), and Date of joining, Department and Reporting Manager are not shown at all.",
+  "testData": "Resignation > My Resignation > Employee Details",
+  "note": "Employee details should be filled from the employee master (Vertical, Location, Designation, DOJ, Department, RM).",
+  "area": "workflow"
+ },
+ {
+  "id": "E50",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The Approvals card at the bottom of Resignation > My Resignation shows Reporting Manager, Functional Manager, Office Admin and Human Resource as Not assigned (only Business Head and Finance are set), so the resignation would skip the manager and HR; the Finance approver email is a demo domain (arjun.pillai@truehr.example).",
+  "testData": "Resignation > My Resignation > scroll to bottom > Approvals card",
+  "note": "All approval levels should be mapped before an employee can resign, with real approver emails.",
+  "area": "workflow"
+ },
+ {
+  "id": "E51",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The Resignation date is editable and can be back-dated, a Last working date before the resignation date (20-10-2026) is not validated before the final confirmation step, Reason is not mandatory, and there is no option to attach a resignation letter.",
+  "testData": "Resignation date 29-10-2026, LWD 20-10-2026 (not submitted)",
+  "note": "Resignation date should default to today, LWD should follow notice period, Reason should be mandatory.",
+  "area": "workflow"
+ },
+ {
+  "id": "E52",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Resignation",
+  "bug": "The resignation approval chain of the Company Admin organisation's employee (TH5001) shows TRUE HR employees as approvers (Business Head TKF5002 Debasis Panigrahi, Finance TKF1009 Arjun Pillai) instead of the approvers set in Company Admin's Approvers page - a resignation would be routed to another company.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Resignation > Approvals card (not submitted)",
+  "note": "Use only the organisation's own approver matrix.",
+  "area": "workflow"
+ },
+ {
+  "id": "E53",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Profile",
+  "bug": "My Profile shows only Employee code, Name, Company and Official email; Date of joining, Department, Designation, Reporting manager, Phone, Address, Bank (masked) and uploaded documents are not visible to the employee, and there is no option to upload documents (Aadhaar, PAN, certificates, photo).",
+  "testData": "TKF9010 Subham Tripathy - Profile",
+  "note": "Show the full record (read-only, sensitive fields masked) and allow document upload for HR verification.",
+  "area": "people"
+ },
+ {
+  "id": "E54",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Profile > Address Book",
+  "bug": "The Address Book shows every employee's personal mobile number and personal Gmail to all employees (e.g. Smruti Nanda 9827101638, Gayadhar Sahoo 7008870235), and location shows junk values ('795754289', 'Ghssva', 'Nnn', 'xyz123').",
+  "testData": "Address Book",
+  "note": "Show only official contact details (or let employees opt in); validate location data.",
+  "area": "people"
+ },
+ {
+  "id": "E55",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Profile > Address Book",
+  "bug": "The Address Book shows the wrong email for TKF9009: 'tkf9009@gmail.com' instead of the login/official email 'subhrajit.tripathy.ts+tkf9009@gmail.com' - the part before '+' is dropped.",
+  "testData": "Address Book - TKF9009",
+  "note": "Display emails exactly as stored (support '+' aliases).",
+  "area": "people"
+ },
+ {
+  "id": "E56",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Profile > Address Book",
+  "bug": "The Address Book lists employees whose last working day has passed (Smruti Nanda TKF9004, Koustav Maity TKF5001) and demo accounts (Demo Employee, Demo Manager); the search does not trim spaces (' aarav ' gives No matches) and cannot search by department/designation ('Engineering' gives No matches).",
+  "testData": "Address Book > search: zzz, tkf9010, Engineering, ' aarav '",
+  "note": "List only active employees; search should trim spaces and match name, code, department and designation.",
+  "area": "people"
+ },
+ {
+  "id": "E57",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Request a change",
+  "bug": "Request a change has no option to raise a new request once a request is pending: after one request per tab (Personal details / Address / Bank account) the form is hidden and only You already have a ... request waiting with HR is shown, and the pending request cannot be withdrawn or edited.",
+  "testData": "Request a change > submit one request in each tab > try to raise another",
+  "note": "A New request option should always be available (multiple requests allowed, or at least edit/withdraw the pending one) and all requests listed under My requests.",
+  "area": "people"
+ },
+ {
+  "id": "E58",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Request a change",
+  "bug": "Gender is empty in Request a change although Male was selected at onboarding; the Address form is not pre-filled with the address submitted in e-joining; the request shows the raw value MALE.",
+  "testData": "Company Admin org employee TH5001 - TH5001 > Request a change > Personal details / Address",
+  "note": "Pre-fill current values and show readable labels.",
+  "area": "people"
+ },
+ {
+  "id": "E59",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Request a change > Personal details",
+  "bug": "Personal details change accepts a future Date of birth (01-01-2030) and phone 0000000000, and the request also includes the unchanged Personal email.",
+  "testData": "DOB 2030-01-01, Phone 0000000000",
+  "note": "DOB should be in the past (age 18+), phone should be a valid 10-digit mobile, unchanged fields should not be sent.",
+  "area": "people"
+ },
+ {
+  "id": "E60",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Request a change > Bank account",
+  "bug": "Bank tab shows only IFSC pre-filled (IDFV0005077) while Account holder, Bank and Branch are blank; clicking Send to HR without changing anything created a Bank account request with the unchanged IFSC.",
+  "testData": "Bank account > Send to HR (no change)",
+  "note": "Existing details should be pre-filled consistently and an unchanged form should not create a request.",
+  "area": "people"
+ },
+ {
+  "id": "E61",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Request a change > Address",
+  "bug": "Address change accepts PIN code 12ab, City 123 and State @@@, and the message reads You already have a address request (grammar).",
+  "testData": "PIN 12ab, City 123, State @@@",
+  "note": "PIN should be 6 digits, City/State validated (State as dropdown), message grammar fixed.",
+  "area": "people"
+ },
+ {
+  "id": "E62",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Contact TrueHR",
+  "bug": "With invalid email abc and phone 12 the error says Leave an email or a phone number so we can reach you, instead of saying the email/phone is invalid.",
+  "testData": "Email abc, Phone 12",
+  "note": "The message should say which contact field is invalid.",
+  "area": "org"
+ },
+ {
+  "id": "E63",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "The top bar shows the email and initials 'SU' (from the email) instead of the employee's name 'Subham Tripathy' (initials ST); the menu bar overflows and the last item 'Contact TrueHR' is cut off as 'Cc'.",
+  "testData": "ESS header and menu bar",
+  "note": "Show the employee name/initials and make the menu wrap or scroll properly.",
+  "area": "auth"
+ },
+ {
+  "id": "E64",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "Clicking Sign out logs the employee out immediately without any confirmation.",
+  "testData": "Header > Sign out",
+  "note": "Ask for confirmation (Are you sure you want to sign out?) before logging out.",
+  "area": "auth"
+ },
+ {
+  "id": "E65",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "Opening an unknown ESS URL (/app/ess/nonexistent-page) shows a bare 404 This page could not be found page with no header, menu or link back to the Dashboard.",
+  "testData": "Negative test: typed a wrong page address in the browser (https://truehr.co.in/app/ess/nonexistent-page) - same happens for any mistyped/broken link",
+  "note": "Show a branded 404 page with navigation back to Dashboard.",
+  "area": "auth"
+ },
+ {
+  "id": "E66",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "After signing in, the employee lands on /app/admin with a Restricted section message and an empty sidebar instead of the Employee Self-Service dashboard; the header shows True HR · Dashboard instead of the employee's company.",
+  "testData": "Company Admin org employee TH5001 - Sign in as TH5001",
+  "note": "Employees should land on /app/ess; header should show their own company.",
+  "area": "auth"
+ },
+ {
+  "id": "E67",
+  "sheet": "Employee Login",
+  "module": "Employee (ESS)",
+  "menu": "Header & General",
+  "bug": "The welcome/credentials email sent on approval shows literal \\n characters throughout, is branded True HR Pvt Ltd with True Kind Foundation mission text (positive social impact), has the typo Employee I'D, and sends the login password in plain text.",
+  "testData": "Company Admin org employee TH5001 - Approval email to subhrajit.tripathy.ts+caemp1@gmail.com (TH5001)",
+  "note": "Use the organisation branding, proper line breaks, correct label Employee ID, and a set-password link instead of a plain-text password.",
+  "area": "people"
+ }
+]

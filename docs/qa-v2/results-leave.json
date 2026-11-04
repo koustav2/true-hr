@@ -1,0 +1,480 @@
+[
+ {
+  "id": "C17",
+  "status": "Fixed",
+  "summary": "Holidays had no owner, so every organisation saw and could delete every other organisation's holidays. Holidays now belong to an organisation: each organisation lists, edits and deletes only its own (another organisation's id answers 404). Existing holidays were assigned to the organisation of the account that created them (from the audit log), otherwise to the first organisation. Delete now asks for confirmation.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/services/attendancePayroll.js",
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin of a second organisation. 2. Open Leave Config > Holidays. Expected: only that organisation's holidays (TRUE HR's 'QA Test Holiday 24-12-2026' etc. are not listed). 3. Add a holiday 'Founders Day' on a weekday, then click Delete on it. Expected: a dialog 'Delete holiday?' with 'Founders Day on dd-mm-yyyy will be removed…'; Cancel keeps it, Delete removes it.",
+  "negativeTests": "1. As the second organisation's admin, call DELETE /api/v2/admin/holidays/<TRUE HR holiday id> (or /api/...). Expected: 404 'Holiday not found', holiday still present for TRUE HR. 2. The same with PUT (edit). Expected: 404.",
+  "automated": "scripts/v2/test-leave.js — 'Holidays are per organisation' section: another organisation does not see it (v2 and v1), cannot delete it: 404 (v2 and v1), other tenant's employee holiday list excludes it.",
+  "v1Impact": "Applies to v1 too — it was a cross-tenant leak; v1 responses keep their shape (id, date, name, state) with fields only added."
+ },
+ {
+  "id": "C18",
+  "status": "Fixed",
+  "summary": "Duplicate holidays on the same date and scope are refused; state names are stored canonical, so Odisha/ODISHA can no longer be two rows; the State Entitlements table is replaced by a 'State-wise quota' tab that lists all 36 states/UTs once with readable column names (leave-type names, not el/cl/sl/elAccum).",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/admin/leave-config/page.jsx",
+   "backend/src/routes/v2/leave.js"
+  ],
+  "testSteps": "1. Log in as HR. Leave Config > Holidays: add 15-08-2026, Occasion 'Independence Day', Applies to 'National'. 2. Add another holiday on 15-08-2026, National. Expected: error under Date '\"Independence Day\" is already on 15-08-2026 for National (all states)'. 3. Add 15-08-2026 for 'Odisha'. Expected: accepted (different scope). 4. Open the State-wise quota tab. Expected: 36 states incl. Kerala, Rajasthan, Punjab, Madhya Pradesh, Assam, Odisha exactly once; columns 'Earned Leave', 'Casual Leave', 'Sick Leave'… with 'default N days/year'.",
+  "negativeTests": "1. Add a second holiday for Odisha on 15-08-2026 (any case). Expected 409: '\"…\" is already on 15-08-2026 for Odisha'. 2. In State-wise quota enter 500 for Earned Leave and Save. Expected: 'Earned Leave for <state> cannot be more than 366'.",
+  "automated": "scripts/v2/test-leave.js — 'same date + same scope is refused (409)', 'case-insensitive duplicate state is refused', 'state saved as \"Odisha\"', 'all 36 states listed, Odisha once', 'bad state, quota 500 and unknown type all reported'.",
+  "v1Impact": "Duplicate blocking is v2 only (v1 POST /admin/holidays keeps accepting, asserted). State canonicalisation applies to both (data fix)."
+ },
+ {
+  "id": "C19",
+  "status": "Fixed",
+  "summary": "Leave types now have an Eligibility setting (Everyone / Female only / Male only) and a 'Certificate needed after (days)' threshold; Maternity and Menstrual default to Female only, Maternity requires a certificate, Sick Leave requires one beyond 2 days. The employee leave form now has a certificate upload. A second type with an existing name (case-insensitive) and a quota above 366 are refused.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/admin/leave-config/page.jsx",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Log in as Company Super Admin > Leave Config > Leave Types. Expected: Eligibility column (Maternity/Menstrual = Female only) and 'Certificate needed after (days)' (Maternity 0, Sick 2). 2. Log in as a female employee > Leave > Apply, pick Sick Leave. Expected: a 'Certificate (required for more than 2 day(s))' file field.",
+  "negativeTests": "1. Add leave type code PAT_L, name 'Earned Leave', quota 500. Expected errors: 'Row 1: The name \"Earned Leave\" is already used by EL' and 'Row 1: Annual quota cannot be more than 366'. 2. Edit an existing type's quota to 500 and Save. Expected: 'Annual quota cannot be more than 366'.",
+  "automated": "scripts/v2/test-leave.js — 'Leave types: eligibility, certificate threshold, duplicates' section: duplicate name, quota 500, bad eligibility all reported; bulk add refuses a duplicate name too; v1 create keeps the old rules.",
+  "v1Impact": "Validation is v2 only (v1 create still accepts, asserted). The eligibility/threshold columns are new and optional on v1."
+ },
+ {
+  "id": "C41",
+  "status": "Fixed",
+  "summary": "There was no admin Attendance screen and a request from an employee without a manager could never be approved. New Admin > Attendance screen: Approvals (all pending leave, miss-punch, on-duty and comp-off requests of the organisation with Approve / Reject, flagged 'HR' when the employee has no manager, counts per type), Daily (every active employee's punch in/out and status for a date) and Monthly (one employee's calendar with punch times). Guarded by the Attendance module (or Leave). Deep links from the HR dashboard work: /admin/attendance?tab=leave|misspunch|onduty|compoff&status=PENDING opens Approvals on that request type and status (also tab=daily|monthly). Access: the sidebar 'Attendance' item (module ATTENDANCE) — view opens the screen, manage is needed to approve/reject; LEAVE is accepted as an alternative.",
+  "files": [
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/missPunchController.js",
+   "backend/src/controllers/onDutyController.js",
+   "backend/src/controllers/compOffController.js",
+   "backend/src/routes/v2/leave.js",
+   "web/app/admin/attendance/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > Attendance (sidebar). 2. Approvals tab, Leave. Expected: TH5001's Casual Leave (10-11 Nov) listed with Approver 'HR'. Click Approve, confirm. Expected: 'Approved.', the request moves to Approved and the employee's balance is deducted. 3. Miss-punch chip: approve TH5001's miss-punch the same way. 4. Daily tab: pick a date. Expected: each employee with Punch in / Punch out / status. 5. Monthly tab: choose an employee. Expected: calendar with punch times. Also: from the HR Dashboard pending-approvals link (e.g. /admin/attendance?tab=misspunch&status=PENDING) the Miss-punch / Pending list opens directly.",
+  "negativeTests": "1. Click Reject and submit with an empty reason. Expected: 'Give a reason for rejecting'. 2. Approve an already-approved request (second tab). Expected: 'This request has already been reviewed'. 3. Log in as an Employee and open /admin/attendance API. Expected 403. 4. Another organisation's admin approving this request id. Expected 404 'Leave request not found'.",
+  "automated": "scripts/v2/test-leave.js — 'No manager → HR approves' section and 'HR attendance views' section (org-scoped lists, 404 across tenants, 403 for employees, 409 on double approval).",
+  "v1Impact": "None (v2-only endpoints). Manager approval on v1 is unchanged."
+ },
+ {
+  "id": "C44",
+  "status": "Fixed",
+  "summary": "The attendance calendar read every organisation's holidays. It now shows only the employee's own organisation's holidays (national, their state, their office location).",
+  "files": [
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/services/attendancePayroll.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/db/migrations_v2/30_leave_backfill.js"
+  ],
+  "testSteps": "1. Log in as Employee TH5001 (Company Admin organisation) > Attendance > Monthly > December 2026. Expected: 24-12-2026 is not a Holiday (TRUE HR's 'QA Test Holiday' no longer appears).",
+  "negativeTests": "1. As TRUE HR HR add a holiday; check the other organisation's employee calendar for that month. Expected: the day is not marked Holiday.",
+  "automated": "scripts/v2/test-leave.js — 'other tenant's calendar does not show org1's holiday (C44/E6)', 'payroll classification ignores another tenant's holiday'.",
+  "v1Impact": "Applies to v1 too (cross-tenant data); the mobile calendar gets the correct holidays."
+ },
+ {
+  "id": "C45",
+  "status": "Fixed",
+  "summary": "Balances came from a global state table (Odisha 6/5/7) instead of the organisation's Leave Types quota, and joiners got the full year. Now: the Leave Types annual quota is the single source, an optional per-organisation State-wise quota overrides it for one state, and joiners in the current year get it prorated from the date of joining (joining month counts if joined by the 15th, rounded to the nearest half day). Old system-written balances were recalculated; balances HR set by hand or bulk upload are kept.",
+  "files": [
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/ess/leave/page.jsx",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. As Company Super Admin, Leave Types: EL 10, CL 12, SL 12. 2. Log in as TH5001 (joined 02-11-2026) > Leave > Apply. Expected My Balances: EL 1.5 / CL 2 / SL 2 (10×2/12 rounded to half days), with the note 'Leave type quota 10, prorated 2/12 from joining on 2026-11-02'.",
+  "negativeTests": "1. As HR set State-wise quota Odisha EL = 15 and Save; an Odisha employee who joined before this year shows EL 15 with 'Odisha state quota 15'. 2. Clear the box and Save. Expected: back to the Leave Types quota.",
+  "automated": "scripts/v2/test-leave.js — 'State-wise quota' and 'Proration and allocation' sections: without an override EL = Leave Types quota, Odisha employee gets 15 with basis, clearing falls back, joiner prorated.",
+  "v1Impact": "Applies to v1 too — the balances were wrong data. v1 /leave/balances keeps its fields (remaining = allocated − used)."
+ },
+ {
+  "id": "H58",
+  "status": "Fixed",
+  "summary": "State names are now unique case-insensitively: holidays store the canonical name ('Odisha'), the holiday 'Applies to' list and the State-wise quota tab use the fixed list of 36 states/UTs.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > Leave Config. Holidays > Applies to state, and State-wise quota tab. Expected: Odisha appears once in each.",
+  "negativeTests": "1. Add a holiday with state 'ODISHA' via the API. Expected: saved as 'Odisha'; adding the same date again for 'odisha' gives the duplicate error.",
+  "automated": "scripts/v2/test-leave.js — 'form lists all 36 states/UTs once', 'state saved as \"Odisha\"', 'all 36 states listed, Odisha once'.",
+  "v1Impact": "Existing holiday states were normalised (data fix, both versions)."
+ },
+ {
+  "id": "H59",
+  "status": "Fixed",
+  "summary": "One source with a clear precedence: Leave Types annual quota is the default; a State-wise quota (per organisation, optional) overrides it for that state; proration from DOJ applies to both. The State-wise quota tab explains this in a 'Which quota applies?' box and shows each type's default; each employee balance card shows the basis used.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/services/leaveTypes.js",
+   "web/app/admin/leave-config/page.jsx",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Log in as HR > Leave Config > State-wise quota. Expected: the 'Which quota applies?' explanation and 'default N days/year' under each type; blank boxes mean the default applies. 2. Log in as an employee > Leave. Expected: each balance card shows e.g. 'Leave type quota 10' or 'Delhi state quota 15'.",
+  "negativeTests": "1. Enter -1 or 400 in a state box and Save. Expected: 'Earned Leave for Delhi cannot be less than 0' / '… cannot be more than 366'.",
+  "automated": "scripts/v2/test-leave.js — 'precedence is explained', 'Odisha employee now gets 15 EL with the basis explained', 'another organisation does not get org1's override'.",
+  "v1Impact": "v1 GET/PUT /admin/entitlements keep their shape but now read/write the organisation's own overrides (it was a cross-tenant write)."
+ },
+ {
+  "id": "H60",
+  "status": "Fixed",
+  "summary": "Per-type gender eligibility and certificate thresholds: Maternity/Menstrual default to Female only; Maternity now requires a certificate (threshold 0), Sick Leave only beyond 2 days (was 'always'). Both are editable per type.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/admin/leave-config/page.jsx",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. HR > Leave Config > Leave Types. Expected: ML Female only, certificate after 0; MSL Female only; SL certificate after 2. 2. As a female employee apply Sick Leave for 3 days without a file. Expected: 'A certificate is required for Sick Leave of more than 2 day(s)'. Attach a PDF: accepted. 3. Apply SL for 1 day without a file: accepted.",
+  "negativeTests": "1. Attach an .html file as certificate. Expected: 'The certificate must be a PNG, JPG, WEBP, GIF, PDF file'. 2. Set eligibility via API to 'X'. Expected: 'Eligibility must be Everyone, Female only or Male only'.",
+  "automated": "scripts/v2/test-leave.js — 'Maternity and Menstrual default to female only', 'Maternity needs a certificate; Sick Leave beyond 2 days', 'SL of 3 days without a certificate is refused', 'an HTML \"certificate\" is refused'.",
+  "v1Impact": "Certificate enforcement is v2 only; on v1 the certificate download is now served as an allowlisted attachment (security fix)."
+ },
+ {
+  "id": "H61",
+  "status": "Fixed",
+  "summary": "Holiday dates are validated client- and server-side: impossible dates (31-02), 5-digit years and dates outside last year .. two years ahead are refused; the date picker carries min/max.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. HR > Leave Config > Holidays. Type a date in the picker. Expected: only dates from 01-01-<last year> to 31-12-<year+2> selectable.",
+  "negativeTests": "1. POST /api/v2/admin/holidays with date 2026-02-31. Expected 400 'Date is not a valid date'. 2. Date 20266-08-15. Expected 'Date is not a valid date'. 3. Date 2035-01-01. Expected 'Date must be no later than 31-12-2028'. 4. Empty date. Expected 'Date is required'.",
+  "automated": "scripts/v2/test-leave.js — 'invalid date / blank occasion / unknown state all reported', 'a 5-digit year is refused'.",
+  "v1Impact": "None (v2 only)."
+ },
+ {
+  "id": "H62",
+  "status": "Fixed",
+  "summary": "The holiday field is labelled 'Occasion' (form and list); its validation message is 'Occasion is required'.",
+  "files": [
+   "web/app/admin/leave-config/page.jsx",
+   "backend/src/controllers/leaveAdminController.js"
+  ],
+  "testSteps": "1. HR > Leave Config > Holidays. Expected: the form field and the list column read 'Occasion'.",
+  "negativeTests": "1. Submit with Occasion empty. Expected: 'Occasion is required'.",
+  "automated": "scripts/v2/test-leave.js — 'invalid date / blank occasion / unknown state all reported'.",
+  "v1Impact": "None (label only; the API still accepts 'name')."
+ },
+ {
+  "id": "H63",
+  "status": "Fixed",
+  "summary": "Holidays can be edited (date, occasion, type, state, office location) via an Edit link that loads the row into the form; the same validation and duplicate rule apply. Platform holidays are read-only.",
+  "files": [
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/routes/v2/leave.js",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. HR > Leave Config > Holidays. Click Edit on a holiday. Expected: form title 'Edit holiday' with its values. 2. Change the date and occasion, click Save changes. Expected: 'Holiday updated.' and the list shows the new values.",
+  "negativeTests": "1. Edit it onto a date that already has a holiday for the same scope. Expected the duplicate error. 2. Another organisation's admin PUT on this id. Expected 404.",
+  "automated": "scripts/v2/test-leave.js — 'HR edits a holiday', 'edit is saved', 'another org cannot edit it: 404', 'edit into a duplicate is refused'.",
+  "v1Impact": "None (new v2 endpoint PUT /api/v2/admin/holidays/:id)."
+ },
+ {
+  "id": "H133",
+  "status": "Fixed",
+  "summary": "Balances were only created when an employee opened Leave, so most active employees had none. The deploy migration now allocates balances for every active employee of every organisation; they are also (re)allocated whenever HR changes a leave type or a state quota, when the employee opens Leave, and on demand with 'Allocate balances now' (Leave Config > Policy). Not yet automatic at the moment onboarding approval activates a new joiner, nor when the HRMIS report is run — those hooks are in other areas' files (lead request). Integration: onboarding approval now allocates balances right after the employee is activated, and the HRMIS export allocates for the whole organisation before building the workbook, so every active employee has balances.",
+  "files": [
+   "backend/src/services/leaveTypes.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/routes/v2/leave.js",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. HR > Leave Config > Policy > 'Allocate balances now' > confirm. Expected: 'Balances checked for N active employee(s).' 2. HRMIS Reports > download the workbook. Expected: Leave balances sheet has rows for every active employee (TKF1001-TKF1009 etc.).",
+  "negativeTests": "1. Bulk-upload a CL balance of 20 for one employee, then click Allocate. Expected: their CL stays 20 (manual figures are never overwritten).",
+  "automated": "scripts/v2/test-leave.js — 'HR allocates balances for every active employee', 'an employee who never opened Leave now has balances', 'a manually set CL (20) survives a balance read'.",
+  "v1Impact": "Applies to v1 too (data fix): v1 balance reads allocate the same way."
+ },
+ {
+  "id": "H134",
+  "status": "Fixed",
+  "summary": "Gender-specific leave types are only allocated to eligible employees. Existing system-allocated, unused Maternity/Menstrual balances of male (or gender-not-recorded) employees were removed; such types are hidden from their type list and balances.",
+  "files": [
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js"
+  ],
+  "testSteps": "1. HRMIS Reports > Leave balances sheet. Expected: Koustav Maity TKF5001 (Male) has no Maternity Leave / Menstrual Leave rows. 2. Log in as a male employee > Leave. Expected: no Maternity/Menstrual card or option.",
+  "negativeTests": "1. As a male employee POST /api/v2/leave with leaveCode ML. Expected 400 'Maternity Leave is only available to female employees'.",
+  "automated": "scripts/v2/test-leave.js — 'male employee has no Maternity / Menstrual balance (H134)', 'no ML row exists for him in the table either'.",
+  "v1Impact": "Applies to v1 too (allocation and type list); v1 apply of an ineligible type is not blocked (v2 only)."
+ },
+ {
+  "id": "E4",
+  "status": "Fixed",
+  "summary": "Days before the date of joining now show 'Not joined' (Not applicable), Saturdays follow the organisation's week-off policy (new Saturday rule in Leave Config > Policy: none / all / 2nd & 4th / 1st, 3rd & 5th, on top of the payroll week-off days; used by the calendar, leave day counts and payroll), and month navigation stops at the joining month and at the current month. Day boundaries use India time (a 00:00-05:30 IST punch was counted for the previous day).",
+  "files": [
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/services/attendancePayroll.js",
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/attendance/page.jsx",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. As HR set Leave Config > Policy > Saturday rule '2nd and 4th Saturdays are week-offs', Save. 2. Log in as TKF9010 > Attendance > Monthly. Expected: 2nd/4th Saturdays show 'Week off'; days before the joining date show 'Not joined' and are counted in the 'Not applicable' tile, not Absent; the ← button is disabled at the joining month and → at the current month.",
+  "negativeTests": "1. Call /api/v2/attendance/monthly?month=13. Expected 400 'Choose a valid month and year'.",
+  "automated": "scripts/v2/test-leave.js — 'days before joining are \"Not applicable\" (v2)', 'the calendar knows the joining month', 'Saturday follows the week-off policy', 'with no Saturday rule it is a working day again', 'a 00:30 IST punch counts for that day'.",
+  "v1Impact": "v1 keeps null before DOJ (no new status code for the app, asserted). Week-off policy, holiday scoping and IST day boundaries apply to v1 too (correctness). The default Saturday rule is 'none', so nothing changes until HR sets it."
+ },
+ {
+  "id": "E5",
+  "status": "Fixed",
+  "summary": "Holidays declared by HR for the employee's organisation now show as Holiday (with the occasion name) whether national, for their state, or for their office location; a Holiday tile counts them, and the month's holidays are listed under the calendar. Location holidays need the employee's Office Location to be filled in (it was blank for TKF9010 — data, not code).",
+  "files": [
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/services/attendancePayroll.js",
+   "backend/src/controllers/leaveAdminController.js",
+   "web/app/ess/attendance/page.jsx",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. HR > Leave Config > Holidays: add 26-08-2026 'demo leave' National and 31-08-2026 'demo' for Office location 'Pune'. 2. Set an employee's Office location to Pune. 3. Log in as that employee > Attendance > Monthly > August 2026. Expected: 26 and 31 show 'Holiday' with the occasion, the Holiday tile shows 2 (+15-Aug), 'Holidays this month' lists them.",
+  "negativeTests": "1. An employee with another office location: 31-08 is not a Holiday for them.",
+  "automated": "scripts/v2/test-leave.js — 'Pune employee sees it as Holiday with its name', 'employee elsewhere does not', 'own calendar shows it (v1 too)'.",
+  "v1Impact": "Applies to v1 too (correct data); the per-day `holiday` name and `holidays` list are added on v2 only."
+ },
+ {
+  "id": "E6",
+  "status": "Fixed",
+  "summary": "Same root cause as C44: another organisation's holidays no longer appear in an employee's calendar, leave day counts or payroll.",
+  "files": [
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/services/attendancePayroll.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/db/migrations_v2/30_leave_backfill.js"
+  ],
+  "testSteps": "1. Log in as TH5001 (Company Admin organisation) > Attendance > Monthly > December 2026. Expected: 24-12-2026 not shown as Holiday.",
+  "negativeTests": "1. As TRUE HR create a holiday; TH5001's leave for that date still counts it as a working day.",
+  "automated": "scripts/v2/test-leave.js — 'other tenant's calendar does not show org1's holiday (C44/E6)'.",
+  "v1Impact": "Applies to v1 too (cross-tenant leak)."
+ },
+ {
+  "id": "E7",
+  "status": "Fixed",
+  "summary": "Miss-punch now validates (v2): days must be real days of the chosen month, in the past, within the allowed window (Leave Config > Policy, default 30 days) and on/after joining; duplicates (same day already requested, or entered twice) are refused; In time and Out time are required (Out after In); Remarks required; Year is a number dropdown; all errors shown at once. A pending request can be cancelled (with confirmation), and the list shows In/Out times, 'Pending with' and Cancelled.",
+  "files": [
+   "backend/src/controllers/missPunchController.js",
+   "backend/src/routes/v2/leave.js",
+   "web/app/ess/attendance/page.jsx",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "backend/src/controllers/leaveAdminController.js"
+  ],
+  "testSteps": "1. Log in as Employee > Attendance > Miss-Punch. Enter yesterday's day number, In 09:30, Out 18:00, Remarks 'forgot to punch', Submit. Expected: 'Applied.' and the request listed with 09:30–18:00 and 'Pending with: …'. 2. Click Cancel > confirm 'Cancel request'. Expected: moves to Cancelled.",
+  "negativeTests": "1. Days '0,32,abc' (Oct 2026). Expected: '0, 32, abc are not days of October 2026 (1–31)'. 2. Empty days. Expected: 'Enter at least one day of the month (e.g. 3 or 3,5)'. 3. A future day. Expected: 'Miss-punch is only for past days — dd-mm-yyyy is today or later'. 4. 10-Jan-2019 (API). Expected: 'Miss-punch can only be applied for the last 30 days (from …) — 10-01-2019 is too old'. 5. The same day twice. Expected 409 'You already have a miss-punch request for dd-mm-yyyy'. 6. Year 'abcd' (API). Expected 'Year must be a number'. 7. No In/Out time. Expected 'In time is required' / 'Out time is required'.",
+  "automated": "scripts/v2/test-leave.js — 'Miss-punch validation (E7)' section incl. 'v1 keeps its old contract'.",
+  "v1Impact": "v2 only (v1 POST /misspunch unchanged, asserted). The completed-day check now uses India-time days on both versions."
+ },
+ {
+  "id": "E8",
+  "status": "Fixed",
+  "summary": "New joiners get prorated balances (see C45) and gender-specific types are offered and allocated only to eligible employees; applying for one is refused on v2.",
+  "files": [
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Log in as TKF9010 (male, joined this year) > Leave. Expected: EL/CL/SL prorated with 'prorated n/12 from joining on …', and no Maternity / Menstrual card or option.",
+  "negativeTests": "1. POST /api/v2/leave {leaveCode:'ML', fromDate:'2026-12-21', toDate:'2026-12-21', reason:'x'}. Expected 400 'Maternity Leave is only available to female employees'. If gender is not recorded: '… your gender is not recorded in your profile. Ask HR to update it.'",
+  "automated": "scripts/v2/test-leave.js — 'a joiner gets EL prorated', 'Maternity Leave refused for a male employee (E8)', 'male employee sees Paternity, not Maternity / Menstrual'.",
+  "v1Impact": "Allocation and type filtering apply to v1 too; the apply-time block is v2 only."
+ },
+ {
+  "id": "E9",
+  "status": "Fixed",
+  "summary": "A request from an employee with no reporting manager is routed to HR: HR approves it in Admin > Attendance (see C41). My Leaves and Miss-Punch now show 'Pending with: <manager names>' or 'HR (no reporting manager assigned)', and approved/rejected requests show who acted. Deep links from the HR dashboard work: /admin/attendance?tab=leave|misspunch|onduty|compoff&status=PENDING opens Approvals on that request type and status (also tab=daily|monthly). Access: the sidebar 'Attendance' item (module ATTENDANCE) — view opens the screen, manage is needed to approve/reject; LEAVE is accepted as an alternative.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/missPunchController.js",
+   "backend/src/controllers/attendanceController.js",
+   "web/app/ess/leave/page.jsx",
+   "web/app/ess/attendance/page.jsx",
+   "web/app/admin/attendance/page.jsx"
+  ],
+  "testSteps": "1. Log in as an employee without a reporting manager > Leave > apply LWP for 03-11-2026 with a reason. Expected: 'Leave applied … Waiting for HR (no reporting manager assigned)'. 2. My Leaves > Pending: 'Pending with: HR (no reporting manager assigned)'. 3. HR approves it in Attendance > Approvals; the employee sees 'Approved by <HR name>'. Also: from the HR Dashboard pending-approvals link (e.g. /admin/attendance?tab=misspunch&status=PENDING) the Miss-punch / Pending list opens directly.",
+  "negativeTests": "1. An employee with a manager sees the manager's name instead. 2. Another organisation's HR cannot see or approve it (404).",
+  "automated": "scripts/v2/test-leave.js — 'My Leaves says the request waits for HR', 'an employee with a manager sees the manager's name', 'HR approves', 'approved-by shows HR'.",
+  "v1Impact": "New fields (pendingWith, reviewedBy) are added on v1 too; nothing removed."
+ },
+ {
+  "id": "E10",
+  "status": "Fixed",
+  "summary": "The 'keep at least one day gap' rule is replaced (v2): leaves on adjacent days are allowed (only overlapping dates are refused) and the sandwich rule applies — week-offs/holidays between two leave days, in one request or bridging to an adjacent pending/approved leave, are counted as leave for balance-deducting types. The rule can be switched off in Leave Config > Policy.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/leave/page.jsx",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. Employee > Leave: CL on Monday, then SL on Tuesday. Expected: both accepted. 2. With Saturday rule 'all Saturdays off': CL on Friday, then CL on the next Monday. Expected: the Monday request counts 3 days ('includes 2 sandwiched week-off/holiday day(s)').",
+  "negativeTests": "1. Apply CL on a date already covered by a leave. Expected 409 'These dates overlap your Casual Leave (dd-mm-yyyy to dd-mm-yyyy)'.",
+  "automated": "scripts/v2/test-leave.js — 'SL on the adjacent Tuesday is accepted (E10)', 'an overlapping leave is still refused', 'Monday CL right after counts the sandwiched weekend: 3 days', 'Fri→Mon in one request counts 4 days', 'v1 keeps the one-day-gap rule'.",
+  "v1Impact": "v2 only — v1 (mobile app) keeps its one-day-gap rule (asserted)."
+ },
+ {
+  "id": "E11",
+  "status": "Fixed",
+  "summary": "Back-dated leave is limited to the policy window (default 30 days, Leave Config > Policy), and Restricted Holiday can only be taken on a restricted holiday HR listed (new holiday type 'Restricted holiday (RH)'); in the apply form RH is a dropdown of the listed dates.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/leaveAdminController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/leave/page.jsx",
+   "web/app/admin/leave-config/page.jsx"
+  ],
+  "testSteps": "1. HR > Holidays: add 'Optional Festival' on a future date with Type 'Restricted holiday (RH)'. 2. Employee > Leave > Restricted Holiday. Expected: dropdown lists that date; applying succeeds.",
+  "negativeTests": "1. SL for 01-10-2026 (more than 30 days ago). Expected: 'Leave can be applied at most 30 days back (from dd-mm-yyyy)'. 2. API: RH on 18-11-2026 (not listed). Expected: '18-11-2026 is not a restricted holiday. Pick a date from the restricted holiday list.'",
+  "automated": "scripts/v2/test-leave.js — 'back-dated beyond 30 days refused (E11)', 'RH on a day that is not a restricted holiday is refused', 'RH on a listed restricted holiday is accepted'.",
+  "v1Impact": "v2 only. v1 /leave/holidays keeps returning declared (non-RH) holidays only."
+ },
+ {
+  "id": "E12",
+  "status": "Fixed",
+  "summary": "Half day is offered only when From = To, with a First half / Second half choice; a half day over a range is refused. Two half days on the same date in different halves are allowed.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Employee > Leave > Casual Leave, From = To = 09-12-2026. Expected: 'Half day' checkbox appears with First half / Second half. 2. Pick First half, apply: counted 0.5 day; My Leaves shows 'first half'.",
+  "negativeTests": "1. API: CL 07-12-2026 to 09-12-2026 with halfDay. Expected 400 'Half day is allowed only when From and To are the same date'. 2. Half day without a session. Expected 'Choose First half or Second half'.",
+  "automated": "scripts/v2/test-leave.js — 'half day over several days is refused, session required (E12)', 'first-half CL accepted as 0.5 day', 'second half of the same day accepted', 'the same half again is refused'.",
+  "v1Impact": "v2 only (v1 half-day contract unchanged)."
+ },
+ {
+  "id": "E13",
+  "status": "Fixed",
+  "summary": "Balance cards now show Available = allocated − used − pending (what apply actually allows), with the pending count, matching the apply check.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Employee with CL 12/12 applies CL for one day. Expected: CL card shows '11 / 12' and 'Available after 1 pending · 0 used'; the apply form shows 'Available: 11 day(s) (1 pending)'.",
+  "negativeTests": "1. Apply CL for more days than available. Expected 409 'Insufficient Casual Leave balance — 11 day(s) available after pending requests, N needed'.",
+  "automated": "scripts/v2/test-leave.js — 'CL card shows pending and available = remaining − pending', 'v1 keeps remaining = allocated − used'.",
+  "v1Impact": "v1 fields unchanged; `pending`, `available`, `basis` added."
+ },
+ {
+  "id": "E14",
+  "status": "Fixed",
+  "summary": "Reason is mandatory (v2). Work From Home (and any non-deducting type other than LWP) needs an allowance: with 0 allocated it is refused, otherwise approved+pending days in the year may not exceed it; the card shows 'Allowance per year' instead of 0 / 0, LWP shows 'No limit'.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Employee > Leave > Earned Leave with an empty reason. Expected: 'Reason is required'. 2. HR sets Work From Home quota 5; employee applies WFH: accepted and the card shows '4 / 5'.",
+  "negativeTests": "1. WFH with quota 0. Expected 409 'Work From Home is not allocated to you (0 days). Ask HR to set a quota.'",
+  "automated": "scripts/v2/test-leave.js — 'reason is mandatory (E14)', 'Work From Home with 0 allocated is refused (E14)', 'v1 still accepts a blank reason'.",
+  "v1Impact": "v2 only (v1 still accepts a blank reason and WFH, asserted)."
+ },
+ {
+  "id": "E15",
+  "status": "Fixed",
+  "summary": "Cancel asks for confirmation ('Cancel this leave?'), and the Cancelled tab shows the cancelled date/time and who cancelled.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Employee > Leave > My Leaves > Pending > Cancel. Expected: dialog 'Cancel this leave?' with Keep it / Cancel leave. 2. Confirm, open Cancelled. Expected: 'Cancelled on dd/mm/yyyy, hh:mm by <name>'.",
+  "negativeTests": "1. Cancelling someone else's leave via API on v2. Expected 404 'Leave request not found'. 2. Cancelling an approved one. Expected 409 'Only pending requests can be cancelled'.",
+  "automated": "scripts/v2/test-leave.js — 'employee cancels a pending leave', 'Cancelled tab shows date and person', 'someone else's leave: 404 on v2'.",
+  "v1Impact": "cancelled_at/by are recorded on both versions (additive); v1 still answers 403 for someone else's leave."
+ },
+ {
+  "id": "E16",
+  "status": "Fixed",
+  "summary": "Certificate upload (PDF/PNG/JPG/WEBP, max 5MB, type checked by content) is in the apply form for types that take one, mandatory beyond the type's threshold; managers (Team Approvals), HR (Attendance) and the employee can open it. A new Holidays tab in Leave lists the year's holidays and restricted holidays that apply to the employee.",
+  "files": [
+   "backend/src/controllers/leaveController.js",
+   "backend/src/controllers/attendanceController.js",
+   "backend/src/db/migrations_v2/30_leave.sql",
+   "web/app/ess/leave/page.jsx",
+   "web/app/admin/attendance/page.jsx"
+  ],
+  "testSteps": "1. Employee > Leave > Apply Sick Leave for 3 days, attach a PDF, apply. Expected: accepted; My Leaves shows 'View certificate'. 2. Leave > Holidays tab. Expected: holidays and RH (badge 'RH') for the year. 3. HR > Attendance > Approvals: 'View certificate' downloads it.",
+  "negativeTests": "1. Attach a 6MB file. Expected 'The certificate is larger than 5MB'. 2. Attach an .html renamed file. Expected 'The certificate must be a PNG, JPG, WEBP, GIF, PDF file' / 'That certificate is not really a PDF file'.",
+  "automated": "scripts/v2/test-leave.js — 'SL with a PDF certificate is accepted', 'HR can open it, served as a download', 'another org cannot: 404', 'Leave screen holiday list includes restricted holidays (E16)'.",
+  "v1Impact": "Upload checks are v2; the certificate download is now an allowlisted attachment on both versions (security)."
+ },
+ {
+  "id": "E17",
+  "status": "Fixed",
+  "summary": "Same fix as C45 for the Company Admin organisation's employee: the quota comes from that organisation's Leave Types (EL 10, CL 12, SL 12), not the global Odisha row, prorated from 02-11-2026.",
+  "files": [
+   "backend/src/services/leaveTypes.js",
+   "backend/src/controllers/leaveController.js",
+   "backend/src/db/migrations_v2/30_leave_backfill.js",
+   "web/app/ess/leave/page.jsx"
+  ],
+  "testSteps": "1. Log in as TH5001 > Leave > My Balances. Expected: EL 1.5, CL 2, SL 2 with basis 'Leave type quota …, prorated 2/12 from joining on 2026-11-02'.",
+  "negativeTests": "1. HR of TRUE HR sets an Odisha override; TH5001's organisation is not affected.",
+  "automated": "scripts/v2/test-leave.js — 'another organisation does not get org1's override', 'a joiner gets EL prorated'.",
+  "v1Impact": "Applies to v1 too (wrong balances)."
+ },
+ {
+  "id": "E18",
+  "status": "Partially fixed",
+  "summary": "Comp-off credits are listed (with an explanation when there are none), an empty Apply shows what is missing, and On-Duty can now be applied from web ESS (Attendance > On-Duty) — an approved OD becomes a comp-off credit. Not done: earning comp-off from punches on a holiday/week-off without an OD is not modelled in the backend (enhancement).",
+  "files": [
+   "backend/src/controllers/compOffController.js",
+   "backend/src/controllers/onDutyController.js",
+   "web/app/ess/leave/page.jsx",
+   "web/app/ess/attendance/page.jsx"
+  ],
+  "testSteps": "1. Employee > Attendance > On-Duty: From/To today, Place 'Client site', Purpose 'Installation', Apply OD. Expected: 'On-duty applied.'. 2. HR approves it in Attendance > Approvals > On-duty. 3. Employee > Leave > Comp-Off. Expected: the credit is listed and selectable.",
+  "negativeTests": "1. Comp-Off > Apply with nothing selected. Expected: 'You have no comp-off credit to use' (or 'Choose the comp-off credit to use') and 'Leave date is required'. 2. OD without place/purpose. Expected: 'Place of duty is required', 'Purpose is required'.",
+  "automated": "scripts/v2/test-leave.js — 'OD needs place and purpose (v2)', 'OD applied from web', 'the approved OD appears as a comp-off credit', 'empty comp-off apply explains what is missing'.",
+  "v1Impact": "v2 validation only; v1 OD/comp-off unchanged except IST day boundaries."
+ },
+ {
+  "id": "_meta",
+  "leadRequests": [
+   "H133: call `ensureOrgBalances(orgId)` (backend/src/services/leaveTypes.js) when generating the HRMIS workbook (hrmisController) and `ensureBalances(employeeId)` right after onboarding approval activates an employee (employeeController approve), so balances exist without anyone opening Leave.",
+   "Dashboard 'Pending approvals — Awaiting managers' text: requests of employees without a manager are now actioned by HR in Admin > Attendance; link there.",
+   "organisationController seeds a new organisation's leave types without the new columns; a DB trigger (trg_leave_types_inherit) fills eligibility/certificate_after_days from the template, but listing them explicitly in that INSERT would be cleaner.",
+   "Payroll agent: loadPayrollPolicy() now also returns `saturdayRule` (Leave Config > Policy) and classifyMonth() honours it plus org/state/location-scoped holidays and IST punch days; signatures unchanged."
+  ],
+  "migrations": [
+   "backend/src/db/migrations_v2/30_leave.sql (holidays.organisation_id/location/kind/updated_at; leave_state_quotas; org_leave_settings; leave_balances.auto_allocated/allocation_basis; leave_requests.half_day_session/sandwich_days/certificate_name/cancelled_at/cancelled_by_user/reviewed_by_user; miss_punch.in_time/out_time/cancelled_at/reviewed_by_user; on_duty.reviewed_by_user/cancelled_at; comp_off_requests.reviewed_by_user)",
+   "backend/src/db/migrations_v2/30_leave_backfill.js (leave_types.eligibility/certificate_after_days added once with ML/MSL=FEMALE, ML cert 0, SL cert 2; insert trigger copying them from templates; holidays backfilled to the creator's organisation from the HOLIDAY_CREATE audit row, else the first organisation; holiday states canonicalised; legacy balances classified auto vs set-by-HR; balances allocated for every active employee)"
+  ],
+  "newEndpoints": [
+   "GET /api/v2/admin/holidays/meta",
+   "PUT /api/v2/admin/holidays/:id",
+   "GET|PUT /api/v2/admin/leave-states",
+   "GET|PUT /api/v2/admin/leave-settings",
+   "POST /api/v2/admin/leave-balances/allocate",
+   "GET /api/v2/admin/attendance/employees",
+   "GET /api/v2/admin/attendance/daily?date=",
+   "GET /api/v2/admin/attendance/monthly?employeeId=&year=&month=",
+   "GET /api/v2/admin/attendance/summary",
+   "GET /api/v2/admin/attendance/requests?kind=LEAVE|MISS_PUNCH|ON_DUTY|COMP_OFF&status=",
+   "POST /api/v2/admin/attendance/requests/:kind/:id/review",
+   "GET /api/v2/admin/attendance/leave/:id/certificate",
+   "POST /api/v2/misspunch/:id/cancel"
+  ],
+  "testRun": "scripts/v2/test-leave.js: 131 passed, 0 failed (fresh DB and re-run on the same DB). Existing suites on truehr_leave: test-attendance-payroll 42 passed, 0 failed; test-payroll-run 16 passed, 0 failed; test-greenhr-gaps 14 passed, 0 failed; test-tenancy 24 passed, 0 failed; test-permissions 44 passed, 0 failed; unit-fnf 11 passed, 0 failed. (test-reports fails its NFA precondition when run alone — unrelated to leave.) web: node scripts/check-jsx.mjs on the 4 leave pages: 4 ok, 0 failed.",
+  "notes": "Holiday rows with organisation_id NULL are treated as platform-wide (shown read-only); every API-created holiday has an owner and the backfill assigns all legacy NULL rows, so only direct SQL (e.g. seed_demo.js) can create one — it gets assigned on the next migrate. Allocation rule (D5): Leave Types quota, overridden by the organisation's State-wise quota for the employee's posting/address state, prorated for joiners of the current calendar year (joining month counts if DOJ ≤ 15th, rounded to 0.5), only for eligible genders; rows are recalculated only while allocated = auto_allocated, so manual/bulk figures are never overwritten. The global leave_entitlements table is no longer used for allocation (shown as a statutory reference). Sandwich rule counts bridged days in `days` (and sandwich_days) for balance purposes; payroll still classifies by the request's own from/to range. Back-dated limit applies to all leave types (setting max_backdate_days, default 30). Default Saturday rule is NONE, so calendars/payroll are unchanged until HR sets it. Request reviewers who are HR are stored in reviewed_by_user (reviewed_by stays the manager's employee id). Lead follow-ups folded in: (1) /admin/attendance honours ?tab=leave|onduty|misspunch|compoff (+daily|monthly) and &status=; (2) v2 attendance routes accept module ATTENDANCE (view; manage for review) or LEAVE; (3) ESS Leave hides 'Team Approvals' unless useHasTeam() is true (E2); (4) noted the shared validate.js mobile() change — not used by leave forms."
+ }
+]

@@ -53,8 +53,9 @@ import {
   authenticate, requireStaff, requireAdmin, requireSuperAdmin, requireAnyAdmin,
   requireModule, requirePlatformAdmin, requireOrg,
 } from '../middleware/auth.js';
+import { catchAsync } from '../utils/asyncRoutes.js';
 
-const r = Router();
+const r = catchAsync(Router());
 
 // --- Auth ---
 r.post('/auth/login', auth.login);

@@ -2,6 +2,72 @@
 // dropdowns client-side (no per-selection server round-trips — unlike GreenHR).
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator, nameTaken } from '../utils/validate.js';
+
+// Readable label per master type, for messages.
+const TYPE_LABEL = {
+  'business-operations': 'Business operation', 'group-companies': 'Group company', 'cost-zones': 'Cost zone',
+  projects: 'Project', locations: 'Location', 'clients-vendors': 'Client / vendor',
+  'expense-categories': 'Expense category', 'expense-headers': 'Expense header', 'expense-subheaders': 'Expense sub-header',
+};
+const KINDS = ['CITY', 'OFFICE', 'CENTER', 'SPECIAL'];
+const CV_TYPES = ['CLIENT', 'VENDOR', 'BOTH'];
+// A master name: starts with a letter or digit, then letters/digits/space and
+// a few separators. Rejects junk like "!!!" (C33).
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 &().,'\/+-]*$/;
+
+/**
+ * The organisation whose masters this caller may see. An employee always sees
+ * their own organisation's masters, whatever the account row says; a platform
+ * owner sees the organisation they are working in. A tenant user with no
+ * organisation at all gets nothing — never every tenant's masters (C46/E21/E28).
+ */
+export async function mastersOrg(req) {
+  if (req.auth?.isPlatformAdmin) return { org: req.orgId || null, all: !req.orgId };
+  if (req.user?.employeeId) {
+    const e = (await query(`SELECT organisation_id FROM employees WHERE id=$1`, [req.user.employeeId])).rows[0];
+    if (e?.organisation_id) return { org: e.organisation_id, all: false };
+  }
+  return { org: req.orgId || null, all: false };
+}
+
+// v2: validate a master's name (and type) and refuse a case-insensitive duplicate.
+async function v2Check(req, d, body, exceptId = null) {
+  const v = validator();
+  const lbl = TYPE_LABEL[req.params.type] || 'Name';
+  const name = body.name;
+  if (name !== undefined || !exceptId) {
+    v.require('name', name, `${lbl} name`);
+    if (name && String(name).trim()) {
+      const s = String(name).trim();
+      if (!NAME_RE.test(s) || !/[A-Za-z]/.test(s)) v.add('name', `${lbl} name must start with a letter or digit and contain letters`);
+      else if (s.length > 120) v.add('name', `${lbl} name must be at most 120 characters`);
+    }
+  }
+  if (d.cols.includes('kind') && body.kind !== undefined) v.oneOf('kind', body.kind, KINDS, 'Location type');
+  if (d.cols.includes('type') && body.type !== undefined) v.oneOf('type', body.type, CV_TYPES, 'Client / vendor type');
+  v.throwIfAny();
+  if (name && String(name).trim()) {
+    // Headers / sub-headers are unique under their parent; the rest per organisation.
+    let taken;
+    if (d.table === 'expense_headers' || d.table === 'expense_subheaders') {
+      const pcol = d.table === 'expense_headers' ? 'category_id' : 'header_id';
+      let parent = body[pcol === 'category_id' ? 'categoryId' : 'headerId'] ?? body[pcol];
+      if (parent == null && exceptId) parent = (await query(`SELECT ${pcol} FROM ${d.table} WHERE id=$1`, [exceptId])).rows[0]?.[pcol];
+      taken = (await query(
+        `SELECT 1 FROM ${d.table} WHERE ${pcol}=$1 AND lower(trim(name))=lower(trim($2)) AND ($3::bigint IS NULL OR id<>$3)`,
+        [parent || null, name, exceptId])).rowCount > 0;
+    } else {
+      taken = await nameTaken(query, d.table, 'name', req.orgId || null, name, { exceptId });
+    }
+    if (taken) {
+      const e = new Error(`${lbl} "${String(name).trim()}" already exists`);
+      e.status = 409; e.publicMessage = e.message; e.fields = { name: e.message };
+      throw e;
+    }
+  }
+}
 
 // Whitelisted masters: :type URL segment → table definition.
 const MASTERS = {
@@ -91,7 +157,9 @@ export async function create(req, res, next) {
       const v = body[camel(c)] ?? body[c];
       if (v !== undefined && v !== '') { cols.push(c); params.push(v); vals.push(`$${params.length}`); }
     }
-    if (!cols.includes('name')) return res.status(400).json({ error: 'name is required' });
+    if (isV2(req)) await v2Check(req, d, body);
+    else if (!cols.includes('name')) return res.status(400).json({ error: 'name is required' });
+    if (isV2(req)) { const i = cols.indexOf('name'); params[i] = String(params[i]).trim(); }
     const parentErr = await badParent(req, d, body);
     if (parentErr) return res.status(400).json({ error: parentErr });
     // Stamp the owner, or the new row would be another ownerless master.
@@ -117,6 +185,7 @@ export async function update(req, res, next) {
       if (v !== undefined) { params.push(v === '' ? null : v); sets.push(`${c}=$${params.length}`); }
     }
     if (!sets.length) return res.status(400).json({ error: 'Nothing to update' });
+    if (isV2(req)) await v2Check(req, d, body, Number(req.params.id));
     const parentErr = await badParent(req, d, body);
     if (parentErr) return res.status(400).json({ error: parentErr });
     params.push(Number(req.params.id));
@@ -210,8 +279,10 @@ export async function nfaMasters(req, res, next) {
     // Nine unfiltered selects served to every signed-in employee: this was the
     // widest leak of the set — every tenant's projects, clients and vendors,
     // group companies and cost zones, readable by any employee anywhere.
-    const org = req.orgId || null;
-    const scoped = 'AND ($1::bigint IS NULL OR organisation_id = $1)';
+    const { org, all } = await mastersOrg(req);
+    // Only the platform owner outside any organisation sees everything; a
+    // tenant user with no resolvable organisation sees nothing.
+    const scoped = all ? 'AND ($1::bigint IS NULL OR organisation_id = $1)' : 'AND organisation_id = $1';
     const [ops, companies, zones, projects, locations, cv, cats, headers, subs] = await Promise.all([
       query(`SELECT id, name FROM business_operations WHERE active ${scoped} ORDER BY name`, [org]),
       query(`SELECT id, name FROM group_companies WHERE active ${scoped} ORDER BY name`, [org]),

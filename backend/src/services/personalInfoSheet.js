@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { theme, logoBuffer, watermark, footer } from './docPdf.js';
+import { theme, logoBuffer, watermark, footer, drawLogo } from './docPdf.js';
 
 const INK = '#111827', SUB = '#6b7280', LINE = '#cbd5e1';
 const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-GB') : '');
@@ -24,7 +24,9 @@ export function buildPersonalInfoSheet(data, stream, brand) {
     doc.save();
     watermark(doc, t);
     let tx = X;
-    if (logo) { try { doc.image(logo, X, 22, { height: 18 }); tx = X + 26; } catch { /* skip */ } }
+    // H102: fitted into a box; the title starts after the logo.
+    const lw = drawLogo(doc, logo, X, 20, 70, 20);
+    if (lw) tx = X + lw + 8;
     doc.font('Helvetica-Bold').fontSize(11).fillColor(INK).text('PERSONAL INFORMATION SHEET', tx, 26, { lineBreak: false });
     doc.font('Helvetica-Bold').fontSize(11).fillColor(t.headTx)
       .text(String(data.company || t.name || '').toUpperCase(), X, 26, { width: W, align: 'right', lineBreak: false });

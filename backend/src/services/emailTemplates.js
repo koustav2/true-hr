@@ -1,16 +1,58 @@
 import { config } from '../config/index.js';
 
-const COMPANY = config.companyName || 'True Kind Foundation';
-const SUPPORT = config.supportPhone || '+91-7370067005';
-const ADDRESS = config.companyAddress || 'A-11, Sector-67, Noida, U.P. 201301';
-const WEBSITE = config.companyWebsite || 'www.truekindfoundation.org';
+// ============================================================================
+// Email templates.
+//
+// Every people-area template takes an optional `brand` — the organisation's
+// own name, address, website and support line, from services/peopleBrand.js
+// (emailBrand / orgBrand(...).mail). Before the QA fix pass these were global
+// constants defaulting to one tenant's name and Noida address, so every
+// organisation's offer, welcome and OTP mail went out under somebody else's
+// name (C5, C53, H28, H29, H45, E67). Without a brand a mail is signed by the
+// platform (TRUE HR) and carries no postal address — never another tenant's.
+// ============================================================================
+const PLATFORM = {
+  company: 'TRUE HR', legalName: 'TRUE HR', address: '', website: 'truehr.co.in', support: '', email: '', accent: '#059669',
+};
 const APP_DOWNLOAD = config.appDownloadUrl || 'https://play.google.com/store/apps/details?id=com.truehr.app';
 const LOGIN_URL = config.appLoginUrl || config.appBaseUrl;
 
-const shell = (title, body, accent = '#059669') => `<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2937">
+const escHtml = (s) => String(s ?? '').replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
+// A value typed into a settings screen may carry literal "\n" sequences; they
+// must never reach a mail as backslash-n.
+const clean = (s) => String(s ?? '').replace(/\\n|\r?\n/g, ', ').replace(/\s{2,}/g, ' ').replace(/^[,\s]+|[,\s]+$/g, '');
+const B = (brand) => {
+  const b = { ...PLATFORM, ...(brand || {}) };
+  for (const k of Object.keys(b)) b[k] = clean(b[k]);
+  if (!b.company) b.company = b.legalName || PLATFORM.company;
+  if (!/^#[0-9a-f]{6}$/i.test(b.accent)) b.accent = PLATFORM.accent;
+  return b;
+};
+// "11/11/2026" from an ISO date or Date, without the UTC off-by-one.
+export const dmyDate = (v) => {
+  if (!v) return '';
+  const s = v instanceof Date ? new Date(v.getTime() + 330 * 60000).toISOString() : String(v);
+  const m = /^(\d{4})-(\d{2})-(\d{2})/.exec(s);
+  return m ? `${m[3]}/${m[2]}/${m[1]}` : s;
+};
+
+const footerLines = (b) => [
+  [escHtml(b.legalName || b.company), escHtml(b.address)].filter(Boolean).join(' | '),
+  [b.support && `Support: ${escHtml(b.support)}`, b.email && `Email: ${escHtml(b.email)}`, b.website && `Website: ${escHtml(b.website)}`]
+    .filter(Boolean).join(' | '),
+].filter(Boolean).join('<br/>');
+
+// Drop any literal backslash-n that slipped into a value (real newlines in the
+// HTML source are harmless whitespace).
+const tight = (html) => html.replace(/\\n/g, ' ');
+
+const shell = (title, body, accent, brand) => {
+  const b = B(brand);
+  const tone = accent || b.accent;
+  return tight(`<!doctype html><html><body style="margin:0;background:#f4f6f8;font-family:Segoe UI,Helvetica,Arial,sans-serif;color:#1f2937">
   <div style="max-width:620px;margin:0 auto;padding:28px 16px">
-    <div style="background:${accent};color:#fff;border-radius:14px 14px 0 0;padding:22px 28px">
-      <div style="font-size:12px;letter-spacing:2px;opacity:.85;text-transform:uppercase">${COMPANY}</div>
+    <div style="background:${tone};color:#fff;border-radius:14px 14px 0 0;padding:22px 28px">
+      <div style="font-size:12px;letter-spacing:2px;opacity:.85;text-transform:uppercase">${escHtml(b.company)}</div>
       <div style="font-size:20px;font-weight:700;margin-top:4px">${title}</div>
     </div>
     <div style="background:#fff;border-radius:0 0 14px 14px;padding:28px;box-shadow:0 8px 30px rgba(0,0,0,.06);font-size:14px;line-height:1.65">
@@ -18,166 +60,195 @@ const shell = (title, body, accent = '#059669') => `<!doctype html><html><body s
       <hr style="border:none;border-top:1px solid #eef0f3;margin:24px 0 14px"/>
       <p style="color:#6b7280;font-size:12.5px;margin:0;line-height:1.7">Regards,<br/>
         <strong>Team Human Resource</strong><br/>
-        ${COMPANY} | ${ADDRESS}<br/>
-        Support No. - ${SUPPORT} | Website: ${WEBSITE}</p>
+        ${footerLines(b)}</p>
     </div>
-  </div></body></html>`;
+  </div></body></html>`);
+};
 
 const btn = (url, label, bg = '#059669') =>
   `<a href="${url}" style="display:inline-block;background:${bg};color:#fff;text-decoration:none;font-weight:700;padding:12px 22px;border-radius:8px;margin:6px 12px 6px 0;font-size:14px">${label}</a>`;
 
 // ---- Offer mail (after HR submits employee data) ----
-export function offerEmail({ name, designation, location, joiningBy, acceptUrl, viewLetterUrl, hasOfferLetter, expiryDays = 3 }) {
+// `joiningBy` is the date of joining; `validTill` the date the link lapses.
+export function offerEmail({ name, designation, location, joiningBy, acceptUrl, viewLetterUrl, hasOfferLetter, expiryDays = 3, validTill, brand }) {
+  const b = B(brand);
+  const C = escHtml(b.company);
   const days = Math.max(1, Math.round(expiryDays));
+  const lapse = validTill ? dmyDate(validTill) : '';
   const docs = `
-    <p style="font-weight:700;margin:18px 0 6px">List of Documents Required for E-joining:</p>
+    <p style="font-weight:700;margin:18px 0 6px">Documents you will need for e-joining:</p>
     <ol style="margin:0 0 4px 18px;padding:0;color:#374151;font-size:13.5px;line-height:1.7">
-      <li>Your recent passport size photograph, preferably in business formals or business casual. Photograph must not be older than 3 months from today.</li>
-      <li>Image of your full signature, preferably on a white background and in blue ink.</li>
-      <li>Scan copy of the following certificates, in PDF format: 10th Standard marksheet, 12th Standard marksheet, Graduation marksheet (final year with result status), Post Graduate marksheet (final year with result status), and any other relevant certifications / education that you may wish to upload.</li>
-      <li>Scan copy of the following documents, in PDF format: relieving letter from your last employer and from each of your previous employers.</li>
-      <li>Scan copy of the following identity documents, in PDF format: Aadhaar card, PAN card, bank passbook front page &amp; cancelled cheque (with your name clearly mentioned along with IFSC code), and driving licence (front &amp; rear image).</li>
+      <li>A recent passport-size photograph (not older than 3 months).</li>
+      <li>An image of your full signature, preferably on a white background in blue ink.</li>
+      <li>Scans (PDF) of your 10th and 12th marksheets, graduation marksheet, post-graduation marksheet (if any) and any other relevant certificates.</li>
+      <li>Scans (PDF) of the relieving letter from your last employer and previous employers (if you have worked before).</li>
+      <li>Scans (PDF) of your Aadhaar card, PAN card, and bank passbook front page or a cancelled cheque showing your name and IFSC; driving licence (if any).</li>
     </ol>`;
+  const role = designation
+    ? `for the position of &ldquo;<strong>${escHtml(designation)}</strong>&rdquo; with <strong>${C}</strong>${location ? `, based out of <strong>${escHtml(location)}</strong>` : ''}`
+    : `of employment with <strong>${C}</strong>${location ? `, based out of <strong>${escHtml(location)}</strong>` : ''}`;
   return {
-    subject: `Welcome to ${COMPANY}!`,
-    html: shell(`Welcome to ${COMPANY}!`, `
-      <p>Dear ${name},</p>
-      <p>Greetings from ${COMPANY}.</p>
-      <p>Hearty congratulations and welcome to the ${COMPANY} family!!</p>
-      <p>We are delighted to extend you this offer for the position of &ldquo;<strong>${designation || '—'}</strong>&rdquo;. You will work for &ldquo;<strong>${COMPANY}</strong>&rdquo;, based out of <strong>${location || '—'}</strong>.</p>
-      <p>You are expected to get your joining formalities done${joiningBy ? ` latest by <strong>${joiningBy}</strong>` : ''}, failing which this offer will be withdrawn and treated as cancelled.</p>
-      <p>Once you accept this offer, you will receive a link of the e-joining form on your email ID and mobile, valid till your date of joining.</p>
-      <p>Your employment is subject to a satisfactory legal record check which includes legal convictions, cautions or reprimands; an unsatisfactory legal record check will result in the offer of appointment being withdrawn or the employment contract being deemed null and void. You must advise us of any change in your legal records prior to joining the organization.</p>
+    subject: `Your offer from ${b.company}`,
+    html: shell(`Welcome to ${C}!`, `
+      <p>Dear ${escHtml(name)},</p>
+      <p>Greetings from ${C}. Congratulations!</p>
+      <p>We are delighted to extend you this offer ${role}.${joiningBy ? ` Your proposed date of joining is <strong>${escHtml(joiningBy)}</strong>.` : ''}</p>
+      <p>Please accept or decline this offer within <strong>${days} day${days > 1 ? 's' : ''}</strong>${lapse ? ` (by <strong>${lapse}</strong>)` : ''}. If we do not hear from you by then, the offer will be treated as declined.</p>
+      <p>When you accept, your e-joining form opens straight away. Please complete it, with the documents listed below, before your date of joining.</p>
+      <p>Your employment is subject to a satisfactory verification of your documents and background. Please tell us about any change in your legal record before you join.</p>
       ${docs}
-      <p>This contract shall be terminable by either party giving 30 (Thirty) days&rsquo; notice in writing, or salary in lieu of notice, to the other party.</p>
-      <p>Your place of work shall initially be the Company&rsquo;s office at <strong>${location || '—'}</strong>.</p>
-      <p>The compensation sheet is attached as <strong>Annexure&nbsp;A</strong>. We reiterate that your compensation is a confidential matter between you and the Company, and we reaffirm that the Company shall view any breach of confidentiality in terms of compensation &amp; otherwise with the utmost seriousness.</p>
-      <p>Congratulations once again on this exciting advancement in your career that comes your way by means of this offer!</p>
-      <p>We are confident that ${COMPANY} will add tremendous value to you as a person and a professional &mdash; not just by offering you a job but by helping you carve your career.</p>
-      <p style="margin-top:18px">Please <strong>CLICK</strong> below to fill your joining forms:</p>
-      <div style="margin:8px 0 6px">
-        ${btn(acceptUrl, 'Click To Accept / Reject Offer', '#E21F26')}
+      ${hasOfferLetter ? '<p>Your offer letter, with the compensation structure as <strong>Annexure&nbsp;A</strong>, is available from the button below. Your compensation is confidential between you and the company.</p>' : ''}
+      <div style="margin:14px 0 6px">
+        ${btn(acceptUrl, 'Accept / Decline Offer', '#E21F26')}
         ${hasOfferLetter ? btn(viewLetterUrl, 'View Offer Letter', '#636363') : ''}
       </div>
-      <p style="font-size:12.5px;color:#6b7280">This link is personal to you and is valid for <strong>${days} day${days > 1 ? 's' : ''}</strong>. If you do not respond within this period, the offer will be automatically treated as declined.</p>`, '#059669'),
+      <p style="font-size:12.5px;color:#6b7280">This link is personal to you. Please do not forward it.</p>`, b.accent, b),
   };
 }
 
 // ---- HR: a submission needs review ----
-export function hrReviewEmail({ name, reviewUrl }) {
+export function hrReviewEmail({ name, reviewUrl, brand }) {
   return {
     subject: `Onboarding submitted — ${name} needs review`,
     html: shell('A submission needs your review', `
       <p>Hi HR team,</p>
-      <p><strong>${name}</strong> has completed and e-signed their e-joining form. Please review and verify the documents.</p>
-      ${btn(reviewUrl, 'Open Review Queue')}`),
+      <p><strong>${escHtml(name)}</strong> has completed and e-signed their e-joining form. Please review and verify the documents.</p>
+      ${btn(reviewUrl, 'Open Review Queue')}`, null, brand),
   };
 }
 
 // ---- HR: candidate declined the offer ----
-export function offerRejectedEmail({ name, reason }) {
+export function offerRejectedEmail({ name, reason, brand }) {
   return {
     subject: `Offer declined — ${name}`,
     html: shell('An offer was declined', `
       <p>Hi HR team,</p>
-      <p><strong>${name}</strong> has <strong>declined</strong> the offer.</p>
-      ${reason ? `<blockquote style="background:#fef2f2;border-left:3px solid #E21F26;padding:10px 14px;border-radius:6px;color:#7f1d1d">${reason}</blockquote>` : ''}`, '#E21F26'),
+      <p><strong>${escHtml(name)}</strong> has <strong>declined</strong> the offer.</p>
+      ${reason ? `<blockquote style="background:#fef2f2;border-left:3px solid #E21F26;padding:10px 14px;border-radius:6px;color:#7f1d1d">${escHtml(reason)}</blockquote>` : ''}`, '#E21F26', brand),
   };
 }
 
 // ---- Employee: corrections requested ----
-export function sentBackEmail({ name, formUrl, notes }) {
+export function sentBackEmail({ name, formUrl, notes, brand }) {
   return {
     subject: 'Action needed — please update your e-joining details',
     html: shell('A small correction is needed', `
-      <p>Dear ${name},</p>
+      <p>Dear ${escHtml(name)},</p>
       <p>HR has reviewed your submission and requested a few corrections:</p>
-      <blockquote style="background:#f4f6f8;border-left:3px solid #059669;padding:10px 14px;border-radius:6px">${notes || 'Please review your details.'}</blockquote>
-      ${btn(formUrl, 'Update My Details')}`),
+      <blockquote style="background:#f4f6f8;border-left:3px solid #059669;padding:10px 14px;border-radius:6px">${escHtml(notes || 'Please review your details.')}</blockquote>
+      ${btn(formUrl, 'Update My Details')}`, null, brand),
   };
 }
 
 // ---- Welcome / E-Joining Completed (after HR verifies & approves) ----
-export function credentialsEmail({ name, employeeCode, officialEmail, tempPassword }) {
+// v2 sends `setPasswordUrl` (a one-time link, decision D3) and no password;
+// the older flow (and HR's "reset password") still passes `tempPassword`.
+export function credentialsEmail({ name, employeeCode, officialEmail, tempPassword, setPasswordUrl, loginFrom, brand }) {
+  const b = B(brand);
+  const C = escHtml(b.company);
+  const opens = loginFrom ? dmyDate(loginFrom) : '';
+  const row = (k, v) => `<tr><td style="padding:7px 0;color:#6b7280;width:150px">${k}</td><td style="font-weight:700">${v}</td></tr>`;
   return {
-    subject: `Welcome to ${COMPANY}! - E-Joining Completed`,
-    html: shell(`Welcome to ${COMPANY}! - E-Joining Completed`, `
-      <p>Dear ${name},</p>
-      <p>Congratulations and thank you for successfully completing the e-joining process with ${COMPANY}.</p>
-      <p>We are delighted to welcome you to our mission of creating positive social impact and empowering communities. Your association with ${COMPANY} marks the beginning of a meaningful journey where together we can contribute towards building a more compassionate and inclusive society.</p>
-      <p>We look forward to having you as a part of the ${COMPANY} family and wish you success in this new journey.</p>
-      <p style="font-weight:700;margin:18px 0 6px">Your login credentials for the My ${COMPANY} application are mentioned below:</p>
+    subject: `Welcome to ${b.company} — e-joining completed`,
+    html: shell(`Welcome to ${C}!`, `
+      <p>Dear ${escHtml(name)},</p>
+      <p>Congratulations, and thank you for completing your e-joining with ${C}. We are glad to have you with us and wish you every success in your new role.</p>
+      <p style="font-weight:700;margin:18px 0 6px">Your sign-in details:</p>
       <table style="width:100%;border-collapse:collapse;margin:6px 0 14px;font-size:14px">
-        <tr><td style="padding:7px 0;color:#6b7280;width:150px">Login URL</td><td style="font-weight:700"><a href="${LOGIN_URL}" style="color:#059669">${LOGIN_URL}</a></td></tr>
-        <tr><td style="padding:7px 0;color:#6b7280">Employee I&rsquo;D</td><td style="font-weight:700">${employeeCode}</td></tr>
-        <tr><td style="padding:7px 0;color:#6b7280">Official email</td><td style="font-weight:700">${officialEmail}</td></tr>
-        <tr><td style="padding:7px 0;color:#6b7280">Password</td><td style="font-weight:700">${tempPassword}</td></tr>
+        ${row('Employee ID', escHtml(employeeCode))}
+        ${row('Sign-in email', escHtml(officialEmail))}
+        ${row('Portal', `<a href="${LOGIN_URL}" style="color:#059669">${LOGIN_URL}</a>`)}
+        ${tempPassword && !setPasswordUrl ? row('Temporary password', escHtml(tempPassword)) : ''}
+        ${opens ? row('Account opens on', opens) : ''}
       </table>
-      <p>Please use the credentials above to sign in. Keep them confidential.</p>
-      <p style="margin:14px 0 4px">${COMPANY} Download Link (Android User):</p>
-      ${btn(LOGIN_URL, 'Open Web Console')}${btn(APP_DOWNLOAD, 'Download Android App', '#636363')}`),
+      ${setPasswordUrl
+        ? `<p>Please set your password using the button below. The link works once and is valid for 7 days.</p>
+           <div>${btn(setPasswordUrl, 'Set your password')}</div>`
+        : '<p>Please sign in and change this temporary password straight away. Keep your credentials confidential.</p>'}
+      ${opens ? `<p>You can sign in from your date of joining, <strong>${opens}</strong>.</p>` : ''}
+      <p style="margin:14px 0 4px">You can also use the mobile app (Android):</p>
+      ${btn(LOGIN_URL, 'Open web portal')}${btn(APP_DOWNLOAD, 'Download Android app', '#636363')}`, b.accent, b),
   };
 }
 
-// ---- OTP emails (modern standalone template with company logo) ----
-// Shared by the forgot-password and two-step-login codes.
-function otpEmail({ name, otp, minutes = 10, title, intro, footNote }) {
+// ---- Employee: account deactivated / re-activated / terminated (H41) ----
+export function employeeStatusEmail({ name, action, lastWorkingDate, reason, brand }) {
+  const b = B(brand);
+  const C = escHtml(b.company);
+  const map = {
+    DEACTIVATED: ['Your account has been deactivated', `Your ${C} employee account has been <strong>deactivated</strong> by HR. You will not be able to sign in until it is re-activated.`, '#dc2626'],
+    ACTIVATED: ['Your account is active again', `Your ${C} employee account has been <strong>re-activated</strong>. You can sign in again.`, '#059669'],
+    TERMINATED: ['Your employment has ended', `This is to inform you that your employment with ${C} has been <strong>terminated</strong>${lastWorkingDate ? `, with your last working day on <strong>${dmyDate(lastWorkingDate)}</strong>` : ''}.`, '#dc2626'],
+  };
+  const [title, line, tone] = map[action] || map.DEACTIVATED;
+  return {
+    subject: `${title} — ${b.company}`,
+    html: shell(title, `
+      <p>Dear ${escHtml(name)},</p>
+      <p>${line}</p>
+      ${reason ? `<p style="background:#f8fafc;border-left:3px solid ${tone};padding:10px 14px;border-radius:6px">${escHtml(reason)}</p>` : ''}
+      <p>If you think this is a mistake, please contact your HR team.</p>`, tone, b),
+  };
+}
+
+// ---- OTP emails (modern standalone template) ----
+// Shared by the forgot-password and two-step-login codes. Pass `brand` (see
+// services/peopleBrand.js emailBrand) to sign with the organisation's name.
+function otpEmail({ name, otp, minutes = 10, title, intro, footNote, brand }) {
+  const b = B(brand);
   const logo = `${(process.env.APP_BASE_URL || config.appBaseUrl || 'https://truehr.co.in/app').replace(/\/$/, '')}/tkf-logo.png`;
-  return `<!doctype html><html><body style="margin:0;padding:0;background:#eef1f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
+  const showLogo = !brand; // the bundled logo is the platform's; a tenant's mail goes without it
+  return tight(`<!doctype html><html><body style="margin:0;padding:0;background:#eef1f6;font-family:'Segoe UI',Helvetica,Arial,sans-serif">
   <table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#eef1f6;padding:32px 12px">
     <tr><td align="center">
       <table role="presentation" width="440" cellpadding="0" cellspacing="0" style="max-width:440px;width:100%">
-        <!-- logo -->
-        <tr><td align="center" style="padding-bottom:18px">
-          <img src="${logo}" width="56" height="56" alt="${COMPANY}" style="border-radius:50%;display:block;border:3px solid #ffffff;box-shadow:0 4px 14px rgba(15,23,42,.12)"/>
-        </td></tr>
-        <!-- card -->
+        ${showLogo ? `<tr><td align="center" style="padding-bottom:18px">
+          <img src="${logo}" width="56" height="56" alt="${escHtml(b.company)}" style="border-radius:50%;display:block;border:3px solid #ffffff;box-shadow:0 4px 14px rgba(15,23,42,.12)"/>
+        </td></tr>` : ''}
         <tr><td style="background:#ffffff;border-radius:18px;overflow:hidden;box-shadow:0 10px 34px rgba(15,23,42,.08)">
           <table role="presentation" width="100%" cellpadding="0" cellspacing="0">
             <tr><td style="height:5px;background:linear-gradient(90deg,#2563eb,#16a34a);font-size:0;line-height:0">&nbsp;</td></tr>
             <tr><td style="padding:34px 36px 30px">
-              <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2563eb">${COMPANY}</p>
+              <p style="margin:0;font-size:12px;font-weight:700;letter-spacing:2px;text-transform:uppercase;color:#2563eb">${escHtml(b.company)}</p>
               <h1 style="margin:10px 0 0;font-size:22px;line-height:1.3;color:#0f172a;font-weight:800">${title}</h1>
               <p style="margin:16px 0 0;font-size:14.5px;line-height:1.7;color:#475569">
-                Hi <strong style="color:#0f172a">${name || 'there'}</strong>, ${intro}</p>
+                Hi <strong style="color:#0f172a">${escHtml(name || 'there')}</strong>, ${intro}</p>
               <table role="presentation" width="100%" cellpadding="0" cellspacing="0"><tr><td align="center" style="padding:26px 0 8px">
                 <div style="display:inline-block;background:#f0fdf4;border:2px dashed #16a34a;border-radius:14px;padding:16px 30px">
                   <span style="font-size:34px;font-weight:800;letter-spacing:10px;color:#065f46;font-family:'Courier New',monospace">${otp}</span>
                 </div>
               </td></tr></table>
               <p style="margin:6px 0 0;text-align:center;font-size:12.5px;color:#94a3b8">
-                Valid for <strong style="color:#475569">${minutes} minutes</strong> \u00b7 single use</p>
+                Valid for <strong style="color:#475569">${minutes} minutes</strong> · single use</p>
               <hr style="border:none;border-top:1px solid #eef0f3;margin:26px 0 18px"/>
               <p style="margin:0;font-size:12.5px;line-height:1.7;color:#94a3b8">
-                ${footNote} Never share this code with anyone; the TRUE HR team will never ask for it.</p>
+                ${footNote} Never share this code with anyone; we will never ask for it.</p>
             </td></tr>
           </table>
         </td></tr>
-        <!-- footer -->
         <tr><td align="center" style="padding:22px 20px 0">
-          <p style="margin:0;font-size:11.5px;line-height:1.7;color:#94a3b8">
-            ${COMPANY} \u00b7 ${ADDRESS}<br/>Support: ${SUPPORT} \u00b7 ${WEBSITE}</p>
+          <p style="margin:0;font-size:11.5px;line-height:1.7;color:#94a3b8">${footerLines(b)}</p>
         </td></tr>
       </table>
     </td></tr>
   </table>
-</body></html>`;
+</body></html>`);
 }
 
-export function passwordResetOtpEmail({ name, otp, minutes = 10 }) {
+export function passwordResetOtpEmail({ name, otp, minutes = 10, brand }) {
   return otpEmail({
-    name, otp, minutes,
+    name, otp, minutes, brand,
     title: 'Your password reset code',
-    intro: 'we received a request to reset your TRUE HR password. Enter this code on the reset screen:',
+    intro: 'we received a request to reset your password. Enter this code on the reset screen:',
     footNote: 'Didn’t request this? You can safely ignore this email — your password stays unchanged.',
   });
 }
 
-export function loginOtpEmail({ name, otp, minutes = 10 }) {
+export function loginOtpEmail({ name, otp, minutes = 10, brand }) {
   return otpEmail({
-    name, otp, minutes,
+    name, otp, minutes, brand,
     title: 'Your sign-in code',
-    intro: 'use this code to finish signing in to TRUE HR:',
+    intro: 'use this code to finish signing in:',
     footNote: 'Didn’t try to sign in? Someone may know your password — please change it right away.',
   });
 }

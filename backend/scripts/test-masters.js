@@ -45,7 +45,11 @@ async function main() {
   // the shared rows, which other suites also read.
   await sql(
     `INSERT INTO business_operations (organisation_id, name, active)
-     SELECT $1, name, TRUE FROM business_operations WHERE organisation_id IS NULL`, [ORG_ID]);
+     SELECT DISTINCT $1::bigint, name, TRUE FROM business_operations
+      WHERE organisation_id IS NULL
+         -- migrate.js gives the shipped templates to the first organisation on a
+         -- single-tenant database, so there may be no ownerless rows left.
+         OR organisation_id = (SELECT min(id) FROM organisations WHERE id <> $1)`, [ORG_ID]);
 
   // list seeded operations
   let r = await call(m.list, { params: { type: 'business-operations' } });
@@ -66,7 +70,9 @@ async function main() {
 
   // project linked to operation + company
   const ops = (await call(m.list, { params: { type: 'business-operations' } })).data;
-  const skilling = ops.find((o) => o.name === 'Skilling');
+  // A fresh database has no demo masters; create the operation this test needs.
+  const skilling = ops.find((o) => o.name === 'Skilling')
+    || (await call(m.create, { params: { type: 'business-operations' }, body: { name: 'Skilling' } })).data;
   r = await call(m.create, { params: { type: 'projects' }, body: { name: `PLTP ${RUN}`, businessOperationId: skilling.id, groupCompanyId: coId } });
   check('create project with links', r.status === 201 && r.data.businessOperationId === skilling.id);
   const projId = r.data.id;

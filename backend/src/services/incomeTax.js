@@ -93,3 +93,45 @@ export function estimateTax({ grossAnnual, items = [], otherExemptions = 0, empl
   const recommended = neu.totalTax <= old.totalTax ? 'new' : 'old';
   return { grossAnnual: r0(grossAnnual), deductions, old, new: neu, recommended, saving: Math.abs(old.totalTax - neu.totalTax) };
 }
+
+// ── Projection for the current financial year (C47 / E37) and monthly TDS ──
+// Indian FY runs April to March. `fyStartYear` 2026 = FY 2026-27.
+
+/** FY of a payroll month: { startYear, label: '2026-27' }. */
+export function fyOf(year, month) {
+  const startYear = Number(month) >= 4 ? Number(year) : Number(year) - 1;
+  return { startYear, label: `${startYear}-${String((startYear + 1) % 100).padStart(2, '0')}` };
+}
+export function fyStartYearOf(label) {
+  const m = /^(\d{4})-\d{2}$/.exec(String(label || ''));
+  return m ? Number(m[1]) : null;
+}
+
+/** Months of salary an employee draws in a FY: 12, or fewer for someone who joined during it. */
+export function monthsInFy({ doj, fyStartYear }) {
+  const fyStart = `${fyStartYear}-04-01`;
+  const fyEnd = `${fyStartYear + 1}-03-31`;
+  const d = doj ? String(doj).slice(0, 10) : null;
+  if (!d || d <= fyStart) return 12;
+  if (d > fyEnd) return 0;
+  const y = Number(d.slice(0, 4)); const m = Number(d.slice(5, 7)); const day = Number(d.slice(8, 10));
+  const dim = new Date(Date.UTC(y, m, 0)).getUTCDate();
+  const firstMonth = (dim - day + 1) / dim;                 // the joining month, prorated by days
+  const idx = (y - fyStartYear) * 12 + (m - 4);              // 0 = April
+  const after = 11 - idx;                                     // whole months after the joining month
+  return firstMonth + after;
+}
+
+/** Gross salary for the FY: monthly CTC × the months actually drawn. */
+export function projectedAnnualGross({ monthlyCtc, doj, fyStartYear }) {
+  return Math.round((Number(monthlyCtc) || 0) * monthsInFy({ doj, fyStartYear }));
+}
+
+/**
+ * This month's TDS: the year's tax, less what has already been deducted this
+ * FY, spread over the months left (this one included).
+ */
+export function monthlyTdsFor({ annualTax, alreadyDeducted = 0, remainingMonths }) {
+  const left = Math.max(1, Number(remainingMonths) || 1);
+  return Math.max(0, Math.round(((Number(annualTax) || 0) - (Number(alreadyDeducted) || 0)) / left));
+}

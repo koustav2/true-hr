@@ -55,13 +55,15 @@ async function loadContext(userId) {
   // rather than the vendor's. Read here because this query already runs on
   // every request and the name is one more column on the same row.
   let orgName = null;
+  let orgCode = null;
   if (orgId) {
     const org = (await query(
-      `SELECT plan, subscription_status, subscription_expires_at,
+      `SELECT plan, subscription_status, subscription_expires_at, code,
               COALESCE(NULLIF(legal_name,''), name) AS display_name
          FROM organisations WHERE id = $1`, [orgId])).rows[0];
     if (org) {
       orgName = org.display_name || null;
+      orgCode = org.code || null;
       const expired = org.subscription_status === 'EXPIRED'
         || (org.subscription_expires_at && new Date(org.subscription_expires_at) < new Date(new Date().toDateString()));
       subscription = {
@@ -101,6 +103,7 @@ async function loadContext(userId) {
     roleRank: acc.role_rank ?? 100,
     orgId,
     orgName,
+    orgCode,
     homeOrgId: acc.organisation_id,
     // Per-company admins are pinned to one company; NULL = whole organisation.
     companyId: acc.company_id || null,

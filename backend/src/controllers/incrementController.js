@@ -9,7 +9,11 @@
 // ============================================================================
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
-import { buildLetter } from '../services/letters.js';
+import { buildLetter, dmy, nextLetterRef } from '../services/letters.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator, todayIST, toNumber } from '../utils/validate.js';
+import { activeEmployeeSql } from '../utils/people.js';
+import { isoDate } from '../utils/joining.js';
 
 const TYPES = ['INCREMENT', 'PROMOTION', 'CORRECTION'];
 const money = (v) => (v == null ? null : Number(v));
@@ -145,6 +149,10 @@ export async function approve(req, res, next) {
     const r = await fetchScoped(id, req);
     if (!r) return res.status(404).json({ error: 'Revision not found.' });
     if (r.status !== 'PROPOSED') return res.status(409).json({ error: `This revision is already ${r.status.toLowerCase()}.` });
+    // v2 (C22): maker-checker — whoever recorded a revision cannot sign it off.
+    if (isV2(req) && r.created_by != null && Number(r.created_by) === Number(req.user.id)) {
+      return res.status(403).json({ error: 'You recorded this revision, so someone else must approve it.' });
+    }
     await query(`UPDATE salary_increments SET status='APPROVED', approved_by=$2, approved_at=now() WHERE id=$1`, [id, req.user.id]);
     await audit(req.user.id, 'INCREMENT_APPROVED', 'salary_increment', id, {});
     res.json(shape(await fetchScoped(id, req)));
@@ -161,6 +169,15 @@ export async function apply(req, res, next) {
     if (!r) return res.status(404).json({ error: 'Revision not found.' });
     if (r.status === 'APPLIED') return res.status(409).json({ error: 'Already applied.' });
     if (r.status !== 'APPROVED') return res.status(409).json({ error: 'Approve the revision before applying it.' });
+    // v2 (C22): salary_structures holds only today's pay, so applying a December
+    // revision in November changed November's payroll. It can be applied from
+    // its effective date onward.
+    if (isV2(req) && isoDate(r.effective_from) > todayIST()) {
+      return res.status(409).json({
+        error: `This revision takes effect on ${dmy(r.effective_from)}. Apply it on or after that date so the current month's payroll is not changed.`,
+        code: 'NOT_YET_EFFECTIVE',
+      });
+    }
 
     let letterId = null;
     await tx(async (c) => {
@@ -190,16 +207,17 @@ export async function apply(req, res, next) {
           employeeCode: r.employee_code || '',
           designation: r.new_designation || r.current_designation || '',
           newDesignation: r.new_designation || r.current_designation || '',
-          effectiveDate: String(r.effective_from).slice(0, 10),
+          // pg hands DATE back as a JS Date; String(date).slice(0,10) printed "Tue Dec 01".
+          effectiveDate: dmy(r.effective_from),
           revisedCtc: inr(Number(r.new_monthly_ctc) * 12),
           companyName: r.company || process.env.COMPANY_NAME || 'True HR Pvt Ltd',
         });
-        const refNo = `TH/INC/${new Date().getFullYear()}/${Date.now().toString().slice(-6)}`;
+        const refNo = await nextLetterRef(c, r.organisation_id || req.orgId || null, r.employee_id);
         const lt = (await c.query(
-          `INSERT INTO issued_letters (employee_id, type_code, ref_no, title, body_rendered, meta, issued_by)
-           VALUES ($1,$2,$3,$4,$5,$6,$7) RETURNING id`,
+          `INSERT INTO issued_letters (employee_id, type_code, ref_no, title, body_rendered, meta, issued_by, organisation_id)
+           VALUES ($1,$2,$3,$4,$5,$6,$7,$8) RETURNING id`,
           [r.employee_id, code, refNo, built.title, built.text,
-           { incrementId: id, missing: built.missing }, req.user.id])).rows[0];
+           { incrementId: id, missing: built.missing }, req.user.id, r.organisation_id || req.orgId || null])).rows[0];
         letterId = lt.id;
       }
 
@@ -256,4 +274,92 @@ export async function summary(req, res, next) {
       appliedMonthlyDelta: Number(by.APPLIED?.delta || 0),
     });
   } catch (e) { next(e); }
+}
+
+
+// ── v2 ──────────────────────────────────────────────────────────────────────
+const MAX_MONTHLY_CTC = 10000000;
+
+// GET /api/v2/admin/increments/current/:employeeId — what the revision starts
+// from (H75): current monthly and annual CTC, grade and designation.
+export async function current(req, res) {
+  const e = (await query(
+    `SELECT e.id, e.first_name, e.last_name, e.employee_code, e.date_of_joining, e.ctc,
+            d.title AS designation, d.grade AS designation_grade, ss.monthly_ctc, ss.grade
+       FROM employees e
+       LEFT JOIN designations d ON d.id = e.designation_id
+       LEFT JOIN salary_structures ss ON ss.employee_id = e.id
+      WHERE e.id=$1 AND ($2::bigint IS NULL OR e.organisation_id=$2) AND ($3::bigint IS NULL OR e.company_id=$3)`,
+    [parseInt(req.params.employeeId, 10) || 0, req.orgId || null, req.companyScope || null])).rows[0];
+  if (!e) return res.status(404).json({ error: 'Employee not found in your scope.' });
+  const m = e.monthly_ctc != null ? Number(e.monthly_ctc) : null;
+  res.json({
+    employeeId: Number(e.id), name: `${e.first_name} ${e.last_name}`.trim(), code: e.employee_code,
+    designation: e.designation || null, grade: e.designation_grade || e.grade || null,
+    dateOfJoining: isoDate(e.date_of_joining),
+    monthlyCtc: m, annualCtc: m != null ? m * 12 : (e.ctc != null ? Number(e.ctc) : null),
+    hasStructure: m != null,
+  });
+}
+
+// POST /api/v2/admin/increments — every field checked at once (H74), the
+// correction type takes an amount only (H76), annual CTC accepted (H77), and a
+// back-dated revision needs an explicit acknowledgement (H75).
+export async function proposeV2(req, res, next) {
+  const b = req.body || {};
+  const v = validator();
+  const type = String(b.revisionType || 'INCREMENT').toUpperCase();
+  v.oneOf('revisionType', type, TYPES, 'Revision type');
+  v.require('employeeId', b.employeeId, 'Employee');
+  const e = b.employeeId ? (await query(
+    `SELECT e.id, e.date_of_joining, ${activeEmployeeSql('e')} AS is_employee
+       FROM employees e WHERE e.id=$1 AND ($2::bigint IS NULL OR e.organisation_id=$2) AND ($3::bigint IS NULL OR e.company_id=$3)`,
+    [parseInt(b.employeeId, 10) || 0, req.orgId || null, req.companyScope || null])).rows[0] : null;
+  if (b.employeeId && !e) return res.status(404).json({ error: 'Employee not found in your scope.' });
+  if (e && !e.is_employee) v.add('employeeId', 'Revisions can only be recorded for active employees');
+  const today = todayIST();
+  const doj = e ? isoDate(e.date_of_joining) : null;
+  const maxDate = `${Number(today.slice(0, 4)) + 1}${today.slice(4)}`;
+  v.date('effectiveFrom', b.effectiveFrom, 'Effective from', {
+    required: true, min: doj || undefined, max: maxDate,
+    minMsg: `Effective from cannot be before the joining date (${dmy(doj)})`,
+    maxMsg: 'Effective from can be at most one year ahead',
+  });
+  if (!v.has('effectiveFrom') && String(b.effectiveFrom).slice(0, 10) < today && b.confirmBackdated !== true) {
+    v.add('effectiveFrom', `${dmy(b.effectiveFrom)} is in the past. Tick "This revision is back-dated" to record it anyway.`);
+  }
+  const mode = type === 'CORRECTION' ? 'AMOUNT' : String(b.mode || (b.hikePct != null && b.hikePct !== '' ? 'PCT' : (b.newAnnualCtc != null && b.newAnnualCtc !== '' ? 'ANNUAL' : 'AMOUNT'))).toUpperCase();
+  if (mode === 'PCT') v.number('hikePct', b.hikePct, 'Hike %', { required: true, min: 0.01, max: 100, decimals: 2 });
+  else if (mode === 'ANNUAL') v.number('newAnnualCtc', b.newAnnualCtc, 'New annual CTC', { required: true, min: 12, max: MAX_MONTHLY_CTC * 12, decimals: 2 });
+  else v.number('newMonthlyCtc', b.newMonthlyCtc, 'New monthly CTC', { required: true, min: 1, max: MAX_MONTHLY_CTC, decimals: 2 });
+  if (b.newDesignationId) {
+    const d = (await query(`SELECT 1 FROM designations WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`,
+      [parseInt(b.newDesignationId, 10) || 0, req.orgId || null])).rowCount;
+    if (!d) v.add('newDesignationId', 'Pick a designation from the list');
+  }
+  if (type === 'PROMOTION' && !b.newDesignationId) v.add('newDesignationId', 'A promotion needs the new designation');
+  v.text('reason', b.reason, 'Reason', { max: 500 });
+  v.throwIfAny();
+
+  // Normalise to what the v1 handler understands; grade follows the designation
+  // master, so free-text grades are not taken (H73).
+  const body = {
+    employeeId: b.employeeId, effectiveFrom: String(b.effectiveFrom).slice(0, 10), revisionType: type,
+    newDesignationId: b.newDesignationId || null, reason: b.reason ? String(b.reason).trim() : null,
+  };
+  if (mode === 'PCT') body.hikePct = toNumber(b.hikePct);
+  else if (mode === 'ANNUAL') body.newMonthlyCtc = Math.round((toNumber(b.newAnnualCtc) / 12) * 100) / 100;
+  else body.newMonthlyCtc = toNumber(b.newMonthlyCtc);
+  if (body.newDesignationId) {
+    body.newGrade = (await query(`SELECT grade FROM designations WHERE id=$1`, [body.newDesignationId])).rows[0]?.grade || null;
+  }
+  // Same errors as v1 but against the field they belong to.
+  const sendField = (status, payload) => {
+    const field = /reduction/i.test(payload.error || '') ? (mode === 'PCT' ? 'hikePct' : (mode === 'ANNUAL' ? 'newAnnualCtc' : 'newMonthlyCtc'))
+      : /open revision/i.test(payload.error || '') ? 'effectiveFrom'
+      : /percentage hike/i.test(payload.error || '') ? 'hikePct' : null;
+    return res.status(status).json(field ? { ...payload, fields: { [field]: payload.error } } : payload);
+  };
+  const proxy = { status: (code) => ({ json: (p) => (code >= 400 ? sendField(code, p) : res.status(code).json(p)) }), json: (p) => res.json(p) };
+  return propose({ ...req, body }, proxy, next);
 }

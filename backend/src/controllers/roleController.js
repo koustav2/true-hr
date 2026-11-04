@@ -2,6 +2,21 @@ import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import { invalidateAllContexts, hasModule } from '../middleware/auth.js';
 import { MODULES, MODULE_GROUPS, ROLE_PRESETS, isModule, expandRoleModules, PLATFORM_ONLY } from '../config/modules.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator } from '../utils/validate.js';
+
+// A non-numeric id (e.g. /admin/roles/undefined) used to reach Postgres and
+// answer 500; it is simply "not found".
+const idParam = (v) => (/^\d{1,18}$/.test(String(v)) ? String(v) : null);
+
+const BASE_LABEL = { SUPER_ADMIN: 'Super Admin', HR_ADMIN: 'HR Admin', IT_ADMIN: 'IT Admin', EMPLOYEE: 'Employee' };
+
+// C40: two roles in one organisation may not share a name (case-insensitive).
+async function roleNameTaken(orgId, label, exceptId = null) {
+  return (await query(
+    `SELECT 1 FROM org_roles WHERE organisation_id = $1 AND lower(trim(label)) = lower(trim($2))
+        AND ($3::bigint IS NULL OR id <> $3)`, [orgId, label, exceptId])).rowCount > 0;
+}
 
 // ============================================================================
 // Roles & module permissions.
@@ -55,6 +70,7 @@ const shapeRole = (r) => ({
   baseRole: r.base_role,
   rank: r.rank,
   isSystem: r.is_system,
+  baseRoleLabel: BASE_LABEL[r.base_role] || r.base_role,
   users: r.users != null ? Number(r.users) : undefined,
   moduleCount: r.module_count != null ? Number(r.module_count) : undefined,
 });
@@ -63,8 +79,15 @@ const shapeRole = (r) => ({
 export async function list(req, res, next) {
   try {
     const { rows } = await query(
+      // People: accounts holding the role, plus — for a built-in role — the
+      // accounts created by onboarding approval with only the enum role set
+      // (they had no org_role_id, so the Employee role showed 0 people; C40).
       `SELECT r.*,
-              (SELECT count(*) FROM user_accounts u WHERE u.org_role_id = r.id) AS users,
+              (SELECT count(*) FROM user_accounts u LEFT JOIN employees e ON e.id = u.employee_id
+                WHERE u.org_role_id = r.id
+                   OR (r.is_system AND u.org_role_id IS NULL AND u.role::text = r.key
+                       AND COALESCE(u.organisation_id, e.organisation_id) = r.organisation_id
+                       AND NOT u.is_platform_admin)) AS users,
               (SELECT count(*) FROM org_role_modules m WHERE m.role_id = r.id AND (m.can_view OR m.can_manage)) AS module_count
          FROM org_roles r
         WHERE r.organisation_id = $1
@@ -78,7 +101,7 @@ export async function detail(req, res, next) {
   try {
     const role = (await query(
       `SELECT * FROM org_roles WHERE id = $1 AND organisation_id = $2`,
-      [req.params.id, req.orgId])).rows[0];
+      [idParam(req.params.id), req.orgId])).rows[0];
     if (!role) return res.status(404).json({ error: 'Role not found' });
 
     const granted = new Map((await query(
@@ -159,6 +182,27 @@ export async function create(req, res, next) {
 
     const key = String(b.key || preset?.key || '').trim().toUpperCase();
     const label = String(b.label || preset?.label || '').trim();
+    if (isV2(req)) {
+      const v = validator();
+      if (!label) v.add('label', 'Role name is required');
+      else if (label.length > 60) v.add('label', 'Role name must be at most 60 characters');
+      else if (!/[A-Za-z]/.test(label)) v.add('label', 'Role name must contain letters');
+      else if (await roleNameTaken(req.orgId, label)) v.add('label', `A role named "${label}" already exists`);
+      if (!ROLE_KEY_RE.test(key)) v.add('key', 'Role code must start with a letter and use only capitals, digits and underscores (2-30)');
+      else if ((await query(`SELECT 1 FROM org_roles WHERE organisation_id = $1 AND key = $2`, [req.orgId, key])).rowCount) {
+        v.add('key', 'A role with that code already exists');
+      }
+      if (!preset) {
+        const base = String(b.baseRole || 'HR_ADMIN').toUpperCase();
+        // Only the built-in Super Admin role may behave as Super Admin.
+        if (base === 'SUPER_ADMIN') v.add('baseRole', 'Only the built-in Super Admin role can behave as Super Admin');
+        else if (!['EMPLOYEE', 'HR_ADMIN', 'IT_ADMIN'].includes(base)) v.add('baseRole', 'Choose what this role behaves as');
+        if (b.rank !== undefined && b.rank !== '') {
+          v.number('rank', b.rank, 'Level', { integer: true, min: 1, max: 100 });
+        }
+      }
+      v.throwIfAny();
+    }
     if (!ROLE_KEY_RE.test(key)) {
       return res.status(400).json({ error: 'Role code must start with a letter and use only capitals, digits and underscores' });
     }
@@ -214,13 +258,24 @@ export async function update(req, res, next) {
   try {
     const role = (await query(
       `SELECT * FROM org_roles WHERE id = $1 AND organisation_id = $2`,
-      [req.params.id, req.orgId])).rows[0];
+      [idParam(req.params.id), req.orgId])).rows[0];
     if (!role) return res.status(404).json({ error: 'Role not found' });
     if (role.key === 'SUPER_ADMIN') {
       return res.status(409).json({ error: 'The Super Admin role always has full access and cannot be limited.' });
     }
 
     const b = req.body || {};
+    if (isV2(req)) {
+      const v = validator();
+      if (b.label !== undefined) {
+        const label = String(b.label || '').trim();
+        if (!label) v.add('label', 'Role name is required');
+        else if (label.length > 60) v.add('label', 'Role name must be at most 60 characters');
+        else if (await roleNameTaken(req.orgId, label, role.id)) v.add('label', `A role named "${label}" already exists`);
+      }
+      if (b.rank !== undefined) v.number('rank', b.rank, 'Level', { integer: true, min: 1, max: 100 });
+      v.throwIfAny();
+    }
     const mods = b.modules !== undefined ? normaliseModules(b.modules) : null;
     const rank = b.rank !== undefined ? Number(b.rank) : role.rank;
 
@@ -259,7 +314,7 @@ export async function remove(req, res, next) {
   try {
     const role = (await query(
       `SELECT * FROM org_roles WHERE id = $1 AND organisation_id = $2`,
-      [req.params.id, req.orgId])).rows[0];
+      [idParam(req.params.id), req.orgId])).rows[0];
     if (!role) return res.status(404).json({ error: 'Role not found' });
     if (role.is_system) return res.status(409).json({ error: 'Built-in roles cannot be deleted' });
 
@@ -298,6 +353,11 @@ export async function myPermissions(req, res, next) {
       // The employee portal prints this in its footer. Without it every tenant's
       // staff saw the vendor's name at the bottom of their own HR system.
       organisationName: ctx.orgName || null,
+      organisationCode: ctx.orgCode || null,
+      // The Master is "working inside" a tenant when its active organisation
+      // differs from its home one (D1).
+      workingInside: ctx.isPlatformAdmin && ctx.orgId && String(ctx.orgId) !== String(ctx.homeOrgId || '')
+        ? { id: ctx.orgId, name: ctx.orgName, code: ctx.orgCode || null } : null,
       // What the tenant has bought, so the portal can explain a missing section
       // as "not in your plan" rather than silently hiding it.
       subscription: ctx.subscription || null,

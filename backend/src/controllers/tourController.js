@@ -1,5 +1,6 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
 
 // Haversine distance in km between two lat/lng points.
 function haversineKm(aLat, aLng, bLat, bLng) {
@@ -206,10 +207,19 @@ export async function createGeotag(req, res, next) {
     const empId = req.user.employeeId;
     if (!empId) return res.status(404).json({ error: 'No employee linked to this account' });
     const { lat, lng, address, photo, remark } = req.body || {};
+    // v2 (Android 1.2): a geo-tag buffered offline uploads later; keep the time the
+    // photo was taken. Accepted only within the last 7 days and not in the future
+    // (+5 min clock skew); anything else falls back to the upload time. v1 unchanged.
+    let capturedAt = null;
+    if (isV2(req) && req.body?.capturedAt) {
+      const t = Date.parse(String(req.body.capturedAt));
+      const now = Date.now();
+      if (Number.isFinite(t) && t <= now + 5 * 60000 && t >= now - 7 * 86400000) capturedAt = new Date(t).toISOString();
+    }
     const row = (await query(
-      `INSERT INTO geotags (employee_id, lat, lng, address, photo, remark)
-       VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [empId, lat ?? null, lng ?? null, address || null, photo || null, remark || null])).rows[0];
+      `INSERT INTO geotags (employee_id, lat, lng, address, photo, remark, captured_at)
+       VALUES ($1,$2,$3,$4,$5,$6, COALESCE($7::timestamptz, now())) RETURNING id`,
+      [empId, lat ?? null, lng ?? null, address || null, photo || null, remark || null, capturedAt])).rows[0];
     await audit(req.user.id, 'GEOTAG_CREATE', 'geotag', row.id, {});
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }

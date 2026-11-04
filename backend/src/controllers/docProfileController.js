@@ -11,8 +11,15 @@ import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import {
   resolveBrand, shapeProfile, PROFILE_FIELDS, DEFAULT_OPTIONS, mergeOptions, BANK_SHEET_COLUMNS,
+  startingProfile, deploymentProfile,
 } from '../services/docProfile.js';
 import { verifyImage } from '../utils/image.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator, patterns } from '../utils/validate.js';
+
+// The merge fields the offer letter actually fills (services/offerLetterPdf.js).
+export const OFFER_PLACEHOLDERS = ['employeeName', 'designation', 'department', 'joiningDate', 'location', 'companyName', 'ctc'];
+const PLACEHOLDER_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
 
 // A logo has to travel inside the row, so it needs a real ceiling: 512KB of
 // base64 is a generous letterhead and a hostile 20MB upload would otherwise
@@ -64,7 +71,11 @@ export async function get(req, res, next) {
       companyId: company ? company.id : null,
       companyName: company ? company.name : null,
       companies,
-      profile: shapeProfile(row, company ? 'COMPANY' : 'ORG'),
+      // An unconfigured org default starts from the organisation's OWN name and
+      // contact details (never the deployment's); a company override starts blank.
+      profile: shapeProfile(row, company ? 'COMPANY' : 'ORG',
+        company ? blankProfile() : await startingProfile(orgId)),
+      offerPlaceholders: OFFER_PLACEHOLDERS,
       // What a PDF would actually print right now, after the fallback chain.
       effective: await resolveBrand({ companyId: company ? company.id : null, organisationId: orgId }),
       defaults: DEFAULT_OPTIONS,
@@ -72,6 +83,73 @@ export async function get(req, res, next) {
       paperSizes: PAPER,
     });
   } catch (e) { next(e); }
+}
+
+const blankProfile = () => Object.fromEntries(
+  Object.entries(deploymentProfile()).map(([k, v]) => [k, ['accentColor', 'headBg', 'headText', 'paperSize'].includes(k) ? v : null]));
+
+/** Image width/height from the header bytes (PNG IHDR / JPEG SOF), or null. */
+function imageSize(dataUrl) {
+  const v = verifyImage(dataUrl);
+  if (!v.ok) return null;
+  const b = v.buffer;
+  try {
+    if (v.mime === 'image/png') return { w: b.readUInt32BE(16), h: b.readUInt32BE(20) };
+    let off = 2;
+    while (off + 9 < b.length) {
+      const m = b[off + 1];
+      if (m >= 0xc0 && m <= 0xcf && ![0xc4, 0xc8, 0xcc].includes(m)) return { w: b.readUInt16BE(off + 7), h: b.readUInt16BE(off + 5) };
+      off += 2 + b.readUInt16BE(off + 2);
+    }
+  } catch { /* fall through */ }
+  return null;
+}
+
+/**
+ * v2: every field checked, every error returned at once, keyed by the field
+ * the editor shows (identity fields by name, offer paragraphs as offer.<key>).
+ */
+function validateV2(b) {
+  const v = validator();
+  const has = (k) => b[k] != null && String(b[k]).trim() !== '';
+  if (has('legalName')) v.text('legalName', b.legalName, 'Legal name', { min: 2, max: 160 });
+  if (has('brandName')) v.text('brandName', b.brandName, 'Brand name', { min: 2, max: 160 });
+  v.pattern('pincode', b.pincode, 'pin', 'PIN code');
+  v.check('phone', b.phone, (s) => /^\+?[\d\s-]+$/.test(s) && (() => { const d = s.replace(/\D/g, ''); return d.length >= 10 && d.length <= 13; })(),
+    'Phone is not valid (10-13 digits, like +91 98765 43210 or 0674-2301234)');
+  v.email('email', b.email, 'Email');
+  v.pattern('website', b.website, 'url', 'Website');
+  v.pattern('gstin', b.gstin, 'gstin', 'GSTIN');
+  v.pattern('cin', b.cin, 'cin', 'CIN');
+  v.pattern('pan', b.pan, 'pan', 'PAN');
+  if (has('signatoryName')) {
+    v.name('signatoryName', b.signatoryName, 'Signatory name');
+    if (!v.has('signatoryName') && String(b.signatoryName).replace(/[^A-Za-z]/g, '').length < 2) {
+      v.add('signatoryName', 'Signatory name must have at least 2 letters');
+    }
+  }
+  for (const [k, label] of [['accentColor', 'Accent colour'], ['headBg', 'Header band colour'], ['headText', 'Header text colour']]) {
+    v.pattern(k, b[k], 'hex', label);
+  }
+  if (has('signatureImage') && verifyImage(b.signatureImage).ok) {
+    const sz = imageSize(b.signatureImage);
+    if (sz && sz.w < sz.h * 2) {
+      v.add('signatureImage', 'The signature should be a cropped scan of the signature itself — at least twice as wide as it is tall. This image looks like a photo.');
+    }
+  }
+  const offer = b.options?.offer || {};
+  const checkTpl = (key, text) => {
+    if (typeof text !== 'string') return;
+    const bad = [...text.matchAll(PLACEHOLDER_RE)].map((m) => m[1]).filter((k) => !OFFER_PLACEHOLDERS.includes(k));
+    if (bad.length) {
+      v.add(`offer.${key}`, `Unknown placeholder ${bad.map((k) => `{{${k}}}`).join(', ')} — use only ${OFFER_PLACEHOLDERS.map((k) => `{{${k}}}`).join(', ')}`);
+    } else if (/\{\{|\}\}/.test(text.replace(PLACEHOLDER_RE, ''))) {
+      v.add(`offer.${key}`, 'A placeholder is not closed properly — write it like {{employeeName}}');
+    }
+  };
+  for (const k of ['salutation', 'intro', 'closing']) checkTpl(k, offer[k]);
+  if (Array.isArray(offer.terms)) offer.terms.forEach((t) => checkTpl('terms', t));
+  v.throwIfAny();
 }
 
 function validate(b) {
@@ -87,10 +165,10 @@ function validate(b) {
   // image data will not inflate crashes pdfkit from inside a zlib callback,
   // which no try/catch at render time can contain — so a file that would fail
   // there must never reach the database.
-  for (const k of ['logo', 'signatureImage']) {
+  for (const k of ['logo', 'signatureImage', 'stampImage']) {
     const v = b[k];
     if (v == null || v === '') continue;
-    const label = k === 'logo' ? 'Logo' : 'Signature';
+    const label = k === 'logo' ? 'Logo' : k === 'stampImage' ? 'Company stamp' : 'Signature';
     if (typeof v !== 'string' || !IMAGE_RE.test(v.trim())) return `${label} must be a PNG or JPEG image.`;
     if (v.length > MAX_IMAGE_B64) {
       return `${label} is too large (max ${Math.round(MAX_IMAGE_B64 / 1024)}KB) — resize it first.`;
@@ -130,6 +208,11 @@ export async function put(req, res, next) {
     }
 
     const b = req.body || {};
+    if (isV2(req)) {
+      validateV2(b);
+      // Statutory ids are stored the way they are printed.
+      for (const k of ['gstin', 'cin', 'pan']) if (typeof b[k] === 'string') b[k] = b[k].trim().toUpperCase();
+    }
     const bad = validate(b);
     if (bad) return res.status(400).json({ error: bad });
 
@@ -152,6 +235,22 @@ export async function put(req, res, next) {
       // These three have NOT NULL defaults, so an explicit null would break.
       if (v === null && ['accent_color', 'head_bg', 'head_text', 'paper_size'].includes(snake)) continue;
       cols.push(snake); vals.push(v);
+    }
+    // The brand name follows the legal name: when the legal name changes and the
+    // brand name was not edited away from the old legal name (or still carries
+    // the deployment's own name), it is cleared so it inherits the new legal name.
+    if (Object.prototype.hasOwnProperty.call(b, 'legalName') && b.legalName) {
+      const start = company ? null : await startingProfile(orgId);
+      const prevLegal = existing ? existing.legal_name : start?.legalName;
+      if (String(b.legalName).trim() !== String(prevLegal || '').trim()) {
+        const sentBrand = String(b.brandName ?? existing?.brand_name ?? '').trim().toLowerCase();
+        const followers = [prevLegal, start?.brandName, deploymentProfile().brandName]
+          .filter(Boolean).map((x) => String(x).trim().toLowerCase());
+        if (!sentBrand || followers.includes(sentBrand)) {
+          const i = cols.indexOf('brand_name');
+          if (i >= 0) vals[i] = null; else { cols.push('brand_name'); vals.push(null); }
+        }
+      }
     }
     const options = b.options !== undefined
       ? mergeOptions(existing?.options || {}, b.options)

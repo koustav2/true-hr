@@ -2,6 +2,11 @@ import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
 import { invalidateAccountStatus } from '../middleware/auth.js';
 import { isoDate, parseIsoDate } from '../utils/joining.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { activeEmployeeSql } from '../utils/people.js';
+import { enqueueEmail } from '../services/emailQueue.js';
+import { employeeStatusEmail } from '../services/emailTemplates.js';
+import { emailBrand } from '../services/peopleBrand.js';
 
 // ============================================================================
 // Termination — employer-initiated exit.
@@ -105,7 +110,8 @@ export async function terminate(req, res, next) {
     if (!lwd) return res.status(400).json({ error: 'A valid last working date (YYYY-MM-DD) is required' });
 
     const emp = (await query(
-      `SELECT e.id, e.first_name, e.last_name, e.organisation_id, e.onboarding_status, e.date_of_joining
+      `SELECT e.id, e.first_name, e.last_name, e.organisation_id, e.company_id, e.onboarding_status, e.date_of_joining,
+              e.personal_email, e.official_email
          FROM employees e WHERE e.id = $1`, [employeeId])).rows[0];
     if (!emp) return res.status(404).json({ error: 'Employee not found' });
 
@@ -115,6 +121,18 @@ export async function terminate(req, res, next) {
     }
     if (emp.onboarding_status === 'INACTIVE') {
       return res.status(409).json({ error: 'This employee is already inactive.' });
+    }
+    // v2 (C26, H89): only an employee can be terminated — a candidate still in
+    // onboarding (offer sent, filling details, no employee ID) is not one; their
+    // offer is withdrawn from Onboarding instead.
+    if (isV2(req)) {
+      const isEmp = (await query(
+        `SELECT 1 FROM employees e WHERE e.id = $1 AND ${activeEmployeeSql('e')}`, [employeeId])).rowCount;
+      if (!isEmp) {
+        return res.status(409).json({
+          error: 'Only active employees can be terminated. This person is still a candidate in onboarding (or has already left) — manage them from Onboarding instead.',
+        });
+      }
     }
     const dojIso = isoDate(emp.date_of_joining);
     if (dojIso && lwd < dojIso) {
@@ -166,6 +184,20 @@ export async function terminate(req, res, next) {
     await audit(req.user.id, 'TERMINATE_EMPLOYEE', 'employee', employeeId,
       { terminationId: row.id, type, lastWorkingDate: lwd, reason });
 
+    // H41: tell the employee, signed with their own organisation's branding.
+    // A notification only — a mail failure never undoes the termination.
+    const to = String(emp.personal_email || '').trim() || String(emp.official_email || '').trim();
+    if (to) {
+      try {
+        const brand = await emailBrand({ organisationId: emp.organisation_id || req.orgId || null, companyId: emp.company_id || null });
+        const tpl = employeeStatusEmail({
+          name: `${emp.first_name || ''} ${emp.last_name || ''}`.trim(), action: 'TERMINATED',
+          lastWorkingDate: lwd, reason, brand,
+        });
+        await enqueueEmail({ to, subject: tpl.subject, html: tpl.html, template: 'EMPLOYEE_TERMINATED', replyTo: brand?.email || undefined, fromName: brand?.company });
+      } catch (err) { console.warn('[termination] notification email not queued:', err.message); }
+    }
+
     const full = (await query(`${SELECT} WHERE t.id = $1`, [row.id])).rows[0];
     res.status(201).json(shape(full));
   } catch (e) { next(e); }
@@ -203,6 +235,26 @@ export async function revoke(req, res, next) {
     if (acc) invalidateAccountStatus(acc.id);
     await audit(req.user.id, 'REVOKE_TERMINATION', 'employee', t.employee_id, { terminationId: id, reason });
     res.json({ ok: true });
+  } catch (e) { next(e); }
+}
+
+// GET /admin/terminations/eligible (v2) — who may be terminated: active
+// employees of this organisation (activeEmployeeSql — never candidates), not
+// already under a live termination. The portal re-reads it after every
+// record/reverse so the picker is never stale (H88, H89, C26).
+export async function eligible(req, res, next) {
+  try {
+    const { rows } = await query(
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name, e.onboarding_status,
+              d.title AS designation
+         FROM employees e
+         LEFT JOIN designations d ON d.id = e.designation_id
+        WHERE ($1::bigint IS NULL OR e.organisation_id = $1)
+          AND ($2::bigint IS NULL OR e.company_id = $2)
+          AND ${activeEmployeeSql('e')}
+          AND NOT EXISTS (SELECT 1 FROM terminations t WHERE t.employee_id = e.id AND t.status = 'ACTIVE')
+        ORDER BY e.first_name, e.last_name`, [req.orgId || null, req.companyScope || null]);
+    res.json(rows);
   } catch (e) { next(e); }
 }
 

@@ -79,6 +79,23 @@ function marginNote(doc, text, offset = 20) {
   }
 }
 
+/**
+ * Draw an image scaled to FIT a box (never wider than maxW, never taller than
+ * maxH), vertically centred in it. Returns the width actually used, so the
+ * caller can start its text after the logo instead of under it — a wide logo
+ * drawn by height alone used to run straight over the company name.
+ */
+function drawLogo(doc, img, x, y, maxW, maxH) {
+  if (!img) return 0;
+  try {
+    const o = doc.openImage(img);
+    const s = Math.min(maxW / o.width, maxH / o.height);
+    const w = o.width * s; const h = o.height * s;
+    doc.image(o, x, y + (maxH - h) / 2, { width: w, height: h });
+    return w;
+  } catch { return 0; }   // bad image — skip it
+}
+
 function header(doc, subtitle, brand) {
   const t = theme(brand);
   watermark(doc, t);
@@ -86,24 +103,36 @@ function header(doc, subtitle, brand) {
   doc.rect(X, y, W, 30).fill(t.head);
   const img = logoBuffer(t.logo);
   let tx = X + 10;
-  if (img) {
-    try { doc.image(img, X + 8, y + 5, { height: 20 }); tx = X + 36; } catch { /* bad image — skip it */ }
-  }
-  doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(13).text(t.name, tx, y + 9, { lineBreak: false });
-  if (subtitle || t.contact) doc.fontSize(9).text(subtitle || t.contact, X, y + 11, { width: W - 10, align: 'right' });
+  const lw = drawLogo(doc, img, X + 8, y + 5, 120, 20);
+  if (lw) tx = X + 8 + lw + 10;
+  const right = subtitle || t.contact;
+  doc.font('Helvetica').fontSize(9);
+  const rightW = right ? Math.min(doc.widthOfString(String(right)) + 4, W * 0.45) : 0;
+  doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(13)
+    .text(t.name, tx, y + 9, { width: Math.max(60, X + W - 10 - rightW - 8 - tx), height: 16, lineBreak: false, ellipsis: true });
+  if (right) doc.font('Helvetica').fontSize(9).text(right, X + W - 10 - rightW, y + 11, { width: rightW, align: 'right', height: 12, lineBreak: false, ellipsis: true });
   y += 30;
   doc.moveTo(X, y).lineTo(X + W, y).lineWidth(1.2).strokeColor(t.rule).stroke();
   return y + 20;
 }
 
-/** Name + designation over a rule, with the signature image when there is one. */
+/**
+ * Name + designation over a rule, with the signature image when the
+ * organisation uploaded one. No image is ever invented: without an upload the
+ * block is a signature line and the signatory's name. An uploaded image is
+ * fitted into a signature-sized box so a photo can never take over the page.
+ */
 function signature(doc, brand, y) {
   const t = theme(brand);
-  if (!brand?.signatoryName && !brand?.signatureImage) return y;
+  if (!brand?.signatoryName && !brand?.signatureImage && !brand?.stampImage) return y;
   let cy = y + 18;
   const img = logoBuffer(brand?.signatureImage);
-  if (img) { try { doc.image(img, X, cy, { height: 34 }); cy += 38; } catch { /* skip */ } }
-  else cy += 26;
+  // H26: the company stamp/seal, when uploaded, sits beside the signature —
+  // to its right, in its own box, so it never covers the signatory's name.
+  const stamp = logoBuffer(brand?.stampImage);
+  const stampUsed = stamp ? drawLogo(doc, stamp, X + 200, cy - 4, 72, 72) : 0;
+  const used = img ? drawLogo(doc, img, X, cy, 160, 40) : 0;
+  cy += used ? 44 : (stampUsed ? 44 : 26);
   doc.moveTo(X, cy).lineTo(X + 180, cy).lineWidth(0.8).strokeColor(LINE).stroke();
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(10)
     .text(brand?.signatoryName || '', X, cy + 5, { width: 240 });
@@ -116,7 +145,7 @@ function signature(doc, brand, y) {
   return doc.y;
 }
 
-export { theme, logoBuffer, watermark, footer, marginNote, signature };
+export { theme, logoBuffer, watermark, footer, marginNote, signature, drawLogo };
 
 // A plain HR letter (title + date + ref + body paragraphs).
 export function buildLetterPdf(letter, stream, brand) {

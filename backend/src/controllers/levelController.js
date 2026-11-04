@@ -15,6 +15,36 @@
 // ============================================================================
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { activeEmployeeSql } from '../utils/people.js';
+import { AppError } from '../middleware/error.js';
+
+// Honorifics mean somebody typed a person where a rung belongs ("Mr Gudu").
+const HONORIFIC = /^(mr|mrs|ms|miss|dr|shri|smt|sri|kumari|mx|prof)\b\.?/i;
+// Standard labels the screen can offer instead of free text.
+export const STANDARD_LEVEL_NAMES = ['Board', 'Leadership', 'Senior Management', 'Management',
+  'Senior Staff', 'Staff', 'Associate', 'Trainee'];
+
+/** v2 (H56): every level-name problem at once, keyed levels.<index>. */
+function levelNameErrors(levels) {
+  const fields = {};
+  const seen = new Map();
+  levels.forEach((l, i) => {
+    const key = `levels.${i}`;
+    const n = l.name;
+    if (!n) { fields[key] = `Level ${l.levelNo} needs a name`; return; }
+    if (n.length > 60) fields[key] = `Level ${l.levelNo}: name must be at most 60 characters`;
+    else if (/[<>]/.test(n) || !/[A-Za-z]/.test(n) || !/^[A-Za-z0-9][A-Za-z0-9 &.,'()\/+-]*$/.test(n)) {
+      fields[key] = `Level ${l.levelNo}: "${n}" is not a valid level name — use letters and digits, like "L1 Board" or "Management"`;
+    } else if (HONORIFIC.test(n)) {
+      fields[key] = `Level ${l.levelNo}: "${n}" looks like a person's name. A level names a rung (e.g. "L1 Board", "Management"), not a person`;
+    }
+    const k = n.toLowerCase();
+    if (!fields[key] && seen.has(k)) fields[key] = `Level ${l.levelNo}: "${n}" is already used by level ${seen.get(k)}`;
+    if (!seen.has(k)) seen.set(k, l.levelNo);
+  });
+  return fields;
+}
 
 const MAX_LEVELS = 20;
 
@@ -34,30 +64,42 @@ async function payload(orgId, orgName) {
             (SELECT COUNT(*) FROM designations d WHERE d.level_id = l.id) AS designation_count,
             (SELECT COUNT(*) FROM employees e
                JOIN designations d ON d.id = e.designation_id
-              WHERE d.level_id = l.id AND e.onboarding_status = 'ACTIVE') AS employee_count
+              WHERE d.level_id = l.id AND ${activeEmployeeSql('e')}) AS employee_count
        FROM org_levels l WHERE l.organisation_id = $1 ORDER BY l.level_no`, [orgId])).rows;
 
-  // The holder count comes back with each row so the screen can grey out the
-  // ones it would refuse to delete instead of failing after the click.
+  // `employees` counts employees by the one rule every screen uses (D7, H55).
+  // `holders` counts every record pointing at the row — candidates and leavers
+  // included — which is what decides whether it can be deleted, so the screen
+  // can grey those out instead of failing after the click.
   const designations = (await query(
-    `SELECT g.id, g.title, g.grade, g.level_id,
-            (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id) AS employees
+    `SELECT g.id, g.title, g.grade, g.level_id, g.department_id,
+            (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id AND ${activeEmployeeSql('e')}) AS employees,
+            (SELECT count(*)::int FROM employees e WHERE e.designation_id = g.id) AS holders
        FROM designations g WHERE g.organisation_id = $1 ORDER BY g.title`, [orgId])).rows
     .map((d) => ({
       id: Number(d.id), title: d.title, grade: d.grade,
       levelId: d.level_id != null ? Number(d.level_id) : null,
+      departmentId: d.department_id != null ? Number(d.department_id) : null,
       employees: Number(d.employees || 0),
+      holders: Number(d.holders || 0),
     }));
   const departments = (await query(
     `SELECT d.id, d.name,
-            (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id) AS employees
+            (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id AND ${activeEmployeeSql('e')}) AS employees,
+            (SELECT count(*)::int FROM employees e WHERE e.department_id = d.id) AS holders
        FROM departments d WHERE d.organisation_id = $1 ORDER BY d.name`, [orgId])).rows
-    .map((d) => ({ id: Number(d.id), name: d.name, employees: Number(d.employees || 0) }));
+    .map((d) => ({ id: Number(d.id), name: d.name, employees: Number(d.employees || 0), holders: Number(d.holders || 0) }));
+  const totalEmployees = Number((await query(
+    `SELECT count(*)::int AS n FROM employees e WHERE e.organisation_id = $1 AND ${activeEmployeeSql('e')}`,
+    [orgId])).rows[0].n);
 
   return {
     organisationId: Number(orgId),
     organisation: orgName || null,
     maxLevels: MAX_LEVELS,
+    standardLevelNames: STANDARD_LEVEL_NAMES,
+    // Same denominator as the org chart's "placed on a level" (D7).
+    totalEmployees,
     levels: levels.map(shape),
     designations,
     departments,
@@ -95,6 +137,11 @@ export async function replace(req, res, next) {
       name: String(l.name || '').trim(),
       description: l.description ? String(l.description).trim() : null,
     }));
+    if (isV2(req)) {
+      const fields = levelNameErrors(levels);
+      const keys = Object.keys(fields);
+      if (keys.length) throw new AppError(keys.length === 1 ? fields[keys[0]] : `Please fix ${keys.length} level names: ${keys.map((k) => fields[k]).join('; ')}`, 400, fields);
+    }
     const blank = levels.find((l) => !l.name);
     if (blank) return res.status(400).json({ error: `Level ${blank.levelNo} needs a name.` });
     const names = levels.map((l) => l.name.toLowerCase());
@@ -159,6 +206,28 @@ export async function setDesignationLevel(req, res, next) {
     await query(`UPDATE designations SET level_id=$2 WHERE id=$1`, [id, levelId]);
     await audit(req.user.id, 'DESIGNATION_LEVEL_SET', 'designation', id, { levelId });
     res.json({ id, levelId });
+  } catch (e) { next(e); }
+}
+
+// PUT /admin/designations/:id/department { departmentId }   (v2 route)
+// Which department a designation belongs to (H12/H127). null = any department.
+// The people and bulk-upload validations read designations.department_id.
+export async function setDesignationDepartment(req, res, next) {
+  try {
+    const id = parseInt(req.params.id, 10);
+    const d = Number.isFinite(id) ? (await query(
+      `SELECT id FROM designations WHERE id=$1 AND organisation_id=$2`, [id, req.orgId])).rows[0] : null;
+    if (!d) return res.status(404).json({ error: 'Designation not found in your organisation.' });
+    const raw = req.body?.departmentId;
+    const departmentId = raw === null || raw === '' || raw === undefined ? null : parseInt(raw, 10);
+    if (departmentId != null) {
+      const ok = Number.isFinite(departmentId) && (await query(
+        `SELECT 1 FROM departments WHERE id=$1 AND organisation_id=$2`, [departmentId, req.orgId])).rowCount;
+      if (!ok) throw new AppError('Choose a department from your organisation', 400, { departmentId: 'Choose a department from your organisation' });
+    }
+    await query(`UPDATE designations SET department_id=$2 WHERE id=$1 AND organisation_id=$3`, [id, departmentId, req.orgId]);
+    await audit(req.user.id, 'DESIGNATION_DEPARTMENT_SET', 'designation', id, { departmentId });
+    res.json({ id, departmentId });
   } catch (e) { next(e); }
 }
 

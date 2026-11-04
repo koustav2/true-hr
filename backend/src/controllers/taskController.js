@@ -1,5 +1,8 @@
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator, todayIST } from '../utils/validate.js';
+import { activeEmployeeSql } from '../utils/people.js';
 
 const VALID = ['PENDING', 'ONGOING', 'CLOSED'];
 
@@ -8,6 +11,35 @@ async function isMyReport(managerId, employeeId) {
     `SELECT 1 FROM employees
       WHERE id=$1 AND (reporting_manager_id=$2 OR function_manager_id=$2 OR operational_manager_id=$2)`,
     [employeeId, managerId])).rowCount > 0;
+}
+
+// An active direct/functional/matrix report in the manager's organisation.
+async function isActiveReport(managerId, employeeId) {
+  if (!Number.isFinite(employeeId)) return false;
+  return (await query(
+    `SELECT 1 FROM employees e JOIN employees m ON m.id=$2
+      WHERE e.id=$1 AND (e.reporting_manager_id=$2 OR e.function_manager_id=$2 OR e.operational_manager_id=$2)
+        AND e.organisation_id IS NOT DISTINCT FROM m.organisation_id AND ${activeEmployeeSql('e')}`,
+    [employeeId, managerId])).rowCount > 0;
+}
+
+// GET /tasks/team-members (v2) — who I may assign to; empty means I have no team
+// and the portal hides Assign Task (E32).
+export async function teamMembers(req, res, next) {
+  try {
+    const managerId = req.user.employeeId;
+    if (!managerId) return res.json({ canAssign: false, members: [] });
+    const rows = (await query(
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name
+         FROM employees e JOIN employees m ON m.id=$1
+        WHERE (e.reporting_manager_id=$1 OR e.function_manager_id=$1 OR e.operational_manager_id=$1)
+          AND e.organisation_id IS NOT DISTINCT FROM m.organisation_id AND ${activeEmployeeSql('e')}
+        ORDER BY e.first_name, e.last_name`, [managerId])).rows;
+    res.json({
+      canAssign: rows.length > 0,
+      members: rows.map((r) => ({ id: r.id, employeeCode: r.employee_code, name: `${r.first_name} ${r.last_name || ''}`.trim() })),
+    });
+  } catch (e) { next(e); }
 }
 
 function shape(r) {
@@ -95,6 +127,19 @@ export async function create(req, res, next) {
     const managerId = req.user.employeeId;
     if (!managerId) return res.status(403).json({ error: 'No employee linked to this account' });
     const { assignedTo, title, description, dueDate, aroundTime } = req.body || {};
+    if (isV2(req)) {
+      // E32: every field problem at once, in words a person reads.
+      const v = validator();
+      v.require('assignedTo', assignedTo, 'Assign to');
+      v.text('title', title, 'Title', { required: true, min: 3, max: 150 });
+      v.text('description', description, 'Description', { max: 2000 });
+      v.date('dueDate', dueDate, 'Due date', { required: true, min: todayIST(), minMsg: 'Due date cannot be in the past' });
+      v.check('aroundTime', aroundTime, /^([01]\d|2[0-3]):[0-5]\d$/, 'Due time must be a valid time like 17:30');
+      v.throwIfAny();
+      if (!(await isActiveReport(managerId, Number(assignedTo)))) {
+        return res.status(400).json({ error: 'You can only assign tasks to your active team members', fields: { assignedTo: 'Select one of your team members' } });
+      }
+    }
     if (!assignedTo || !title) return res.status(400).json({ error: 'assignedTo and title are required' });
     if (Number(assignedTo) !== managerId && !(await isMyReport(managerId, Number(assignedTo)))) {
       return res.status(403).json({ error: 'You can only assign tasks to your team members' });
@@ -102,7 +147,7 @@ export async function create(req, res, next) {
     const row = (await query(
       `INSERT INTO tasks (title, description, assigned_to, assigned_by, due_date, around_time)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
-      [title, description || null, assignedTo, managerId, dueDate || null, aroundTime || null])).rows[0];
+      [String(title).trim(), description || null, assignedTo, managerId, dueDate || null, aroundTime || null])).rows[0];
     await audit(req.user.id, 'TASK_CREATE', 'task', row.id, { assignedTo });
     res.status(201).json({ ok: true, id: row.id });
   } catch (e) { next(e); }

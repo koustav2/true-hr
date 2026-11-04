@@ -621,7 +621,8 @@ CREATE TABLE IF NOT EXISTS clients_vendors (
   type   TEXT NOT NULL DEFAULT 'CLIENT', -- CLIENT | VENDOR | BOTH
   active BOOLEAN NOT NULL DEFAULT TRUE
 );
-CREATE UNIQUE INDEX IF NOT EXISTS uniq_clients_vendors_name ON clients_vendors (lower(name));
+-- Client/vendor names are unique per organisation, not globally:
+-- see migrations_v2/99_lead.sql (uniq_clients_vendors_org_name).
 
 -- 3-level expense hierarchy: Category → Header → SubHeader.
 -- business_operation_id NULL = category available for all operations.

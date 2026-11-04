@@ -13,7 +13,41 @@
 // ============================================================================
 import { query, tx } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
-import { KINDS, CALCS, STATUTORY_KEYS, loadForCompany, shape } from '../services/payComponents.js';
+import { KINDS, CALCS, STATUTORY_KEYS, loadForCompany, shape, computeFromComponents } from '../services/payComponents.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { activeEmployeeSql } from '../utils/people.js';
+import { AppError } from '../middleware/error.js';
+
+/**
+ * C23 (v2): a component set whose deductions exceed gross pay would publish
+ * negative payslips. Check it against every employee on this company with a
+ * structure (their own CTC and overrides), and against the CTC tried on the
+ * preview when nobody has a structure yet.
+ */
+async function negativeNetCheck(companyId, rows, previewCtc) {
+  const emps = (await query(
+    `SELECT e.id, e.first_name, e.last_name, e.employee_code, ss.monthly_ctc
+       FROM employees e JOIN salary_structures ss ON ss.employee_id = e.id
+      WHERE e.company_id = $1 AND ${activeEmployeeSql('e')} AND ss.monthly_ctc > 0`, [companyId])).rows;
+  const ov = (await query(
+    `SELECT v.employee_id, c.code, v.value FROM employee_component_values v
+       JOIN salary_components c ON c.id = v.component_id WHERE c.company_id = $1`, [companyId])).rows;
+  const byEmp = new Map();
+  for (const o of ov) {
+    if (!byEmp.has(String(o.employee_id))) byEmp.set(String(o.employee_id), {});
+    byEmp.get(String(o.employee_id))[o.code] = Number(o.value);
+  }
+  const active = rows.filter((r) => r.active !== false).map((r) => ({ ...r, value: Number(r.value) || 0 }));
+  const bad = [];
+  const test = (label, ctc, mine = {}) => {
+    const comps = active.map((c) => (mine[c.code] != null && c.perEmployee !== false ? { ...c, value: mine[c.code] } : c));
+    const calc = computeFromComponents(comps, { monthlyCtc: ctc, daysInMonth: 30, daysPaid: 30 });
+    if (calc.totalDeductions > calc.grossEarnings) bad.push(`${label}: net pay ₹${calc.netPay.toLocaleString('en-IN')}`);
+  };
+  for (const e of emps) test(`${e.first_name} ${e.last_name}`.trim() + (e.employee_code ? ` (${e.employee_code})` : ''), Number(e.monthly_ctc), byEmp.get(String(e.id)));
+  if (!emps.length && Number(previewCtc) > 0) test(`A monthly CTC of ₹${Number(previewCtc).toLocaleString('en-IN')}`, Number(previewCtc));
+  return bad;
+}
 
 const CODE_RE = /^[A-Z][A-Z0-9_]{1,23}$/;
 
@@ -112,7 +146,14 @@ export async function replace(req, res, next) {
       calc: String(r.calc || 'FLAT').toUpperCase(),
     }));
     const bad = validate(rows);
-    if (bad) return res.status(400).json({ error: bad });
+    if (bad) return res.status(400).json({ error: bad, ...(isV2(req) ? { fields: { components: bad } } : {}) });
+    if (isV2(req)) {
+      const neg = await negativeNetCheck(co.id, rows, req.body?.previewCtc);
+      if (neg.length) {
+        const msg = `Deductions would be more than gross pay for ${neg.length} case${neg.length === 1 ? '' : 's'} — ${neg.slice(0, 3).join('; ')}${neg.length > 3 ? '; …' : ''}. Lower the deduction before saving.`;
+        throw new AppError(msg, 400, { components: msg });
+      }
+    }
 
     await tx(async (c) => {
       const keep = rows.filter((r) => r.id).map((r) => Number(r.id));

@@ -1,11 +1,66 @@
 import PDFDocument from 'pdfkit';
-import { theme, logoBuffer, watermark, footer, signature } from './docPdf.js';
-import { renderLetter } from './letters.js';
+import { theme, logoBuffer, watermark, footer, signature, drawLogo } from './docPdf.js';
 
 const X = 50, W = 495;
 const INK = '#111827', SUB = '#6b7280';
 const inr = (n) => Number(n || 0).toLocaleString('en-IN', { maximumFractionDigits: 0 });
-const dmy = (d) => { const p = String(d || '').slice(0, 10).split('-'); return p.length === 3 ? `${p[2]}/${p[1]}/${p[0]}` : '—'; };
+// A pg DATE arrives as a JS Date (local midnight); String(Date) is not ISO, which
+// is why Annexure A printed "Date of Joining: —" (H27).
+const isoOf = (d) => {
+  if (!d) return '';
+  if (d instanceof Date) return Number.isNaN(d.getTime()) ? '' : new Date(d.getTime() - d.getTimezoneOffset() * 60000).toISOString().slice(0, 10);
+  return String(d).slice(0, 10);
+};
+const dmy = (d) => { const p = isoOf(d).split('-'); return p.length === 3 && p[0].length === 4 ? `${p[2]}/${p[1]}/${p[0]}` : '—'; };
+
+// ── Template placeholders (H25) ─────────────────────────────────────────────
+// A tenant's offer template is free text typed on the branding screen. Every
+// {{placeholder}} resolves from the candidate (with common aliases); a
+// paragraph that still carries an unknown placeholder, a [missing] marker or
+// leftover braces is not printed raw — the built-in paragraph is used instead.
+// The salutation must address the candidate by name and the intro must state
+// the position and joining date, or the default is used (so a template that
+// hard-codes another person's name — "Dear Rocky" — can never go out).
+const ALIASES = {
+  employeename: 'employeeName', name: 'employeeName', candidatename: 'employeeName', fullname: 'employeeName',
+  employee_name: 'employeeName', candidate: 'employeeName', firstname: 'firstName', first_name: 'firstName',
+  designation: 'designation', position: 'designation', role: 'designation', title: 'designation', jobtitle: 'designation',
+  department: 'department', dept: 'department',
+  joiningdate: 'joiningDate', dateofjoining: 'joiningDate', doj: 'joiningDate', joining_date: 'joiningDate', startdate: 'joiningDate',
+  location: 'location', place: 'location', placeofposting: 'location', branch: 'location',
+  companyname: 'companyName', company: 'companyName', organisation: 'companyName', organization: 'companyName', employer: 'companyName',
+  ctc: 'ctc', annualctc: 'ctc', salary: 'ctc', today: 'today', date: 'today',
+};
+export function fillTemplate(tpl, merge, { mustHave = [] } = {}) {
+  if (!tpl || !String(tpl).trim()) return null;
+  let bad = false;
+  const used = new Set();
+  const out = String(tpl).replace(/\{\{\s*([^{}]*?)\s*\}\}/g, (_, raw) => {
+    const key = ALIASES[String(raw).toLowerCase().replace(/[\s-]+/g, '')] || ALIASES[String(raw).toLowerCase()];
+    if (!key) { bad = true; return ''; }
+    used.add(key);
+    const val = merge[key];
+    if (val === undefined || val === null || String(val).trim() === '' || val === '—') {
+      // Location is optional; anything else missing makes the sentence wrong.
+      if (key === 'location') return 'our office';
+      bad = true; return '';
+    }
+    return String(val);
+  });
+  if (bad || /\{\{|\}\}|\[[^\]]{1,40}\]/.test(out)) return null;
+  if (mustHave.some((k) => !used.has(k))) return null;
+  return out;
+}
+
+// A signatory that is plainly not a person's name (a keyboard mash) is not
+// printed on a legal document (H26); the letter is signed "Authorised Signatory".
+export function plausibleName(s) {
+  const t = String(s || '').trim();
+  if (!t || t.length > 60 || !/^[A-Za-z][A-Za-z .'-]*$/.test(t)) return false;
+  const parts = t.split(/\s+/);
+  return parts.length <= 6 && parts.every((w) => w.length <= 16 && (/[aeiouy]/i.test(w) || w.replace(/\./g, '').length <= 3));
+}
+const plausibleTitle = (s) => { const t = String(s || '').trim(); return !t || (t.length <= 60 && t.split(/\s+/).every((w) => w.length <= 18 && /[aeiouy]/i.test(w) || w.length <= 4)); };
 
 // The letterhead a company actually signs with — name, address, tax ids and
 // logo all come from its document profile rather than from the deployment.
@@ -14,7 +69,9 @@ function letterhead(doc, brand, y = 40) {
   watermark(doc, t);
   const img = logoBuffer(t.logo);
   let tx = X;
-  if (img) { try { doc.image(img, X, y - 2, { height: 34 }); tx = X + 44; } catch { /* skip */ } }
+  // H102: fitted into a box and the name starts after it, never under it.
+  const lw = drawLogo(doc, img, X, y - 2, 110, 34);
+  if (lw) tx = X + lw + 10;
   doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(16)
     .text(String(t.name || '').toUpperCase(), tx, y, { width: W - (tx - X) });
   let ly = y + 20;
@@ -57,19 +114,24 @@ export function salaryBreakup(ctc) {
 export function buildOfferLetterPdf({ name, designation, department, joiningDate, ctc, location, breakup }, stream, brand) {
   const t = theme(brand);
   const opt = brand?.options?.offer || {};
+  const fullName = String(name || '').trim();
   const merge = {
-    employeeName: name || '', designation: designation || '', department: department || '',
-    joiningDate: dmy(joiningDate), location: location || '',
-    companyName: t.name, ctc: `INR ${inr(ctc)}`,
+    employeeName: fullName, firstName: fullName.split(/\s+/)[0] || fullName,
+    designation: designation || '', department: department || '',
+    joiningDate: isoOf(joiningDate) ? dmy(joiningDate) : '', location: location || '',
+    companyName: t.name, ctc: ctc ? `INR ${inr(ctc)}` : '', today: dmy(new Date()),
   };
-  const fill = (tpl) => (tpl ? renderLetter(tpl, merge).text : '');
+  const fill = (tpl, mustHave) => fillTemplate(tpl, merge, { mustHave });
+  const signBrand = plausibleName(brand?.signatoryName)
+    ? { ...brand, signatoryDesignation: plausibleTitle(brand?.signatoryDesignation) ? brand?.signatoryDesignation : null }
+    : { ...(brand || {}), signatoryName: 'Authorised Signatory', signatoryDesignation: null, signatureImage: null };
   const doc = new PDFDocument({ size: brand?.paperSize || 'A4', margins: { top: 40, bottom: 48, left: X, right: X } });
   doc.pipe(stream);
 
   // ── Page 1: offer letter ──
   let y = letterhead(doc, brand);
   doc.fillColor(SUB).font('Helvetica').fontSize(10)
-    .text(`Date: ${dmy(new Date().toISOString())}`, X, y, { width: W, align: 'right' });
+    .text(`Date: ${dmy(new Date())}`, X, y, { width: W, align: 'right' });
   y += 26;
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text('OFFER OF EMPLOYMENT', X, y, { width: W, align: 'center', underline: true });
   y += 34;
@@ -77,17 +139,18 @@ export function buildOfferLetterPdf({ name, designation, department, joiningDate
   const para = (t) => { doc.text(t, X, y, { width: W, align: 'justify', lineGap: 3 }); y = doc.y + 12; };
   // Every paragraph is editable per company from the branding screen; the
   // defaults below only apply when a tenant has not written its own.
-  para(fill(opt.salutation) || `Dear ${name},`);
-  para(fill(opt.intro)
-    || `With reference to your application and the subsequent discussions, we are pleased to offer you the position of "${designation || '—'}"${department ? ` in our ${department} department` : ''} at ${t.name}. Your date of joining will be ${dmy(joiningDate)}${location ? `, and your initial place of posting will be ${location}` : ''}.`);
+  para(fill(opt.salutation, ['employeeName']) || `Dear ${fullName},`);
+  const dojText = isoOf(joiningDate) ? dmy(joiningDate) : null;
+  para(fill(opt.intro, ['designation', 'joiningDate'])
+    || `With reference to your application and the subsequent discussions, we are pleased to offer you ${designation ? `the position of "${designation}"` : 'employment'}${department ? ` in our ${department} department` : ''} at ${t.name}.${dojText ? ` Your date of joining will be ${dojText}` : ''}${location ? `${dojText ? ', and' : ' Your'} your initial place of posting will be ${location}` : ''}${dojText || location ? '.' : ''}`);
   para(`Your annual Cost to Company (CTC) will be INR ${inr(ctc)}/- (Rupees ${inr(ctc)} only).`
     + (opt.showAnnexure !== false ? ' The detailed break-up of your compensation is provided in Annexure A of this letter.' : ''));
   const terms = Array.isArray(opt.terms) && opt.terms.length ? opt.terms : null;
-  if (terms) for (const line of terms) para(fill(line));
+  if (terms) for (const line of terms) { const l = fill(line); if (l) para(l); }
   else para('This offer is subject to: (a) satisfactory verification of the documents and information furnished by you, (b) your medical fitness, and (c) the terms of the company’s employment policies as amended from time to time. You will be on probation for a period of six months from the date of joining, during which your performance will be reviewed.');
-  para(fill(opt.closing) || 'Please confirm your acceptance of this offer by completing the onboarding formalities shared with you over email. We look forward to a mutually rewarding association and wish you a great career with us.');
+  para(fill(opt.closing, []) || 'Please confirm your acceptance of this offer by completing the onboarding formalities shared with you over email. We look forward to a mutually rewarding association and wish you a great career with us.');
   if (opt.showSignature !== false) {
-    signature(doc, brand, y);
+    signature(doc, signBrand, y);
   } else {
     doc.font('Helvetica-Bold').fillColor(INK).text('For ' + t.name, X, y + 8);
   }
@@ -100,7 +163,7 @@ export function buildOfferLetterPdf({ name, designation, department, joiningDate
   doc.fillColor(INK).font('Helvetica-Bold').fontSize(13).text('ANNEXURE A — COMPENSATION STRUCTURE', X, y, { width: W, align: 'center', underline: true });
   y += 30;
   doc.font('Helvetica').fontSize(10).fillColor(INK)
-    .text(`Name: ${name}    ·    Designation: ${designation || '—'}    ·    Date of Joining: ${dmy(joiningDate)}`, X, y, { width: W });
+    .text(`Name: ${fullName}    ·    Designation: ${designation || '—'}    ·    Date of Joining: ${dmy(joiningDate)}`, X, y, { width: W });
   y += 26;
 
   const rows = (Array.isArray(breakup) && breakup.length) ? breakup : salaryBreakup(ctc);

@@ -18,11 +18,15 @@ function shape(r) {
     approvalInstanceId: r.approval_instance_id,
     raisedAt: r.raised_at, closedAt: r.closed_at,
     nfaGrandTotal: r.grand_total, settlementDueDate: r.settlement_due_date,
+    // H110: the report shows the NFA's own figures next to the settlement's,
+    // so "₹10,000 on 22-07" is no longer mistaken for the NFA's ₹1,00,000.
+    nfaRaisedAt: r.nfa_created_at, advanceAmount: r.grand_total, settledAmount: r.amount,
+    balance: r.grand_total != null ? Math.round((Number(r.grand_total) - Number(r.amount || 0)) * 100) / 100 : null,
     project: r.project_name ? { name: r.project_name } : undefined,
   };
 }
 
-const COLS = `s.*, n.nfa_code, n.grand_total, n.settlement_due_date, e.employee_code, e.first_name, e.last_name, p.name AS project_name`;
+const COLS = `s.*, n.nfa_code, n.grand_total, n.settlement_due_date, n.created_at AS nfa_created_at, e.employee_code, e.first_name, e.last_name, p.name AS project_name`;
 const JOINS = `FROM nfa_settlements s
   JOIN nfas n ON n.id = s.nfa_id
   JOIN employees e ON e.id = s.employee_id

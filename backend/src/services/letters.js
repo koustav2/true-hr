@@ -140,3 +140,93 @@ export function buildLetter({ typeCode, customTitle, customBody } = {}, data = {
   const rendered = renderLetter(body, data);
   return { title, ...rendered };
 }
+
+// ── Dates and reference numbers ─────────────────────────────────────────────
+
+/** dd-mm-yyyy from a pg DATE (a JS Date), an ISO string or a Date. '' for nothing. */
+export function dmy(v) {
+  if (!v) return '';
+  let iso;
+  if (v instanceof Date) {
+    if (Number.isNaN(v.getTime())) return '';
+    iso = `${v.getFullYear()}-${String(v.getMonth() + 1).padStart(2, '0')}-${String(v.getDate()).padStart(2, '0')}`;
+  } else iso = String(v).slice(0, 10);
+  const m = /^(\d{4})-(\d{2})-(\d{2})$/.exec(iso);
+  return m ? `${m[3]}-${m[2]}-${m[1]}` : String(v);
+}
+
+/** dd-mm-yyyy for a timestamp, in India time (an issued_at stored as UTC). */
+export function dmyIST(v) {
+  if (!v) return '';
+  const d = v instanceof Date ? v : new Date(v);
+  if (Number.isNaN(d.getTime())) return '';
+  return dmy(new Date(d.getTime() + 330 * 60000).toISOString().slice(0, 10));
+}
+
+/**
+ * Next sequential reference for an organisation, e.g. TH/LTR/2026/0007 — the
+ * prefix is the employee's company code. One counter per organisation per
+ * year, bumped atomically, so two HR users issuing at once never collide.
+ * `db` is the pool's `query`-compatible client (a tx client or the pool).
+ */
+export async function nextLetterRef(db, organisationId, employeeId) {
+  const year = new Date(Date.now() + 330 * 60000).getUTCFullYear();
+  const row = (await db.query(
+    `INSERT INTO letter_ref_counters (org_key, year, last_no) VALUES ($1,$2,1)
+     ON CONFLICT (org_key, year) DO UPDATE SET last_no = letter_ref_counters.last_no + 1
+     RETURNING last_no`, [Number(organisationId) || 0, year])).rows[0];
+  let prefix = 'TH';
+  if (employeeId) {
+    const p = (await db.query(
+      `SELECT c.code_prefix FROM employees e JOIN companies c ON c.id = e.company_id WHERE e.id=$1`, [employeeId])).rows[0];
+    if (p?.code_prefix) prefix = String(p.code_prefix).toUpperCase();
+  }
+  return `${prefix}/LTR/${year}/${String(row.last_no).padStart(4, '0')}`;
+}
+
+// ── Field types (H97, H98) ───────────────────────────────────────────────────
+// Every placeholder a letter can carry, with the kind of value it takes. The
+// issue screen draws a date picker / number / designation list from this, and
+// the server refuses a value of the wrong kind before anything is rendered.
+export const FIELD_TYPES = {
+  employeeName: { kind: 'auto', label: 'Employee name' },
+  employeeCode: { kind: 'auto', label: 'Employee ID' },
+  companyName: { kind: 'auto', label: 'Company' },
+  designation: { kind: 'auto', label: 'Designation' },
+  department: { kind: 'auto', label: 'Department' },
+  dateOfJoining: { kind: 'auto', label: 'Date of joining' },
+  effectiveDate: { kind: 'date', label: 'Effective date' },
+  lastWorkingDate: { kind: 'date', label: 'Last working date' },
+  revisedCtc: { kind: 'money', label: 'Revised annual CTC (₹)' },
+  newDesignation: { kind: 'designation', label: 'New designation' },
+  signatoryName: { kind: 'name', label: 'Signatory name' },
+  signatoryDesignation: { kind: 'text', label: 'Signatory designation' },
+  extensionPeriod: { kind: 'choice', label: 'Extension period', options: ['1 month', '2 months', '3 months', '6 months'] },
+  fromLocation: { kind: 'text', label: 'From location' },
+  toLocation: { kind: 'text', label: 'To location' },
+  conduct: { kind: 'choice', label: 'Conduct', options: ['Satisfactory', 'Good', 'Very good', 'Excellent'] },
+  achievement: { kind: 'text', label: 'Achievement' },
+  reason: { kind: 'text', label: 'Reason' },
+  projectSummary: { kind: 'text', label: 'Project summary' },
+};
+export const fieldType = (key) => FIELD_TYPES[key] || { kind: 'text', label: key.replace(/([A-Z])/g, ' $1').replace(/^./, (c) => c.toUpperCase()) };
+
+// Which employees a letter type may be issued to (H96, H99).
+//   EXIT    — only after an approved resignation or termination
+//   ACTIVE  — only a current employee
+//   REVISION — only off an applied salary revision (pre-filled from it)
+export const LETTER_RULES = {
+  RELIEVING: 'EXIT', EXPERIENCE: 'EXIT', INTERNSHIP_COMPLETION: 'EXIT_OR_ACTIVE',
+  PROMOTION: 'REVISION', INCREMENT: 'REVISION',
+};
+export const ruleFor = (typeCode) => LETTER_RULES[typeCode] || 'ACTIVE';
+
+// What an employee can ask HR for (E38).
+export const REQUESTABLE = {
+  EMPLOYMENT: 'Employment certificate',
+  SALARY: 'Salary certificate',
+  ADDRESS_PROOF: 'Address proof letter',
+  EXPERIENCE: 'Experience certificate',
+  RELIEVING: 'Relieving letter',
+  OTHER: 'Other',
+};

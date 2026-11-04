@@ -3,6 +3,7 @@
 import { query } from '../db/pool.js';
 
 import ExcelJS from 'exceljs';
+import { stageLabel } from '../services/approvalEngine.js';
 
 function toCsv(rows, columns) {
   const esc = (v) => {
@@ -76,7 +77,7 @@ export async function dashboard(req, res, next) {
       totalRaised: Number(n.raised), totalApproved: Number(n.approved), paymentReleased: Number(n.released),
       pending: Number(n.pending), query: Number(n.query), settled: Number(n.settled),
       raisedAmount: Number(n.raised_amount), releasedAmount: Number(n.released_amount),
-      pendingByStage: byStage.map((s) => ({ roleKey: s.role_key, count: Number(s.pending) })),
+      pendingByStage: byStage.map((s) => ({ roleKey: s.role_key, roleLabel: stageLabel(s.role_key), count: Number(s.pending) })),
     });
   } catch (e) { next(e); }
 }
@@ -197,6 +198,8 @@ export async function pendingSettlements(req, res, next) {
     const rows = (await query(
       `SELECT n.nfa_code, e.employee_code, e.first_name || ' ' || e.last_name AS employee,
               gc.name AS company, p.name AS project, n.grand_total AS amount_received,
+              to_char(n.created_at AT TIME ZONE 'Asia/Kolkata', 'YYYY-MM-DD') AS raised_on,
+              COALESCE((SELECT sum(s.amount) FROM nfa_settlements s WHERE s.nfa_id=n.id AND s.status='CLOSED'), 0) AS settled_amount,
               COALESCE(n.settlement_status,'PENDING') AS settlement_status,
               n.settlement_due_date,
               GREATEST(0, (now()::date - n.settlement_due_date))::int AS days_overdue
@@ -209,11 +212,14 @@ export async function pendingSettlements(req, res, next) {
           AND ($2::bigint IS NULL OR e.company_id = $2)
         ORDER BY n.settlement_due_date NULLS LAST, n.created_at`,
       [req.orgId || null, req.companyScope || null])).rows
-      .map((r) => ({ ...r, amount_received: Number(r.amount_received) }));
+      .map((r) => ({ ...r, amount_received: Number(r.amount_received), settled_amount: Number(r.settled_amount),
+        balance: Math.round((Number(r.amount_received) - Number(r.settled_amount)) * 100) / 100 }));
     await send(res, req, rows, [
       { key: 'nfa_code', label: 'NFA Code' }, { key: 'employee_code', label: 'Emp Code' },
       { key: 'employee', label: 'Employee' }, { key: 'company', label: 'Cost To Company' },
-      { key: 'project', label: 'Project' }, { key: 'amount_received', label: 'Amount Pending (₹)' },
+      { key: 'project', label: 'Project' }, { key: 'raised_on', label: 'NFA Raised' },
+      { key: 'amount_received', label: 'Advance (₹)' }, { key: 'settled_amount', label: 'Settled (₹)' },
+      { key: 'balance', label: 'Balance (₹)' },
       { key: 'settlement_status', label: 'Settlement Status' },
       { key: 'settlement_due_date', label: 'Due Date' }, { key: 'days_overdue', label: 'Days Overdue' },
     ], 'pending-settlements');

@@ -13,6 +13,8 @@
 // ============================================================================
 import { query } from '../db/pool.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator } from '../utils/validate.js';
 
 /**
  * Each kind declares what it is for and what its parent means, because the
@@ -40,6 +42,11 @@ export const KINDS = {
   ASSET_BRAND: {
     label: 'Brand Master — Assets',
     blurb: 'Brands the asset register offers, instead of a free-text box per laptop.',
+    parent: null, code: null, usedBy: 'Asset register',
+  },
+  ASSET_CATEGORY: {
+    label: 'Asset Category Master',
+    blurb: 'Categories the asset register offers (Laptop, Phone, Furniture…), so one kind of asset is named one way.',
     parent: null, code: null, usedBy: 'Asset register',
   },
   POLICY_TYPE: {
@@ -78,6 +85,7 @@ const USAGE = {
   // are free text on records that predate the master.
   BANK: `(SELECT COUNT(*) FROM employee_bank b WHERE lower(b.bank_name) = lower(m.name))`,
   ASSET_BRAND: `(SELECT COUNT(*) FROM assets a WHERE lower(a.brand) = lower(m.name))`,
+  ASSET_CATEGORY: `(SELECT COUNT(*) FROM assets a WHERE lower(a.category) = lower(m.name))`,
   GRADE: `(SELECT COUNT(*) FROM designations d WHERE lower(d.grade) = lower(m.name))`,
 };
 
@@ -119,10 +127,12 @@ export async function hub(req, res, next) {
     const companies = (await query(
       `SELECT id, name FROM companies WHERE organisation_id=$1 AND active IS NOT FALSE ORDER BY id`,
       [orgId])).rows.map((c) => ({ id: Number(c.id), name: c.name }));
+    // Departments are organisation-wide (schema_tenancy.sql §27). This query
+    // used an alias `c` that was never joined, so the whole hub answered 500.
     const departments = (await query(
-      `SELECT d.id, d.name, o.name AS company FROM departments d JOIN organisations o ON o.id=d.organisation_id
-        WHERE c.organisation_id=$1 ORDER BY c.name, d.name`, [orgId])).rows
-      .map((d) => ({ id: Number(d.id), name: d.name, company: d.company }));
+      `SELECT d.id, d.name FROM departments d
+        WHERE d.organisation_id=$1 ORDER BY lower(d.name)`, [orgId])).rows
+      .map((d) => ({ id: Number(d.id), name: d.name, company: null }));
 
     res.json({
       kinds: Object.entries(KINDS).map(([key, v]) => ({ key, ...v, count: lists[key].length })),
@@ -132,7 +142,7 @@ export async function hub(req, res, next) {
       // index of the organisation's reference data rather than half of one.
       elsewhere: [
         { label: 'Companies', href: '/admin/companies', module: 'COMPANIES', note: 'Legal entities, and GreenHR’s "Add New Company"' },
-        { label: 'Departments & designations', href: '/admin/companies', module: 'COMPANIES', note: 'Per company, under its structure' },
+        { label: 'Departments & designations', href: '/admin/hierarchy', module: 'STRUCTURE', note: 'Organisation-wide — shared by every company in the group' },
         { label: 'Organisation levels', href: '/admin/hierarchy', module: 'STRUCTURE', note: 'GreenHR’s Level / Rank Master' },
         { label: 'Payslip components', href: '/admin/salary-components', module: 'PAYCOMP', note: 'GreenHR’s Salary Header, per company' },
         { label: 'Leave types', href: '/admin/leave-config', module: 'LEAVE', note: 'Leave Type Master' },
@@ -167,8 +177,7 @@ async function validate(kind, b, orgId) {
     const ok = spec.parent === 'company'
       ? (await query(`SELECT 1 FROM companies WHERE id=$1 AND organisation_id=$2`, [parentRef, orgId])).rowCount
       : (await query(
-          `SELECT 1 FROM departments d JOIN organisations o ON o.id=d.organisation_id
-            WHERE d.id=$1 AND c.organisation_id=$2`, [parentRef, orgId])).rowCount;
+          `SELECT 1 FROM departments d WHERE d.id=$1 AND d.organisation_id=$2`, [parentRef, orgId])).rowCount;
     if (!ok) return 'That parent does not belong to your organisation.';
   } else if (parentRef != null) {
     return `${spec.label} is a flat list — it takes no parent.`;
@@ -179,6 +188,33 @@ async function validate(kind, b, orgId) {
   return null;
 }
 
+/**
+ * v2: every problem at once, as field errors, plus a case-insensitive duplicate
+ * check that names the clash instead of a bare 409.
+ */
+async function validateV2(kind, b, orgId, exceptId = null) {
+  const v = validator();
+  const name = String(b?.name ?? '').trim();
+  v.text('name', name, 'Name', { required: true, max: 120 });
+  if (name && /[<>]/.test(name)) v.add('name', 'Name cannot contain < or >');
+  if (name && !/[A-Za-z]/.test(name)) v.add('name', 'Name must contain letters');
+  if (b?.code) v.text('code', b.code, 'Code', { max: 40 });
+  if (b?.note) v.text('note', b.note, 'Note', { max: 500 });
+  if (b?.sortOrder != null && b.sortOrder !== '') v.number('sortOrder', b.sortOrder, 'Sort order', { integer: true, min: 0, max: 100000 });
+  const bad = await validate(kind, b, orgId);
+  if (bad && !v.ok) { /* field errors already explain it */ }
+  else if (bad) v.add(KINDS[kind].parent ? 'parentRef' : 'name', bad);
+  if (!v.has('name') && name) {
+    const parentRef = b?.parentRef == null || b.parentRef === '' ? null : parseInt(b.parentRef, 10);
+    const dupe = await query(
+      `SELECT 1 FROM org_masters WHERE organisation_id=$1 AND kind=$2 AND lower(trim(name))=lower($3)
+          AND parent_ref IS NOT DISTINCT FROM $4 AND ($5::bigint IS NULL OR id <> $5)`,
+      [orgId, kind, name, KINDS[kind].parent ? parentRef : null, exceptId]);
+    if (dupe.rowCount) v.add('name', `"${name}" is already on this list`);
+  }
+  v.throwIfAny();
+}
+
 // POST /admin/org-masters/:kind
 export async function create(req, res, next) {
   try {
@@ -187,6 +223,7 @@ export async function create(req, res, next) {
     const orgId = req.orgId || null;
     if (!orgId) return res.status(400).json({ error: 'No organisation in scope.' });
 
+    if (isV2(req)) await validateV2(kind, req.body, orgId);
     const bad = await validate(kind, req.body, orgId);
     if (bad) return res.status(400).json({ error: bad });
 
@@ -213,10 +250,12 @@ export async function update(req, res, next) {
     if (!isKind(kind)) return res.status(404).json({ error: 'Unknown master list.' });
     const orgId = req.orgId || null;
     const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(404).json({ error: 'Not found on this list.' });
     const existing = (await query(
       `SELECT 1 FROM org_masters WHERE id=$1 AND kind=$2 AND organisation_id=$3`, [id, kind, orgId])).rowCount;
     if (!existing) return res.status(404).json({ error: 'Not found on this list.' });
 
+    if (isV2(req)) await validateV2(kind, req.body, orgId, id);
     const bad = await validate(kind, req.body, orgId);
     if (bad) return res.status(400).json({ error: bad });
 
@@ -248,6 +287,7 @@ export async function remove(req, res, next) {
     if (!isKind(kind)) return res.status(404).json({ error: 'Unknown master list.' });
     const orgId = req.orgId || null;
     const id = parseInt(req.params.id, 10);
+    if (!Number.isFinite(id)) return res.status(404).json({ error: 'Not found on this list.' });
     const row = (await query(
       `SELECT m.*, ${USAGE[kind] || '0'} AS in_use FROM org_masters m
         WHERE m.id=$1 AND m.kind=$2 AND m.organisation_id=$3`, [id, kind, orgId])).rows[0];

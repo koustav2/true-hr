@@ -1,4 +1,5 @@
 import { query } from '../db/pool.js';
+import { activeEmployeeSql } from '../utils/people.js';
 
 // ============================================================================
 // Shared lookup data for the admin forms (company, departments, designations,
@@ -28,9 +29,9 @@ export async function getCompanies(req, res, next) {
   try {
     const { rows } = await query(
       `SELECT c.id, c.name, c.legal_name, c.code_prefix,
+              -- One definition of "employee" on every screen (D7).
               (SELECT count(*) FROM employees e
-                WHERE e.company_id = c.id
-                  AND e.onboarding_status NOT IN ('REJECTED','EXPIRED')) AS employees
+                WHERE e.company_id = c.id AND ${activeEmployeeSql('e')}) AS employees
          FROM companies c
         WHERE ($1::bigint IS NULL OR c.organisation_id = $1)
           AND ($2::bigint IS NULL OR c.id = $2)
@@ -58,9 +59,12 @@ export async function getDepartments(req, res, next) {
 export async function getDesignations(req, res, next) {
   try {
     res.json((await query(
-      `SELECT id, title, grade FROM designations
+      `SELECT id, title, grade, department_id FROM designations
         WHERE ($1::bigint IS NULL OR organisation_id = $1)
-        ORDER BY title`, [req.orgId || null])).rows);
+        ORDER BY title`, [req.orgId || null])).rows
+      // departmentId (H12/H127): the department this title belongs to, null =
+      // usable in any department. Added field only; v1 keys are unchanged.
+      .map(({ department_id: dep, ...d }) => ({ ...d, departmentId: dep != null ? Number(dep) : null })));
   } catch (e) { next(e); }
 }
 
@@ -72,7 +76,7 @@ export async function getManagers(req, res, next) {
               d.title AS designation
          FROM employees e
          LEFT JOIN designations d ON d.id = e.designation_id
-        WHERE e.onboarding_status IN ('ACTIVE','APPROVED')
+        WHERE ${activeEmployeeSql('e')}
           AND ($1::bigint IS NULL OR e.organisation_id = $1)
         ORDER BY e.first_name`, [req.orgId || null])).rows);
   } catch (e) { next(e); }

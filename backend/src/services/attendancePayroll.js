@@ -24,6 +24,89 @@ import { query } from '../db/pool.js';
 
 const iso = (y, m, d) => `${y}-${String(m).padStart(2, '0')}-${String(d).padStart(2, '0')}`;
 
+// ---------------------------------------------------------------------------
+// India-time day boundaries. `captured_at::date` and `now()::date` use the
+// database session's time zone, which is UTC on the server, so a punch at
+// 00:00–05:30 IST counted for the previous day. Every attendance query now
+// cuts days in Asia/Kolkata explicitly.
+// ---------------------------------------------------------------------------
+export const TZ = 'Asia/Kolkata';
+export const istDay = (col) => `((${col}) AT TIME ZONE '${TZ}')::date`;
+export const IST_TODAY = `((now() AT TIME ZONE '${TZ}')::date)`;
+export const todayIsoIST = () => new Date(Date.now() + 330 * 60000).toISOString().slice(0, 10);
+
+// ---------------------------------------------------------------------------
+// Week-off policy: the organisation's weekly-off weekdays (payroll settings,
+// Sunday by default) plus an optional Saturday rule from Leave config:
+//   NONE           every Saturday is a working day (the old behaviour)
+//   ALL            every Saturday is off
+//   SECOND_FOURTH  2nd and 4th Saturdays are off
+//   FIRST_THIRD    1st, 3rd and 5th Saturdays are off
+// ---------------------------------------------------------------------------
+export const SATURDAY_RULES = ['NONE', 'ALL', 'SECOND_FOURTH', 'FIRST_THIRD'];
+
+/** (y, m, d) → is it a weekly off under this policy? */
+export function weekOffTest(policy = {}) {
+  const days = new Set(policy.weekOffDays?.length ? policy.weekOffDays.map(Number) : [0]);
+  const rule = SATURDAY_RULES.includes(policy.saturdayRule) ? policy.saturdayRule : 'NONE';
+  return (y, m, d) => {
+    const dow = new Date(Date.UTC(y, m - 1, d)).getUTCDay();
+    if (days.has(dow)) return true;
+    if (dow !== 6 || rule === 'NONE') return false;
+    const nth = Math.ceil(d / 7);
+    if (rule === 'ALL') return true;
+    if (rule === 'SECOND_FOURTH') return nth === 2 || nth === 4;
+    if (rule === 'FIRST_THIRD') return nth === 1 || nth === 3 || nth === 5;
+    return false;
+  };
+}
+
+/** Leave/attendance policy of an organisation, with defaults. */
+export async function loadLeaveSettings(organisationId) {
+  const row = organisationId
+    ? (await query(`SELECT * FROM org_leave_settings WHERE organisation_id = $1`, [organisationId])).rows[0]
+    : null;
+  return {
+    saturdayRule: row?.saturday_rule || 'NONE',
+    sandwichRule: row ? row.sandwich_rule !== false : true,
+    maxBackdateDays: row?.max_backdate_days ?? 30,
+    missPunchDays: row?.miss_punch_days ?? 30,
+  };
+}
+
+/** Where an employee sits: organisation, state and office location (for holidays). */
+export async function employeePlace(employeeId) {
+  return (await query(
+    `SELECT e.organisation_id, e.location, e.date_of_joining, e.gender,
+            COALESCE(NULLIF(e.posting_state,''),
+              (SELECT state FROM employee_addresses
+                 WHERE employee_id=e.id ORDER BY CASE WHEN type='CURRENT' THEN 0 ELSE 1 END LIMIT 1)) AS state
+       FROM employees e WHERE e.id = $1`, [employeeId])).rows[0] || {};
+}
+
+/**
+ * Holidays that apply to one employee between two ISO dates (inclusive):
+ * their own organisation's (never another tenant's), national ones plus the
+ * ones for their state and/or office location. `kind` PUBLIC (default) or
+ * RESTRICTED (optional holidays, taken as RH leave).
+ * A row with no organisation is a platform-wide holiday (only ever created by
+ * direct SQL; every API-created holiday belongs to an organisation).
+ */
+export async function holidaysFor(employeeId, fromIso, toIso, { kind = 'PUBLIC', place } = {}) {
+  const p = place || await employeePlace(employeeId);
+  const { rows } = await query(
+    `SELECT to_char(holiday_date,'YYYY-MM-DD') AS date, name, state, location, kind
+       FROM holidays
+      WHERE holiday_date BETWEEN $1 AND $2
+        AND (organisation_id = $3 OR organisation_id IS NULL)
+        AND COALESCE(kind,'PUBLIC') = $6
+        AND (state IS NULL OR state = '' OR lower(state) = lower($4))
+        AND (location IS NULL OR location = '' OR lower(location) = lower($5))
+      ORDER BY holiday_date`,
+    [fromIso, toIso, p.organisation_id || null, String(p.state || '').trim(), String(p.location || '').trim(), kind]);
+  return rows;
+}
+
 /** Expand a "1,5,10" miss-punch day list into numbers. */
 function parseDays(csv) {
   return String(csv || '').split(',')
@@ -58,18 +141,16 @@ async function approvedRangeDays(table, employeeId, year, month, extraJoin = '',
 export async function classifyMonth(employeeId, year, month, window, policy) {
   const y = Number(year), m = Number(month);
   const dim = new Date(y, m, 0).getDate();
-  const weekOff = new Set(policy.weekOffDays?.length ? policy.weekOffDays : [0]);
-
-  const emp = (await query(
-    `SELECT posting_state FROM employees WHERE id = $1`, [employeeId])).rows[0] || {};
+  const isWeekOff = weekOffTest(policy);
+  const place = await employeePlace(employeeId);
 
   // Punches — a single IN is enough to count the day as worked.
   const punched = new Set((await query(
-    `SELECT DISTINCT EXTRACT(DAY FROM captured_at)::int AS d
+    `SELECT DISTINCT EXTRACT(DAY FROM ${istDay('captured_at')})::int AS d
        FROM attendance
       WHERE employee_id = $1
-        AND EXTRACT(YEAR FROM captured_at) = $2
-        AND EXTRACT(MONTH FROM captured_at) = $3`,
+        AND EXTRACT(YEAR FROM ${istDay('captured_at')}) = $2
+        AND EXTRACT(MONTH FROM ${istDay('captured_at')}) = $3`,
     [employeeId, y, m])).rows.map((r) => r.d));
 
   // Approved miss-punch regularisations count as present.
@@ -91,28 +172,23 @@ export async function classifyMonth(employeeId, year, month, window, policy) {
     'leave_requests', employeeId, y, m,
     'JOIN leave_types lt ON lt.id = r.leave_type_id', `AND lt.code <> 'LWP'`));
 
-  // Declared holidays — national (state IS NULL) plus the employee's own state.
-  const holidays = new Set((await query(
-    `SELECT EXTRACT(DAY FROM holiday_date)::int AS d
-       FROM holidays
-      WHERE EXTRACT(YEAR FROM holiday_date) = $1
-        AND EXTRACT(MONTH FROM holiday_date) = $2
-        AND (state IS NULL OR state = $3)`,
-    [y, m, emp.posting_state || null])).rows.map((r) => r.d));
+  // Declared holidays — the employee's own organisation only: national ones
+  // plus those for their state / office location.
+  const holidays = new Set((await holidaysFor(employeeId, iso(y, m, 1), iso(y, m, dim), { place }))
+    .map((h) => Number(h.date.slice(8, 10))));
 
   // Don't hold someone responsible for days that have not happened yet — a run
   // generated mid-month must not brand the rest of the month as absence.
-  const now = new Date();
-  const isCurrentMonth = now.getFullYear() === y && now.getMonth() + 1 === m;
-  const lastAssessable = isCurrentMonth ? now.getDate() : dim;
+  const [ty, tm, td] = todayIsoIST().split('-').map(Number);
+  const isCurrentMonth = ty === y && tm === m;
+  const lastAssessable = isCurrentMonth ? td : dim;
 
   const days = {};
   const totals = { present: 0, leave: 0, holiday: 0, weekOff: 0, lop: 0, unexplained: 0, future: 0 };
 
   for (let d = window.start; d <= window.end; d++) {
-    const dow = new Date(y, m - 1, d).getDay();
     let kind;
-    if (weekOff.has(dow)) kind = 'WEEK_OFF';
+    if (isWeekOff(y, m, d)) kind = 'WEEK_OFF';
     else if (holidays.has(d)) kind = 'HOLIDAY';
     else if (punched.has(d)) kind = 'PRESENT';
     else if (unpaidLeave.has(d)) kind = 'LOP';
@@ -160,6 +236,8 @@ export async function loadPayrollPolicy(organisationId) {
     attendanceBased: row ? row.attendance_based : true,
     deductUnexplained: row ? row.deduct_unexplained : false,
     weekOffDays: String(row?.week_off_days ?? '0').split(',').filter((s) => s !== '').map(Number),
+    // Added (v2 QA pass, E4): the Saturday rule set in Leave config.
+    saturdayRule: (await loadLeaveSettings(organisationId)).saturdayRule,
   };
 }
 

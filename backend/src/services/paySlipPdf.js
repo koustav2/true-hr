@@ -1,5 +1,5 @@
 import PDFDocument from 'pdfkit';
-import { theme, logoBuffer, watermark, footer, marginNote } from './docPdf.js';
+import { theme, logoBuffer, watermark, footer, marginNote, drawLogo } from './docPdf.js';
 
 const INK = '#111827', SUB = '#6b7280', LINE = '#cbd5e1';
 const MONTHS = ['January', 'February', 'March', 'April', 'May', 'June',
@@ -23,12 +23,17 @@ export function buildPayslipPdf(slip, stream, brand) {
   // hardcoded one, and a logo takes the left slot when the profile has one.
   doc.rect(X, y, W, 30).fill(t.head);
   const img = logoBuffer(t.logo);
+  // H102: the logo is fitted into its slot (aspect kept, at most 120×20) and
+  // the title starts after its real width, so a wide logo no longer runs over
+  // the text. The company name is kept to the space right of the title.
   let tx = X + 10;
-  if (img) { try { doc.image(img, X + 8, y + 5, { height: 20 }); tx = X + 36; } catch { /* skip */ } }
-  doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(13)
-    .text(`PAY SLIP — ${(MONTHS[slip.month - 1] || '').toUpperCase()} ${slip.year}`, tx, y + 9, { lineBreak: false });
+  const lw = drawLogo(doc, img, X + 8, y + 5, 120, 20);
+  if (lw) tx = X + 8 + lw + 10;
+  const title = `PAY SLIP — ${(MONTHS[slip.month - 1] || '').toUpperCase()} ${slip.year}`;
+  doc.fillColor(t.headTx).font('Helvetica-Bold').fontSize(13).text(title, tx, y + 9, { lineBreak: false });
+  const titleEnd = tx + doc.widthOfString(title) + 12;
   doc.font('Helvetica-Bold').fontSize(10).fillColor(t.headTx)
-    .text(String(t.name || '').toUpperCase(), X, y + 10, { width: W - 10, align: 'right' });
+    .text(String(t.name || '').toUpperCase(), titleEnd, y + 10, { width: Math.max(40, X + W - 10 - titleEnd), align: 'right', lineBreak: false, ellipsis: true });
   y += 30;
   doc.moveTo(X, y).lineTo(X + W, y).lineWidth(1.2).strokeColor(t.rule).stroke();
   y += 12;

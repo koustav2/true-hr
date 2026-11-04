@@ -78,6 +78,10 @@ async function main() {
      SELECT o.id, m.key, true
        FROM organisations o
        CROSS JOIN (SELECT unnest($1::text[]) AS key) m
+      -- Only organisations with no entitlement rows at all: a Master's plan
+      -- change deletes and re-inserts the chosen set, so granting every module
+      -- to every org on each deploy silently undid those removals.
+      WHERE NOT EXISTS (SELECT 1 FROM organisation_modules x WHERE x.organisation_id = o.id)
      ON CONFLICT (organisation_id, module_key) DO NOTHING`,
     [SELLABLE_MODULES]);
   console.log('[migrate] organisation module entitlements backfilled');
@@ -364,6 +368,20 @@ async function main() {
       }
     }
     console.log('[migrate] organisation-wide uniqueness ensured on structure');
+  }
+
+  // v2 (web QA fix pass). One file per area, applied in name order, every
+  // statement additive and idempotent so v1 clients keep working unchanged.
+  // A .js file exports `run(pool)` for steps SQL alone cannot express.
+  const v2Dir = path.join(__dirname, 'migrations_v2');
+  if (fs.existsSync(v2Dir)) {
+    for (const f of fs.readdirSync(v2Dir).sort()) {
+      const full = path.join(v2Dir, f);
+      if (f.endsWith('.sql')) await pool.query(fs.readFileSync(full, 'utf8'));
+      else if (f.endsWith('.js')) await (await import(full)).run(pool);
+      else continue;
+      console.log(`[migrate] v2 ${f} applied`);
+    }
   }
 
   await pool.end();

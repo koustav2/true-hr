@@ -69,7 +69,7 @@ export const BANK_SHEET_COLUMNS = {
 const FIELDS = [
   'legal_name', 'brand_name', 'address_line1', 'address_line2', 'city', 'state', 'pincode',
   'country', 'phone', 'email', 'website', 'gstin', 'cin', 'pan',
-  'logo', 'signature_image', 'signatory_name', 'signatory_designation',
+  'logo', 'signature_image', 'signatory_name', 'signatory_designation', 'stamp_image',
   'accent_color', 'head_bg', 'head_text', 'paper_size', 'footer_note', 'watermark_text',
 ];
 
@@ -84,7 +84,7 @@ function fallback() {
     addressLine2: null, city: null, state: null, pincode: null, country: 'India',
     phone: config.supportPhone, email: null, website: config.companyWebsite,
     gstin: null, cin: null, pan: null,
-    logo: null, signatureImage: null, signatoryName: null, signatoryDesignation: null,
+    logo: null, signatureImage: null, signatoryName: null, signatoryDesignation: null, stampImage: null,
     accentColor: '#16a34a', headBg: '#ecfdf5', headText: '#065f46',
     paperSize: 'A4', footerNote: null, watermarkText: null,
   };
@@ -104,6 +104,55 @@ function mergeOptions(base, over) {
 }
 
 /**
+ * Join address parts once each. A profile often holds the whole address in
+ * line 1 ("A-11, Sector-67, Noida, U.P. 201301") AND the city/state/PIN in
+ * their own fields, which printed the address twice on every letterhead.
+ */
+export function joinAddress(parts) {
+  const norm = (x) => String(x || '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+  const out = [];
+  for (const raw of parts) {
+    const p = String(raw ?? '').trim();
+    if (!p) continue;
+    const n = norm(p);
+    if (!n) continue;
+    const sofar = ` ${norm(out.join(' '))} `;
+    if (sofar.includes(` ${n} `)) continue;
+    out.push(p);
+  }
+  return out.join(', ');
+}
+
+/**
+ * The organisation that owns the deployment (the first one, which the seed
+ * creates). Only it inherits the deployment's own name/address/phone from the
+ * environment; every other tenant starts from its OWN name and contact details.
+ * Before this, a new organisation's letters and offer emails went out as
+ * "TRUE HR PVT LTD, Noida".
+ */
+async function orgIdentity(organisationId) {
+  if (!organisationId) return null;
+  const o = (await query(
+    `SELECT o.id, o.name, o.legal_name, o.contact_email, o.contact_phone, o.address,
+            (o.id = (SELECT MIN(id) FROM organisations)) AS is_home
+       FROM organisations o WHERE o.id = $1`, [organisationId])).rows[0];
+  if (!o) return null;
+  if (o.is_home) return null;           // the deployment's own tenant: env fallback
+  const legal = (o.legal_name && String(o.legal_name).trim()) || o.name;
+  return {
+    ...fallback(),
+    legalName: legal, brandName: legal,
+    addressLine1: o.address || null, addressLine2: null, city: null, state: null, pincode: null,
+    phone: o.contact_phone || null, email: o.contact_email || null, website: null,
+  };
+}
+
+/** What a new (unconfigured) profile starts from for this organisation. */
+export async function startingProfile(organisationId) {
+  try { return (await orgIdentity(organisationId)) || fallback(); } catch { return fallback(); }
+}
+
+/**
  * The branding to print on a document for one company.
  *
  * Never throws and never returns null: a PDF must render even if the profile
@@ -111,16 +160,23 @@ function mergeOptions(base, over) {
  * user getting a 500 instead of a letter.
  */
 export async function resolveBrand({ companyId = null, organisationId = null } = {}) {
-  const base = fallback();
+  let base = fallback();
   let options = DEFAULT_OPTIONS;
   try {
+    // A caller that only knows the company still gets its organisation's identity.
+    let orgId = organisationId;
+    if (!orgId && companyId) {
+      orgId = (await query(`SELECT organisation_id FROM companies WHERE id=$1`, [companyId])).rows[0]?.organisation_id || null;
+    }
+    base = (await orgIdentity(orgId)) || base;
+
     // Both levels in one round trip; company row wins where it has a value.
     const { rows } = await query(
       `SELECT * FROM document_profiles
         WHERE (($1::bigint IS NOT NULL AND company_id = $1)
             OR ($2::bigint IS NOT NULL AND company_id IS NULL AND organisation_id = $2))
         ORDER BY (company_id IS NULL)`,
-      [companyId, organisationId]);   // company row sorts first
+      [companyId, orgId]);   // company row sorts first
 
     let merged = { ...base };
     // Apply org default first, then the company row on top of it.
@@ -129,12 +185,14 @@ export async function resolveBrand({ companyId = null, organisationId = null } =
       for (const [k, v] of Object.entries(shaped)) {
         if (v !== null && v !== undefined && v !== '') merged[k] = v;
       }
+      // The brand name follows the legal name unless this level sets its own:
+      // saving a new legal name used to leave the letterhead on the old brand.
+      if (r.legal_name && !r.brand_name) merged.brandName = r.legal_name;
       options = mergeOptions(options, r.options || {});
     }
     merged.options = options;
-    merged.addressLine = [merged.addressLine1, merged.addressLine2,
-      [merged.city, merged.state].filter(Boolean).join(' '), merged.pincode]
-      .filter(Boolean).join(', ');
+    merged.addressLine = joinAddress([merged.addressLine1, merged.addressLine2,
+      [merged.city, merged.state].filter(Boolean).join(' '), merged.pincode]);
     merged.contactLine = [merged.website, merged.phone, merged.email].filter(Boolean).join(' · ');
     merged.taxLine = [merged.gstin && `GSTIN ${merged.gstin}`, merged.cin && `CIN ${merged.cin}`,
       merged.pan && `PAN ${merged.pan}`].filter(Boolean).join(' · ');
@@ -156,14 +214,16 @@ export async function brandForEmployee(employeeId) {
 }
 
 /** What the editor reads and writes. */
-export const shapeProfile = (r, scope) => ({
+// `start` (optional) is what an unconfigured profile shows: the organisation's
+// own identity for the org default, blanks (= inherit) for a company override.
+export const shapeProfile = (r, scope, start) => ({
   id: r ? Number(r.id) : null,
   scope,                                    // 'ORG' | 'COMPANY'
   companyId: r?.company_id != null ? Number(r.company_id) : null,
-  ...(r ? rowToShape(r) : fallback()),
+  ...(r ? rowToShape(r) : (start || fallback())),
   options: mergeOptions(DEFAULT_OPTIONS, r?.options || {}),
   updatedAt: r?.updated_at || null,
   configured: !!r,
 });
 
-export { FIELDS as PROFILE_FIELDS, mergeOptions };
+export { FIELDS as PROFILE_FIELDS, mergeOptions, fallback as deploymentProfile };

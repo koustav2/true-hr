@@ -142,3 +142,80 @@ export const normaliseBands = (bands) => (Array.isArray(bands) && bands.length
       rating: numeric(b.rating),
     })).sort((x, y) => x.min - y.min)
   : DEFAULT_BANDS);
+
+// ── Readable ranges and the grade ladder (QA v2: H119, C36, E31) ────────────
+// A band or grade covers [its floor, the next floor): min inclusive, next min
+// exclusive. Printed whole-number ranges like 90–104 left 104.5% in no grade;
+// reading ranges as "90% to below 105%" makes the ladder continuous.
+
+const fmtPct = (n) => `${Number(n).toLocaleString('en-IN', { maximumFractionDigits: 2 })}%`;
+
+/** "90% to below 105%", "120% and above", "Below 60%". */
+export function rangeLabel(min, nextMin) {
+  if (nextMin == null) return `${fmtPct(min)} and above`;
+  if (Number(min) === 0) return `Below ${fmtPct(nextMin)}`;
+  return `${fmtPct(min)} to below ${fmtPct(nextMin)}`;
+}
+
+/** Bands with a readable `label` each (the floor of the next band is the ceiling). */
+export function labelBands(bands) {
+  const rows = (Array.isArray(bands) ? bands : [])
+    .map((b) => ({ ...b, min: numeric(b?.min) }))
+    .filter((b) => b.min != null)
+    .sort((x, y) => x.min - y.min);
+  return rows.map((b, i) => ({ ...b, label: rangeLabel(b.min, rows[i + 1]?.min ?? null) }));
+}
+
+/**
+ * The grade for a percentage: the highest grade whose floor is at or below it.
+ * `ladder` rows are { code, minPct }. Null only for a negative / missing pct.
+ */
+export function gradeForPct(ladder, pct) {
+  const p = numeric(pct);
+  if (p == null || !Array.isArray(ladder) || !ladder.length) return null;
+  const rows = [...ladder].sort((a, b) => Number(a.minPct) - Number(b.minPct));
+  for (let i = rows.length - 1; i >= 0; i--) if (p >= Number(rows[i].minPct)) return rows[i];
+  return null;
+}
+
+/**
+ * Validate an organisation's grade ladder. Returns { fields } keyed by row
+ * (`grades.<i>.code` …) plus a general `grades` message, or null when valid.
+ * Rules: 2-10 grades; grade numbers 1-10 and unique; codes 1-10 letters/digits
+ * and unique (case-insensitive); a label; floors are numbers 0-1000, unique,
+ * the lowest is 0, and a higher grade always has a higher floor.
+ */
+export function validateLadder(rows) {
+  const fields = {};
+  const add = (k, m) => { if (!fields[k]) fields[k] = m; };
+  if (!Array.isArray(rows) || rows.length < 2) return { grades: 'Give at least two grades.' };
+  if (rows.length > 10) return { grades: 'Ten grades is the most a ladder can have.' };
+  const seenGrade = new Set(); const seenCode = new Set(); const seenMin = new Set();
+  rows.forEach((g, i) => {
+    const grade = Number(g?.grade);
+    if (!Number.isInteger(grade) || grade < 1 || grade > 10) add(`grades.${i}.grade`, 'Grade must be a whole number from 1 to 10');
+    else if (seenGrade.has(grade)) add(`grades.${i}.grade`, `Grade ${grade} is used twice`);
+    else seenGrade.add(grade);
+    const code = String(g?.code ?? '').trim().toUpperCase();
+    if (!code) add(`grades.${i}.code`, 'Code is required');
+    else if (!/^[A-Z0-9+-]{1,10}$/.test(code)) add(`grades.${i}.code`, 'Code must be 1-10 letters or digits');
+    else if (seenCode.has(code)) add(`grades.${i}.code`, `Code ${code} is used twice`);
+    else seenCode.add(code);
+    const label = String(g?.label ?? '').trim();
+    if (!label) add(`grades.${i}.label`, 'Label is required');
+    else if (label.length > 80 || !/[A-Za-z]/.test(label)) add(`grades.${i}.label`, 'Label must be up to 80 characters and contain letters');
+    const min = numeric(g?.minPct);
+    if (min == null) add(`grades.${i}.minPct`, 'From % is required');
+    else if (min < 0 || min > 1000) add(`grades.${i}.minPct`, 'From % must be between 0 and 1000');
+    else if (Math.round(min * 100) !== min * 100) add(`grades.${i}.minPct`, 'From % can have at most 2 decimal places');
+    else if (seenMin.has(min)) add(`grades.${i}.minPct`, `Two grades both start at ${min}%`);
+    else seenMin.add(min);
+  });
+  if (Object.keys(fields).length) return fields;
+  const sorted = rows.map((g) => ({ grade: Number(g.grade), min: numeric(g.minPct) })).sort((a, b) => a.min - b.min);
+  if (sorted[0].min !== 0) return { grades: 'The lowest grade must start at 0%, or a low score would get no grade.' };
+  for (let i = 1; i < sorted.length; i++) {
+    if (sorted[i].grade <= sorted[i - 1].grade) return { grades: 'A higher grade must start at a higher percentage.' };
+  }
+  return null;
+}

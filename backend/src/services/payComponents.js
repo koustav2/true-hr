@@ -220,3 +220,78 @@ export async function annexureFromComponents(companyId, employeeId, annualCtc) {
     return rows.length ? rows : null;
   } catch { return null; }
 }
+
+/**
+ * The company's components with BOTH values kept apart — what the company runs
+ * and what this employee overrides — so a screen can show "inherits 40%" next
+ * to "this employee 45%", and a preview can try an unsaved override.
+ */
+export async function loadDetailedForEmployee(companyId, employeeId) {
+  if (!companyId) return [];
+  const { rows } = await query(
+    `SELECT c.*, v.value AS employee_value
+       FROM salary_components c
+       LEFT JOIN employee_component_values v
+              ON v.component_id = c.id AND v.employee_id = $2
+      WHERE c.company_id = $1 AND c.active
+      ORDER BY c.kind DESC, c.sort_order, c.id`,
+    [companyId, employeeId || null]);
+  return rows.map(shape).map((c) => ({ ...c, companyValue: c.value }));
+}
+
+/**
+ * A company created after the components migration has no rows, and its
+ * payslips then ran on the old fixed template (Basic 50 / HRA 50 of Basic).
+ * Seed it with the same set the migration gives every older company, built from
+ * the company's saved template if it has one, and carry each employee's own
+ * structure across as overrides so no figure moves. Idempotent.
+ */
+export async function ensureCompanyComponents(companyId) {
+  if (!companyId) return false;
+  const have = (await query(`SELECT 1 FROM salary_components WHERE company_id=$1 LIMIT 1`, [companyId])).rowCount;
+  if (have) return false;
+  const c = (await query(
+    `SELECT c.id, c.organisation_id, t.basic_pct, t.hra_pct_of_basic, t.employee_pf_pct, t.professional_tax,
+            t.welfare_trust, t.lta, t.personal_allowance, t.miscellaneous, t.city_allowance, t.performance_pay
+       FROM companies c LEFT JOIN company_salary_templates t ON t.company_id = c.id
+      WHERE c.id = $1`, [companyId])).rows[0];
+  if (!c) return false;
+  const n = (v, d) => (v == null ? d : Number(v));
+  const tpl = {
+    basicPct: n(c.basic_pct, 50), hraPctOfBasic: n(c.hra_pct_of_basic, 50), employeePfPct: n(c.employee_pf_pct, 12),
+    professionalTax: n(c.professional_tax, 200), welfareTrust: n(c.welfare_trust, 0), lta: n(c.lta, 0),
+    personalAllowance: n(c.personal_allowance, 0), miscellaneous: n(c.miscellaneous, 0),
+    cityAllowance: n(c.city_allowance, 0), performancePay: n(c.performance_pay, 0),
+  };
+  for (const comp of legacyComponents(tpl)) {
+    await query(
+      `INSERT INTO salary_components
+         (organisation_id, company_id, code, label, kind, calc, basis_code, value,
+          prorate, taxable, statutory, per_employee, sort_order)
+       VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13)
+       ON CONFLICT (company_id, code) DO NOTHING`,
+      [c.organisation_id, c.id, comp.code, comp.label, comp.kind, comp.calc, comp.basisCode || null,
+       comp.value, comp.prorate, comp.taxable, comp.statutory || null, comp.perEmployee !== false, comp.sortOrder]);
+  }
+  const comps = (await query(`SELECT id, code, value FROM salary_components WHERE company_id=$1`, [c.id])).rows;
+  const structures = (await query(
+    `SELECT ss.* FROM salary_structures ss JOIN employees e ON e.id = ss.employee_id WHERE e.company_id = $1`, [c.id])).rows;
+  for (const ss of structures) {
+    const own = {
+      basicPct: ss.basic_pct, hraPctOfBasic: ss.hra_pct_of_basic, employeePfPct: ss.employee_pf_pct,
+      professionalTax: ss.professional_tax, welfareTrust: ss.welfare_trust, lta: ss.lta,
+      personalAllowance: ss.personal_allowance, miscellaneous: ss.miscellaneous,
+      cityAllowance: ss.city_allowance, performancePay: ss.performance_pay,
+    };
+    for (const comp of comps) {
+      const field = LEGACY_FIELD[comp.code];
+      if (!field || own[field] == null) continue;
+      if (Number(own[field]) === Number(comp.value)) continue;
+      await query(
+        `INSERT INTO employee_component_values (employee_id, component_id, value)
+         VALUES ($1,$2,$3) ON CONFLICT (employee_id, component_id) DO NOTHING`,
+        [ss.employee_id, comp.id, Number(own[field])]);
+    }
+  }
+  return true;
+}

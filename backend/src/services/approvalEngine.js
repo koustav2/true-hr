@@ -26,6 +26,15 @@ const appError = (message, status = 400) =>
 
 export const ACTIONS = ['APPROVED', 'REJECTED', 'QUERY_HOLD'];
 
+// Readable name for every stage used by any flow (C34/H112).
+export const STAGE_LABELS = {
+  REPORTING_MANAGER: 'Reporting Manager', FUNCTIONAL_HEAD: 'Functional Head', FUNCTIONAL_MANAGER: 'Functional Manager',
+  MATRIX_MANAGER: 'Matrix Manager', FINANCE_INITIATOR: 'Finance Initiator', PROJECT_LEADER: 'Project Leader',
+  BUSINESS_LEADER: 'Business Leader', BUSINESS_HEAD: 'Business Head', FINANCE: 'Finance', FINAL_APPROVAL: 'Final Approval',
+  ADMIN: 'Admin', OFFICE_ADMIN: 'Office Admin', DIRECTOR: 'Director', CLOSER: 'Closer', HR: 'Human Resource',
+};
+export const stageLabel = (k) => STAGE_LABELS[k] || String(k || '').replace(/_/g, ' ').toLowerCase().replace(/^\w/, (c) => c.toUpperCase());
+
 // role_key → employees column used by the manager_chain resolver.
 const MANAGER_COLS = {
   REPORTING_MANAGER: 'reporting_manager_id',
@@ -54,63 +63,87 @@ async function orgOfEmployee(employeeId) {
  */
 async function sameOrg(approverId, orgId) {
   if (!approverId) return null;
-  if (orgId == null) return approverId;          // platform-level, nothing to compare
+  // Never route to someone who has left (H113/H85): deactivated, or past an
+  // approved last working day / an active termination's last day. A stage
+  // whose approver has exited is treated as unresolved.
   const r = await query(
-    `SELECT 1 FROM employees WHERE id=$1 AND organisation_id=$2`, [approverId, orgId]);
+    `SELECT 1 FROM employees e
+      WHERE e.id=$1 AND ($2::bigint IS NULL OR e.organisation_id=$2)
+        AND NOT ${exitedSql('e')}`, [approverId, orgId ?? null]);
   return r.rowCount ? approverId : null;
 }
 
-async function resolveApprover(stage, employeeId, ctx, orgId = undefined) {
+// True when the employee has left. Deliberately not activeEmployeeSql(): that
+// also requires an employee code and ACTIVE onboarding, and approvers created
+// by older flows/scripts may lack both while still being on the payroll.
+export const exitedSql = (a) => `(
+  ${a}.onboarding_status = 'INACTIVE'
+  OR EXISTS (SELECT 1 FROM resignations rx WHERE rx.employee_id=${a}.id AND rx.status='APPROVED'
+              AND rx.last_working_date < (now() AT TIME ZONE 'Asia/Kolkata')::date)
+  OR EXISTS (SELECT 1 FROM terminations tx WHERE tx.employee_id=${a}.id AND tx.status='ACTIVE'
+              AND tx.last_working_date < (now() AT TIME ZONE 'Asia/Kolkata')::date))`;
+
+// The org's approver_matrix row for a role (most specific wins). Rows flagged
+// for reassignment (their approver left) are ignored.
+async function matrixLookup(roleKey, ctx, org) {
+  const r = await query(
+    `SELECT approver_employee_id
+       FROM approver_matrix
+      WHERE role_key = $1
+        AND (project_id          IS NULL OR project_id          = $2)
+        AND (expense_category_id IS NULL OR expense_category_id = $3)
+        AND (zone_id             IS NULL OR zone_id             = $4)
+        AND organisation_id IS NOT DISTINCT FROM $5::bigint
+        AND NOT COALESCE(needs_reassignment, false)
+      ORDER BY (project_id IS NOT NULL)::int + (expense_category_id IS NOT NULL)::int + (zone_id IS NOT NULL)::int DESC
+      LIMIT 1`,
+    [roleKey, ctx.projectId || null, ctx.expenseCategoryId || null, ctx.zoneId || null, org ?? null]);
+  return sameOrg(r.rows[0]?.approver_employee_id, org);
+}
+
+async function resolveApprover(stage, employeeId, ctx, orgId = undefined, { noSelf = false } = {}) {
+  const id = await resolveApproverRaw(stage, employeeId, ctx || {}, orgId);
+  // v2: a requester never approves their own request; the stage is then
+  // treated as unstaffed (skipped if optional, blocks a v2 submission if not).
+  if (noSelf && id && Number(id) === Number(employeeId)) return null;
+  return id;
+}
+
+async function resolveApproverRaw(stage, employeeId, ctx, orgId = undefined) {
   // Resolve the tenant once if the caller did not. Passing it in is cheaper —
   // this runs per stage — but deriving it here means no call site can omit it.
   const org = orgId === undefined ? await orgOfEmployee(employeeId) : orgId;
-  const fallback = () => sameOrg(stage.default_approver_employee_id || null, org);
+  // A manager-chain or named stage with nobody behind it falls back to the
+  // organisation's Approvers page row for the same stage (C34/H112/E50), and
+  // only then to the stage's default approver.
+  const fallback = async () => (await matrixLookup(stage.role_key, ctx, org))
+    || sameOrg(stage.default_approver_employee_id || null, org);
 
   if (stage.resolver_type === 'named_user') return fallback();
 
   if (stage.resolver_type === 'manager_chain') {
     const col = MANAGER_COLS[stage.role_key];
     if (!col) return fallback();
-    // The manager must be inside the raiser's organisation. updateEmployee and
-    // createEmployee now validate that when a manager is assigned, but rows
-    // written before that check could still point across tenants.
-    //
-    // IS NOT DISTINCT FROM, not `=`: a plain equality is NULL — never true —
-    // when both sides are NULL, so a pair of employees with no organisation set
-    // (legacy rows, or any created by a script that omits it) silently resolved
-    // to no manager. That left stage 1 of every chain unresolved and mandatory,
-    // which stalls the whole approval until a staff override. NULL still only
-    // matches NULL here, so a genuine cross-tenant manager is refused as before
-    // — and this now matches how sameOrg() already treats an absent tenant.
+    // The manager must be inside the raiser's organisation (IS NOT DISTINCT
+    // FROM so two org-less legacy rows still match each other).
     const r = await query(
       `SELECT m.id AS mgr
          FROM employees e
          JOIN employees m ON m.id = e.${col}
-        WHERE e.id = $1 AND m.organisation_id IS NOT DISTINCT FROM e.organisation_id`, [employeeId]);
+        WHERE e.id = $1 AND m.organisation_id IS NOT DISTINCT FROM e.organisation_id
+          AND NOT ${exitedSql('m')}`, [employeeId]);
     return r.rows[0]?.mgr || await fallback();
   }
 
   if (stage.resolver_type === 'matrix') {
     // Most-specific match wins: project+category+zone > partial > wildcard row.
-    const r = await query(
-      `SELECT approver_employee_id
-         FROM approver_matrix
-        WHERE role_key = $1
-          AND (project_id          IS NULL OR project_id          = $2)
-          AND (expense_category_id IS NULL OR expense_category_id = $3)
-          AND (zone_id             IS NULL OR zone_id             = $4)
-          AND ($5::bigint IS NULL OR organisation_id = $5)
-        ORDER BY (project_id IS NOT NULL)::int + (expense_category_id IS NOT NULL)::int + (zone_id IS NOT NULL)::int DESC
-        LIMIT 1`,
-      [stage.role_key, ctx.projectId || null, ctx.expenseCategoryId || null, ctx.zoneId || null, org]
-    );
-    return await sameOrg(r.rows[0]?.approver_employee_id, org) || await fallback();
+    return (await matrixLookup(stage.role_key, ctx, org)) || sameOrg(stage.default_approver_employee_id || null, org);
   }
   return null;
 }
 
 // Preview the chain without creating anything (shown read-only on create forms).
-export async function previewChain(flowCode, employeeId, ctx = {}) {
+export async function previewChain(flowCode, employeeId, ctx = {}, { noSelf = false } = {}) {
   const stages = (await query(
     `SELECT s.* FROM approval_flow_stages s
        JOIN approval_flows f ON f.id = s.flow_id
@@ -118,7 +151,7 @@ export async function previewChain(flowCode, employeeId, ctx = {}) {
   const out = [];
   const orgId = await orgOfEmployee(employeeId);
   for (const s of stages) {
-    const approverId = await resolveApprover(s, employeeId, ctx, orgId);
+    const approverId = await resolveApprover(s, employeeId, ctx, orgId, { noSelf });
     let approver = null;
     if (approverId) {
       // Belt and braces: resolveApprover already refuses a cross-org approver,
@@ -130,7 +163,8 @@ export async function previewChain(flowCode, employeeId, ctx = {}) {
         [approverId, orgId])).rows[0];
       if (e) approver = { id: e.id, employeeCode: e.employee_code, name: `${e.first_name} ${e.last_name}`.trim(), email: e.official_email };
     }
-    out.push({ seq: s.seq, roleKey: s.role_key, approver, willBypass: !approverId && s.optional_bypass });
+    out.push({ seq: s.seq, roleKey: s.role_key, roleLabel: stageLabel(s.role_key), approver, optional: !!s.optional_bypass,
+      willBypass: !approverId && s.optional_bypass, missing: !approverId && !s.optional_bypass });
   }
   return out;
 }
@@ -210,7 +244,7 @@ async function notify(instanceId, { action = null, actorEmployeeId = null, remar
   } catch (e) { console.warn('[approval-notify] skipped:', e.message); }
 }
 
-export async function createInstance(flowCode, subjectType, subjectId, raisedByEmployeeId, ctx = {}, actorUserId = null) {
+export async function createInstance(flowCode, subjectType, subjectId, raisedByEmployeeId, ctx = {}, actorUserId = null, { noSelf = false } = {}) {
   const flow = (await query(`SELECT id FROM approval_flows WHERE code=$1 AND active`, [flowCode])).rows[0];
   if (!flow) throw appError(`Unknown approval flow ${flowCode}`, 400);
 
@@ -225,7 +259,7 @@ export async function createInstance(flowCode, subjectType, subjectId, raisedByE
 
   const orgId = await orgOfEmployee(raisedByEmployeeId);
   for (const s of stages) {
-    const approverId = await resolveApprover(s, raisedByEmployeeId, ctx, orgId);
+    const approverId = await resolveApprover(s, raisedByEmployeeId, ctx, orgId, { noSelf });
     await query(
       `INSERT INTO approval_instance_stages (instance_id, seq, role_key, approver_employee_id)
        VALUES ($1,$2,$3,$4)`, [inst.id, s.seq, s.role_key, approverId]);
@@ -286,7 +320,31 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
       WHERE i.id = $1 AND ($2::bigint IS NULL OR e.organisation_id = $2)`,
     [instanceId, orgId || null])).rowCount;
   if (!inTenant) throw appError('Approval instance not found', 404);
-  if (inst.status !== 'PENDING') throw appError(`Instance is ${inst.status}, not actionable`, 409);
+
+  // Who is acting, by name — recorded on the stage and the trail so an HR
+  // override is shown under the HR user, not under the stage's approver (C32).
+  const actorName = await nameOfActor(actorUserId, actorEmployeeId);
+
+  // Staff may close a request that sits on a query (the raiser never replied).
+  if (inst.status === 'QUERY' && isStaff && action === 'REJECTED') {
+    const seq = inst.query_stage_seq || inst.current_stage_seq;
+    const qs = (await query(`SELECT role_key FROM approval_instance_stages WHERE instance_id=$1 AND seq=$2`, [instanceId, seq])).rows[0];
+    const closed = await query(
+      `UPDATE approval_instances SET status='REJECTED', rejected_by_role=$2, rejected_by_name=$3, completed_at=now(), query_stage_seq=NULL
+        WHERE id=$1 AND status='QUERY'`, [instanceId, qs?.role_key || 'HR', actorName]);
+    if (!closed.rowCount) throw appError('This request has already been actioned', 409);
+    await query(
+      `UPDATE approval_instance_stages SET status='REJECTED', remarks=$3, acted_at=now(),
+              acted_by_user_id=$4, acted_by_name=$5, is_override=true
+        WHERE instance_id=$1 AND seq=$2`, [instanceId, seq, remarks || null, actorUserId, actorName]);
+    await query(
+      `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks, actor_user_id, actor_name, is_override)
+       VALUES ($1,$2,$3,'REJECTED',$4,$5,$6,true)`, [instanceId, seq, actorEmployeeId, remarks || null, actorUserId, actorName]);
+    await audit(actorUserId, 'APPROVAL_REJECTED', inst.subject_type, inst.subject_id, { instanceId, stageSeq: seq, override: true });
+    await notify(instanceId, { action, actorEmployeeId, remarks });
+    return { ...(await getInstance(instanceId)), done: true, rejected: true };
+  }
+  if (inst.status !== 'PENDING') throw appError(`This request is ${String(inst.status).toLowerCase()} and cannot be actioned`, 409);
 
   const stage = (await query(
     `SELECT * FROM approval_instance_stages WHERE instance_id=$1 AND seq=$2`,
@@ -295,32 +353,32 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
 
   const isApprover = stage.approver_employee_id && Number(stage.approver_employee_id) === Number(actorEmployeeId);
   if (!isApprover && !isStaff) throw appError('You are not the approver for this stage', 403);
+  const isOverride = !isApprover;
 
   const stageStatus = action === 'APPROVED' ? 'APPROVED' : action === 'REJECTED' ? 'REJECTED' : 'QUERY';
-  // Claim the stage, and only if it is still pending. The SELECT above is a
-  // read — two approvals arriving together both saw the same PENDING stage and
-  // both went on to advance the chain, which a double-tap on a mobile Approve
-  // button is enough to cause. Making the write itself conditional means
-  // exactly one caller can win, with no transaction or lock needed, and the
-  // loser is told the truth instead of quietly advancing the chain twice.
+  // Claim the stage, and only if it is still pending (a double-tap must not
+  // advance the chain twice). An override no longer writes the HR user into
+  // approver_employee_id: the stage keeps its approver, and the actor is
+  // recorded separately.
   const claimed = await query(
     `UPDATE approval_instance_stages SET status=$2, remarks=$3, acted_at=now(),
-            approver_employee_id = COALESCE(approver_employee_id, $4)
-      WHERE id=$1 AND status='PENDING'`, [stage.id, stageStatus, remarks || null, actorEmployeeId]);
+            approver_employee_id = CASE WHEN $6 THEN approver_employee_id ELSE COALESCE(approver_employee_id, $4) END,
+            acted_by_user_id=$5, acted_by_name=$7, is_override=$6
+      WHERE id=$1 AND status='PENDING'`,
+    [stage.id, stageStatus, remarks || null, actorEmployeeId, actorUserId, isOverride, actorName]);
   if (!claimed.rowCount) throw appError('This stage has already been actioned', 409);
   await query(
-    `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks)
-     VALUES ($1,$2,$3,$4,$5)`, [instanceId, stage.seq, actorEmployeeId, action, remarks || null]);
+    `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks, actor_user_id, actor_name, is_override)
+     VALUES ($1,$2,$3,$4,$5,$6,$7,$8)`,
+    [instanceId, stage.seq, actorEmployeeId, action, remarks || null, actorUserId, actorName, isOverride]);
 
   let result;
   if (action === 'APPROVED') {
     result = await advance(instanceId, stage.seq, actorUserId);
   } else if (action === 'REJECTED') {
-    const actor = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [actorEmployeeId])).rows[0];
-    const name = actor ? `${actor.first_name} ${actor.last_name}`.trim() : null;
     await query(
       `UPDATE approval_instances SET status='REJECTED', rejected_by_role=$2, rejected_by_name=$3, completed_at=now()
-        WHERE id=$1`, [instanceId, stage.role_key, name]);
+        WHERE id=$1`, [instanceId, stage.role_key, actorName]);
     result = { done: true, rejected: true };
   } else { // QUERY_HOLD — back to the raiser; resumes at this stage on resubmit
     await query(
@@ -328,9 +386,23 @@ export async function act(instanceId, actorEmployeeId, action, remarks = '', { i
       [instanceId, stage.seq]);
     result = { done: false, query: true };
   }
-  await audit(actorUserId, `APPROVAL_${action}`, inst.subject_type, inst.subject_id, { instanceId, stageSeq: stage.seq, roleKey: stage.role_key });
+  await audit(actorUserId, `APPROVAL_${action}`, inst.subject_type, inst.subject_id, { instanceId, stageSeq: stage.seq, roleKey: stage.role_key, override: isOverride });
   await notify(instanceId, { action, actorEmployeeId, remarks });
   return { ...(await getInstance(instanceId)), ...result };
+}
+
+async function nameOfActor(actorUserId, actorEmployeeId) {
+  if (actorEmployeeId) {
+    const a = (await query(`SELECT first_name, last_name FROM employees WHERE id=$1`, [actorEmployeeId])).rows[0];
+    if (a) return `${a.first_name || ''} ${a.last_name || ''}`.trim();
+  }
+  if (actorUserId) {
+    const u = (await query(
+      `SELECT ua.email, e.first_name, e.last_name FROM user_accounts ua
+         LEFT JOIN employees e ON e.id = ua.employee_id WHERE ua.id=$1`, [actorUserId])).rows[0];
+    if (u) return u.first_name ? `${u.first_name} ${u.last_name || ''}`.trim() : u.email;
+  }
+  return null;
 }
 
 // Raiser resubmits after a QUERY_HOLD; the chain resumes at the querying stage.
@@ -356,6 +428,26 @@ export async function resubmit(instanceId, raiserEmployeeId, remarks = '', actor
   return getInstance(instanceId);
 }
 
+// Raiser (or staff) withdraws a request before it completes. Open stages are
+// closed as CANCELLED so the item leaves every approver's inbox at once.
+export async function cancel(instanceId, { actorEmployeeId = null, actorUserId = null, remarks = 'Withdrawn by the requester' } = {}) {
+  const inst = (await query(`SELECT * FROM approval_instances WHERE id=$1`, [instanceId])).rows[0];
+  if (!inst) throw appError('Approval instance not found', 404);
+  if (!['PENDING', 'QUERY'].includes(inst.status)) throw appError(`This request is already ${String(inst.status).toLowerCase()}`, 409);
+  const done = await query(
+    `UPDATE approval_instances SET status='CANCELLED', completed_at=now()
+      WHERE id=$1 AND status IN ('PENDING','QUERY')`, [instanceId]);
+  if (!done.rowCount) throw appError('This request has already been actioned', 409);
+  await query(
+    `UPDATE approval_instance_stages SET status='CANCELLED', acted_at=now()
+      WHERE instance_id=$1 AND status IN ('PENDING','WAITING','QUERY')`, [instanceId]);
+  await query(
+    `INSERT INTO approval_actions (instance_id, stage_seq, actor_employee_id, action, remarks)
+     VALUES ($1,$2,$3,'WITHDRAWN',$4)`, [instanceId, inst.current_stage_seq, actorEmployeeId, remarks || null]);
+  await audit(actorUserId, 'APPROVAL_WITHDRAWN', inst.subject_type, inst.subject_id, { instanceId });
+  return getInstance(instanceId);
+}
+
 // Full instance with chain + trail (for detail views).
 export async function getInstance(instanceId) {
   const inst = (await query(
@@ -364,13 +456,13 @@ export async function getInstance(instanceId) {
       WHERE i.id=$1`, [instanceId])).rows[0];
   if (!inst) return null;
   const stages = (await query(
-    `SELECT st.seq, st.role_key, st.status, st.remarks, st.acted_at,
+    `SELECT st.seq, st.role_key, st.status, st.remarks, st.acted_at, st.acted_by_name, st.is_override,
             e.id AS approver_id, e.employee_code, e.first_name, e.last_name, e.official_email
        FROM approval_instance_stages st
        LEFT JOIN employees e ON e.id = st.approver_employee_id
       WHERE st.instance_id=$1 ORDER BY st.seq`, [instanceId])).rows;
   const actions = (await query(
-    `SELECT a.stage_seq, a.action, a.remarks, a.acted_at,
+    `SELECT a.stage_seq, a.action, a.remarks, a.acted_at, a.actor_name, a.is_override,
             e.employee_code, e.first_name, e.last_name
        FROM approval_actions a LEFT JOIN employees e ON e.id = a.actor_employee_id
       WHERE a.instance_id=$1 ORDER BY a.acted_at, a.id`, [instanceId])).rows;
@@ -391,9 +483,11 @@ export async function getInstance(instanceId) {
     chain: stages.map((s) => ({
       seq: s.seq,
       roleKey: s.role_key,
+      roleLabel: stageLabel(s.role_key),
       status: s.status,
       remarks: s.remarks,
       actedAt: s.acted_at,
+      actedBy: s.acted_by_name ? { name: s.acted_by_name, override: !!s.is_override } : null,
       approver: s.approver_id ? {
         id: s.approver_id, employeeCode: s.employee_code,
         name: `${s.first_name} ${s.last_name}`.trim(), email: s.official_email,
@@ -401,7 +495,9 @@ export async function getInstance(instanceId) {
     })),
     trail: actions.map((a) => ({
       stageSeq: a.stage_seq, action: a.action, remarks: a.remarks, actedAt: a.acted_at,
-      actor: a.employee_code ? { employeeCode: a.employee_code, name: `${a.first_name} ${a.last_name}`.trim() } : null,
+      actor: a.employee_code ? { employeeCode: a.employee_code, name: a.actor_name || `${a.first_name} ${a.last_name}`.trim() }
+        : (a.actor_name ? { employeeCode: null, name: a.actor_name } : null),
+      override: !!a.is_override,
     })),
   };
 }

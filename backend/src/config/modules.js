@@ -34,7 +34,8 @@ export const MODULES = [
   // ── PEOPLE ────────────────────────────────────────────────────
   { key: 'EMPLOYEES',     label: 'Employees',            group: MODULE_GROUPS.PEOPLE,      path: '/admin/employees' },
   { key: 'ONBOARDING',    label: 'Onboarding & Review',  group: MODULE_GROUPS.PEOPLE,      path: '/admin/review' },
-  { key: 'ATTENDANCE',    label: 'Attendance',           group: MODULE_GROUPS.PEOPLE },
+  { key: 'ATTENDANCE',    label: 'Attendance',           group: MODULE_GROUPS.PEOPLE,      path: '/admin/attendance',
+    note: 'Attendance, leave, on-duty, miss-punch and comp-off requests' },
   { key: 'LEAVE',         label: 'Leave Configuration',  group: MODULE_GROUPS.PEOPLE,      path: '/admin/leave-config' },
   { key: 'STRUCTURE',     label: 'Departments & Roles',  group: MODULE_GROUPS.PEOPLE,
     path: '/admin/hierarchy',
@@ -45,6 +46,8 @@ export const MODULES = [
     note: 'Employee-submitted profile, address and bank changes awaiting approval' },
   { key: 'ORGCHART',      label: 'Organisation Chart',   group: MODULE_GROUPS.PEOPLE,      path: '/admin/org-chart',
     note: 'Reporting hierarchy by manager level' },
+  { key: 'WISHES',        label: 'Wishes',               group: MODULE_GROUPS.PEOPLE,      path: '/admin/wishes',
+    note: 'Upcoming birthdays and work anniversaries' },
   // ── PAY ───────────────────────────────────────────────────────
   { key: 'PAYROLL',       label: 'Payroll & Payslips',   group: MODULE_GROUPS.PAY,     path: '/admin/payroll',
     sensitive: true, note: 'Salary structures, runs and bank sheets' },
@@ -70,9 +73,12 @@ export const MODULES = [
     sensitive: true,
     note: 'Letterhead, logo, signatory and PDF templates per organisation or company' },
   { key: 'BANNERS',       label: 'App Banners',          group: MODULE_GROUPS.COMMS,       path: '/admin/banners' },
+  { key: 'SCHEDULER',     label: 'Notification Scheduler', group: MODULE_GROUPS.COMMS,     path: '/admin/notification-scheduler',
+    note: 'Recurring reminders and announcements' },
   // ── FINANCE ───────────────────────────────────────────────────
   { key: 'NFA',           label: 'NFA',                  group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa' },
-  { key: 'SETTLEMENTS',   label: 'Settlements',          group: MODULE_GROUPS.FINANCE },
+  { key: 'SETTLEMENTS',   label: 'Settlements',          group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa',
+    note: 'NFA settlements are reviewed inside each NFA in the NFA queue' },
   { key: 'NFA_REPORTS',   label: 'NFA Reports',          group: MODULE_GROUPS.FINANCE,     path: '/admin/nfa-reports' },
   { key: 'VENDORS',       label: 'Vendors & Agreements', group: MODULE_GROUPS.FINANCE,     path: '/admin/vendors' },
   { key: 'MASTERS',       label: 'Masters',              group: MODULE_GROUPS.FINANCE,     path: '/admin/masters' },
@@ -134,6 +140,7 @@ export const SYSTEM_ROLES = [
     manage: [
       'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'RESIGNATION',
       'TERMINATION', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'POLICIES', 'SUPPORT', 'BANNERS', 'CHANGEREQ', 'ORGCHART',
+      'WISHES', 'SCHEDULER',
       'BULK', 'HRMIS', 'DOCBRAND', 'ORGMASTERS',
       'MASTERS', 'APPROVERS', 'NFA', 'SETTLEMENTS', 'NFA_REPORTS', 'VENDORS', 'PMS',
       'STRUCTURE', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS', 'ASSETS',
@@ -226,12 +233,12 @@ export const GRACE_MODULES = ['DASHBOARD'];
 
 const STARTER = [
   'DASHBOARD', 'EMPLOYEES', 'ONBOARDING', 'ATTENDANCE', 'LEAVE', 'STRUCTURE',
-  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART', 'DOCBRAND', 'ORGMASTERS',
+  'POLICIES', 'SUPPORT', 'USERS', 'ROLES', 'AUDIT', 'CHANGEREQ', 'ORGCHART', 'DOCBRAND', 'ORGMASTERS', 'WISHES',
 ];
 const GROWTH = [
   ...STARTER, 'COMPANIES', 'PAYROLL', 'INCREMENT', 'PAYCOMP', 'STATUTORY', 'INVDECL', 'FNF', 'LETTERS',
   'BULK', 'HRMIS',
-  'RESIGNATION', 'TERMINATION', 'ASSETS', 'BANNERS',
+  'RESIGNATION', 'TERMINATION', 'ASSETS', 'BANNERS', 'SCHEDULER',
 ];
 
 export const PLANS = [

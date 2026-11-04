@@ -43,8 +43,18 @@ export function computeFnf(p = {}) {
   const lwd = p.lastWorkingDate;
   const dim = lwd ? dInMonth(new Date(lwd).getFullYear(), new Date(lwd).getMonth() + 1) : 30;
 
-  // 1) Final-month salary for days actually worked (1st → LWD of that month).
-  const finalMonthDays = lwd ? new Date(lwd).getDate() : 0;
+  // 1) Final-month salary for days actually worked: from the 1st of the LWD's
+  // month — or the joining date, if they joined that month — to the LWD. A LWD
+  // before the joining date is no service at all (it used to pay one day).
+  const lwdIso = lwd ? String(lwd).slice(0, 10) : null;
+  const dojIso = p.dateOfJoining ? (p.dateOfJoining instanceof Date
+    ? `${p.dateOfJoining.getFullYear()}-${String(p.dateOfJoining.getMonth() + 1).padStart(2, '0')}-${String(p.dateOfJoining.getDate()).padStart(2, '0')}`
+    : String(p.dateOfJoining).slice(0, 10)) : null;
+  let finalMonthDays = lwd ? new Date(lwd).getDate() : 0;
+  if (lwdIso && dojIso) {
+    if (dojIso > lwdIso) finalMonthDays = 0;
+    else if (dojIso.slice(0, 7) === lwdIso.slice(0, 7)) finalMonthDays = Number(lwdIso.slice(8, 10)) - Number(dojIso.slice(8, 10)) + 1;
+  }
   const perDayGross = gross / dim;
   const finalMonthSalary = r2(perDayGross * finalMonthDays);
 
@@ -82,13 +92,19 @@ export function computeFnf(p = {}) {
     { type: 'deduction', label: 'Advances / loans', amount: advances },
     { type: 'deduction', label: 'Asset / IT recovery', amount: assetRecovery },
     { type: 'deduction', label: 'Other deductions', amount: otherDeductions },
-  ].filter((l) => l.amount);
+  ];
+  // Every line, zero or not, so a preview shows that final salary and gratuity
+  // were considered (H95); `lines` keeps only the non-zero ones as before.
+  const allLines = lines.map((l) => ({ ...l }));
+  const gratuityNote = gratuity ? null : `Not payable: ${years} completed year${years === 1 ? '' : 's'} of service, ${eligYears} needed`;
+  for (const l of allLines) if (l.label.startsWith('Gratuity') && gratuityNote) l.note = gratuityNote;
+  const shown = lines.filter((l) => l.amount);
 
   const earnings = r2(finalMonthSalary + leaveEncashment + gratuity + arrears + bonus + otherEarnings);
   const deductions = r2(noticeRecovery + tds + advances + assetRecovery + otherDeductions);
   const net = r2(earnings - deductions);
   return {
-    lines, earnings, deductions, net,
+    lines: shown, allLines, earnings, deductions, net,
     breakup: { finalMonthDays, finalMonthSalary, leaveDays, leaveEncashment, gratuity, completedYears: years,
       noticeShortfall, noticeRecovery, perDayGross: r2(perDayGross), perDayWage: r2(perDayWage) },
     payableBy: net >= 0 ? 'company' : 'employee',

@@ -3,6 +3,8 @@ import { audit } from '../utils/audit.js';
 import { enqueueEmail } from '../services/emailQueue.js';
 import { platformTicketRaisedEmail, platformTicketRepliedEmail } from '../services/emailTemplates.js';
 import { config } from '../config/index.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { validator } from '../utils/validate.js';
 
 // ============================================================================
 // Master tickets — the one channel that deliberately crosses the tenant line.
@@ -62,6 +64,9 @@ const shape = (r, { withBody = true } = {}) => ({
   raisedBy: r.raiser_name || null,
   raiserEmail: r.raiser_email || null,
   raiserRole: r.raiser_role || null,
+  assignedTo: r.assigned_to != null ? Number(r.assigned_to) : null,
+  assigneeEmail: r.assignee_email || null,
+  assignedAt: r.assigned_at || null,
 });
 
 // Columns every read needs. `screenshot` itself is never selected into a list —
@@ -69,6 +74,8 @@ const shape = (r, { withBody = true } = {}) => ({
 const COLS = `t.id, t.ticket_code, t.organisation_id, t.subject, t.description, t.status,
               t.contact_email, t.contact_phone, t.screenshot_name, t.reply, t.replied_at,
               t.created_at, t.updated_at, t.raiser_name, t.raiser_email, t.raiser_role,
+              t.assigned_to, t.assigned_at,
+              (SELECT ua.email FROM user_accounts ua WHERE ua.id = t.assigned_to) AS assignee_email,
               (t.screenshot IS NOT NULL) AS has_screenshot`;
 
 // Derived from the row's own id rather than a count, so two people raising a
@@ -90,6 +97,21 @@ export async function create(req, res, next) {
     const contactEmail = clean(b.contactEmail, 160).toLowerCase();
     const contactPhone = clean(b.contactPhone, 24);
 
+    if (isV2(req)) {
+      // v2: name the field that is wrong (QA E62). "Leave an email or a phone"
+      // is only true when both are blank.
+      const v = validator();
+      v.require('subject', subject, 'Subject');
+      v.require('description', description, 'Description');
+      if (!contactEmail && !contactPhone) {
+        v.add('contactEmail', 'Leave an email or a phone number so we can reach you');
+      }
+      v.email('contactEmail', contactEmail, 'Email');
+      if (contactPhone && !PHONE_RE.test(contactPhone)) {
+        v.add('contactPhone', 'Phone is not a valid phone number (at least 8 digits, e.g. +91 98765 43210)');
+      }
+      v.throwIfAny();
+    }
     if (!subject) throw err('Please give the issue a short subject');
     if (!description) throw err('Please describe the issue');
     if (!contactEmail && !contactPhone) {
@@ -97,6 +119,10 @@ export async function create(req, res, next) {
     }
     if (contactEmail && !EMAIL_RE.test(contactEmail)) throw err('That email address does not look right');
     if (contactPhone && !PHONE_RE.test(contactPhone)) throw err('That phone number does not look right');
+
+    // The platform owner logging a ticket on a tenant's behalf (v2 admin route)
+    // names the organisation; everyone else's ticket is from their own.
+    const ticketOrg = req.ticketOrgId !== undefined ? req.ticketOrgId : (req.orgId || null);
 
     let shot = null, shotMime = null, shotName = null;
     if (b.screenshot) {
@@ -117,7 +143,7 @@ export async function create(req, res, next) {
          FROM user_accounts ua
          LEFT JOIN employees e ON e.id = ua.employee_id
          LEFT JOIN organisations o ON o.id = $2
-        WHERE ua.id = $1`, [req.user.id, req.orgId || null])).rows[0] || {};
+        WHERE ua.id = $1`, [req.user.id, ticketOrg])).rows[0] || {};
     const raiserName = [who.first_name, who.last_name].filter(Boolean).join(' ').trim()
       || who.email || 'Unknown user';
     const raiserRole = req.auth?.roleLabel || who.role || null;
@@ -130,7 +156,7 @@ export async function create(req, res, next) {
             screenshot, screenshot_mime, screenshot_name)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12)
          RETURNING id, created_at`,
-        [req.orgId || null, req.user.id, raiserName, who.email || null, raiserRole,
+        [ticketOrg, req.user.id, raiserName, who.email || null, raiserRole,
          subject, description, contactEmail || null, contactPhone || null,
          shot, shotMime, shotName])).rows[0];
       return (await c.query(
@@ -224,6 +250,10 @@ export async function list(req, res, next) {
                    OR t.ticket_code ILIKE $${i} OR t.raiser_name ILIKE $${i}
                    OR o.name ILIKE $${i})`);
     }
+    if (isV2(req) && req.query.assignee) {
+      if (req.query.assignee === 'none') conds.push('t.assigned_to IS NULL');
+      else if (req.query.assignee === 'me') conds.push(`t.assigned_to = $${params.push(req.user.id)}`);
+    }
     const where = conds.length ? `WHERE ${conds.join(' AND ')}` : '';
 
     const { rows } = await query(
@@ -288,5 +318,67 @@ export async function reply(req, res, next) {
     }
 
     res.json(shape(row));
+  } catch (e) { next(e); }
+}
+
+// POST /admin/platform-tickets (v2) { organisationId, subject, description,
+//   contactEmail?, contactPhone? } — the platform owner logs a ticket for a
+// tenant, e.g. one reported by phone (QA M11).
+export async function adminCreate(req, res, next) {
+  try {
+    const raw = req.body?.organisationId;
+    let orgId = null;
+    if (raw != null && raw !== '') {
+      orgId = parseInt(raw, 10);
+      const ok = Number.isFinite(orgId) && (await query(`SELECT 1 FROM organisations WHERE id = $1`, [orgId])).rowCount;
+      if (!ok) {
+        const e = err('Choose an organisation from the list'); e.fields = { organisationId: 'Choose an organisation from the list' };
+        throw e;
+      }
+    }
+    req.ticketOrgId = orgId;
+    return create(req, res, next);
+  } catch (e) { next(e); }
+}
+
+// GET /admin/platform-tickets/assignees (v2) — who a ticket can be given to.
+export async function assignees(req, res, next) {
+  try {
+    const { rows } = await query(
+      `SELECT ua.id, ua.email, e.first_name, e.last_name FROM user_accounts ua
+         LEFT JOIN employees e ON e.id = ua.employee_id
+        WHERE ua.is_platform_admin = true AND ua.status = 'ACTIVE' ORDER BY ua.id`);
+    res.json(rows.map((r) => ({
+      id: Number(r.id), email: r.email,
+      name: [r.first_name, r.last_name].filter(Boolean).join(' ') || r.email,
+    })));
+  } catch (e) { next(e); }
+}
+
+// POST /admin/platform-tickets/:id/assign (v2) { userId | null }
+export async function assign(req, res, next) {
+  try {
+    const raw = req.body?.userId;
+    let userId = null;
+    if (raw != null && raw !== '') {
+      userId = parseInt(raw, 10);
+      const ok = Number.isFinite(userId) && (await query(
+        `SELECT 1 FROM user_accounts WHERE id = $1 AND is_platform_admin = true AND status = 'ACTIVE'`, [userId])).rowCount;
+      if (!ok) {
+        const e = err('Assign it to an active platform admin'); e.fields = { userId: 'Assign it to an active platform admin' };
+        throw e;
+      }
+    }
+    const row = (await query(
+      `UPDATE platform_tickets SET assigned_to = $2, assigned_at = CASE WHEN $2::bigint IS NULL THEN NULL ELSE now() END,
+              status = CASE WHEN $2::bigint IS NOT NULL AND status = 'OPEN' THEN 'IN_PROGRESS' ELSE status END,
+              updated_at = now()
+        WHERE id = $1 RETURNING id`, [req.params.id, userId])).rows[0];
+    if (!row) throw err('Ticket not found', 404);
+    await audit(req.user.id, 'PLATFORM_TICKET_ASSIGNED', 'platform_ticket', row.id, { assignedTo: userId });
+    const full = (await query(
+      `SELECT ${COLS}, o.name AS organisation_name FROM platform_tickets t
+         LEFT JOIN organisations o ON o.id = t.organisation_id WHERE t.id = $1`, [row.id])).rows[0];
+    res.json(shape(full));
   } catch (e) { next(e); }
 }

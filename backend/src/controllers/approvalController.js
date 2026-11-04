@@ -3,6 +3,8 @@ import * as engine from '../services/approvalEngine.js';
 import { query } from '../db/pool.js';
 import { ownsEmployee } from '../utils/scope.js';
 import { audit } from '../utils/audit.js';
+import { isV2 } from '../utils/apiVersion.js';
+import { activeEmployeeSql } from '../utils/people.js';
 
 const STAFF = ['HR_ADMIN', 'SUPER_ADMIN'];
 
@@ -79,11 +81,13 @@ export async function preview(req, res, next) {
   try {
     const { flow, projectId, expenseCategoryId, zoneId } = req.query;
     if (!flow) return res.status(400).json({ error: 'flow is required' });
+    // v2 previews exactly what a v2 submission will do: the requester is never
+    // their own approver, and `missing` marks a mandatory stage with nobody.
     const chain = await engine.previewChain(String(flow), req.user.employeeId, {
       projectId: projectId ? Number(projectId) : null,
       expenseCategoryId: expenseCategoryId ? Number(expenseCategoryId) : null,
       zoneId: zoneId ? Number(zoneId) : null,
-    });
+    }, { noSelf: isV2(req) });
     res.json(chain);
   } catch (e) { next(e); }
 }
@@ -99,6 +103,7 @@ export async function matrixList(req, res, next) {
     // schema_tenancy.sql section 17), so the row owner is what we filter on.
     const rows = (await query(
       `SELECT m.id, m.role_key, m.project_id, m.expense_category_id, m.zone_id, m.approver_employee_id,
+              m.needs_reassignment, m.reassign_reason,
               p.name AS project, c.name AS category, z.name AS zone,
               e.first_name || ' ' || e.last_name AS approver, e.employee_code
          FROM approver_matrix m
@@ -108,18 +113,51 @@ export async function matrixList(req, res, next) {
          LEFT JOIN cost_zones z ON z.id = m.zone_id
         WHERE ($1::bigint IS NULL OR m.organisation_id = $1)
         ORDER BY m.role_key, m.id`, [req.orgId || null])).rows;
-    const roles = (await query(
-      `SELECT DISTINCT s.role_key FROM approval_flow_stages s WHERE s.resolver_type='matrix' ORDER BY 1`)).rows.map((r) => r.role_key);
+    // Every stage of every chain (C34/H112), not only the matrix-resolved ones:
+    // a manager-chain stage (Reporting Manager, Functional Head) or a named
+    // stage (HR, Admin) uses a row here when the employee has no such manager.
+    const stageRows = (await query(
+      `SELECT s.role_key, s.resolver_type, bool_and(s.optional_bypass) AS optional, array_agg(DISTINCT f.code) AS flows
+         FROM approval_flow_stages s JOIN approval_flows f ON f.id=s.flow_id AND f.active
+        GROUP BY s.role_key, s.resolver_type ORDER BY min(s.seq), s.role_key`)).rows;
+    const byRole = new Map();
+    for (const st of stageRows) {
+      const cur = byRole.get(st.role_key) || { key: st.role_key, label: engine.stageLabel(st.role_key), flows: [], optional: true, resolver: st.resolver_type };
+      cur.flows = [...new Set([...cur.flows, ...st.flows])];
+      cur.optional = cur.optional && st.optional;
+      if (st.resolver_type !== 'matrix') cur.resolver = st.resolver_type;
+      byRole.set(st.role_key, cur);
+    }
+    const stages = [...byRole.values()];
     res.json({
-      roles,
+      roles: stages.map((x) => x.key),
+      stages,
       rows: rows.map((r) => ({
-        id: r.id, roleKey: r.role_key, approverEmployeeId: r.approver_employee_id,
+        id: r.id, roleKey: r.role_key, roleLabel: engine.stageLabel(r.role_key), approverEmployeeId: r.approver_employee_id,
         approver: r.approver, employeeCode: r.employee_code,
         projectId: r.project_id, project: r.project,
         expenseCategoryId: r.expense_category_id, category: r.category,
         zoneId: r.zone_id, zone: r.zone,
+        needsReassignment: !!r.needs_reassignment, reassignReason: r.reassign_reason || null,
       })),
     });
+  } catch (e) { next(e); }
+}
+
+// GET /admin/approver-matrix/candidates — who can be picked as an approver:
+// the organisation's current employees only (D7/H113 — never a candidate or
+// someone past their last working day).
+export async function matrixCandidates(req, res, next) {
+  try {
+    const rows = (await query(
+      `SELECT e.id, e.employee_code, e.first_name, e.last_name, d.title AS designation
+         FROM employees e LEFT JOIN designations d ON d.id = e.designation_id
+        WHERE ${activeEmployeeSql('e')}
+          AND ($1::bigint IS NULL OR e.organisation_id = $1)
+          AND ($2::bigint IS NULL OR e.company_id = $2)
+        ORDER BY e.first_name, e.last_name`, [req.orgId || null, req.companyScope || null])).rows;
+    res.json(rows.map((r) => ({ id: r.id, employeeCode: r.employee_code,
+      name: `${r.first_name || ''} ${r.last_name || ''}`.trim(), designation: r.designation || null })));
   } catch (e) { next(e); }
 }
 
@@ -137,6 +175,36 @@ export async function matrixSave(req, res, next) {
     if (!(await ownsEmployee(req, approverEmployeeId))) {
       return res.status(400).json({ error: 'That approver is not in your organisation.' });
     }
+    // Context ids must be this organisation's masters (both versions).
+    for (const [id, table, lbl] of [[proj, 'projects', 'Project'], [cat, 'expense_categories', 'Expense category'], [zone, 'cost_zones', 'Zone']]) {
+      if (id == null) continue;
+      const ok = (await query(`SELECT 1 FROM ${table} WHERE id=$1 AND ($2::bigint IS NULL OR organisation_id=$2)`, [id, req.orgId || null])).rowCount;
+      if (!ok) return res.status(400).json({ error: `${lbl} is not one of your organisation's options` });
+    }
+    let replaced = null;
+    if (isV2(req)) {
+      const known = (await query(`SELECT 1 FROM approval_flow_stages WHERE role_key=$1 LIMIT 1`, [roleKey])).rowCount;
+      if (!known) return res.status(400).json({ error: 'Choose a stage from the list', fields: { roleKey: 'Choose a stage from the list' } });
+      const active = (await query(
+        `SELECT 1 FROM employees e WHERE e.id=$1 AND ${activeEmployeeSql('e')}`, [Number(approverEmployeeId)])).rowCount;
+      if (!active) {
+        const m = 'Only a current employee can be an approver';
+        return res.status(400).json({ error: m, fields: { approverEmployeeId: m } });
+      }
+      const existing = (await query(
+        `SELECT m.id, m.approver_employee_id, m.needs_reassignment, e.first_name || ' ' || e.last_name AS name
+           FROM approver_matrix m JOIN employees e ON e.id = m.approver_employee_id
+          WHERE m.role_key=$1 AND COALESCE(m.project_id,0)=COALESCE($2::bigint,0)
+            AND COALESCE(m.expense_category_id,0)=COALESCE($3::bigint,0)
+            AND COALESCE(m.zone_id,0)=COALESCE($4::bigint,0)
+            AND m.organisation_id IS NOT DISTINCT FROM $5::bigint`,
+        [roleKey, proj, cat, zone, req.orgId || null])).rows[0];
+      if (existing && Number(existing.approver_employee_id) === Number(approverEmployeeId) && !existing.needs_reassignment) {
+        // C34: saving the same approver twice was silently ignored but audited.
+        return res.status(409).json({ error: `${existing.name.trim()} is already the ${engine.stageLabel(roleKey)} approver for this scope` });
+      }
+      if (existing) replaced = existing.name.trim();
+    }
     // Both halves of the upsert are now scoped. Unscoped, saving an approver
     // for a role DELETED ANOTHER TENANT'S ROW for the same role/context and
     // installed this tenant's approver in its place — which silently re-routes
@@ -152,8 +220,17 @@ export async function matrixSave(req, res, next) {
       `INSERT INTO approver_matrix (role_key, approver_employee_id, project_id, expense_category_id, zone_id, organisation_id)
        VALUES ($1,$2,$3,$4,$5,$6) RETURNING id`,
       [roleKey, Number(approverEmployeeId), proj, cat, zone, req.orgId || null])).rows[0];
-    await audit(req.user.id, 'APPROVER_MATRIX_SAVE', 'approver_matrix', row.id, { roleKey });
-    res.status(201).json({ ok: true, id: row.id });
+    await audit(req.user.id, 'APPROVER_MATRIX_SAVE', 'approver_matrix', row.id, { roleKey, replaced });
+    // v2 tells the admin where else this person already approves (C34 self /
+    // concentration warning) — the page shows it; nothing is blocked.
+    let alsoApproves = [];
+    if (isV2(req)) {
+      alsoApproves = (await query(
+        `SELECT DISTINCT role_key FROM approver_matrix
+          WHERE approver_employee_id=$1 AND id<>$2 AND organisation_id IS NOT DISTINCT FROM $3::bigint`,
+        [Number(approverEmployeeId), row.id, req.orgId || null])).rows.map((r) => engine.stageLabel(r.role_key));
+    }
+    res.status(201).json({ ok: true, id: row.id, replaced, alsoApproves });
   } catch (e) { next(e); }
 }
 

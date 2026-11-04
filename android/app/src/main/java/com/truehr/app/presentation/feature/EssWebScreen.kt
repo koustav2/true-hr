@@ -2,6 +2,7 @@ package com.truehr.app.presentation.feature
 
 import android.content.Intent
 import android.net.Uri
+import com.truehr.app.core.startActivitySafely
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.*
 import androidx.compose.material.icons.Icons
@@ -63,8 +64,8 @@ fun EssWebScreen(section: String = "", onBack: () -> Unit, vm: EssWebViewModel =
   // As soon as the tokenized link is ready, hand off to the browser.
   LaunchedEffect(url) {
     url?.let {
-      ctx.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(it)))
-      onBack()
+      // A8: no browser installed must not crash the app.
+      if (ctx.startActivitySafely(Intent(Intent.ACTION_VIEW, Uri.parse(it)), "No web browser is available on this phone.")) onBack()
     }
   }
 

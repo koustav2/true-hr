@@ -9,8 +9,11 @@ class PolicyRepositoryImpl @Inject constructor(
   private val api: ApiService,
 ) : PolicyRepository {
   override suspend fun list(): List<Policy> = api.policies().map {
-    Policy(id = it.id, title = it.title.orEmpty(), category = it.category, filename = it.filename, mime = it.mime, uploadedAt = it.uploadedAt, available = it.available)
+    Policy(id = it.id, title = it.title.orEmpty(), category = it.category ?: it.policyType, filename = it.filename, mime = it.mime, uploadedAt = it.uploadedAt, available = it.available,
+      kind = it.kind, version = it.version, effectiveDate = it.effectiveDate)
   }
 
-  override suspend fun fileBytes(id: Long): ByteArray = api.policyFile(id).bytes()
+  // A3: read the streamed file on the IO dispatcher.
+  override suspend fun fileBytes(id: Long): ByteArray =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.policyFile(id).use { it.bytes() } }
 }

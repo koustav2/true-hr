@@ -1,7 +1,5 @@
 package com.truehr.app.presentation.feature
 
-import android.util.Base64
-import android.widget.Toast
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
@@ -17,6 +15,7 @@ import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material.icons.filled.UploadFile
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -25,88 +24,89 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
+import com.truehr.app.core.Dates
+import com.truehr.app.core.launchSafely
+import com.truehr.app.core.readPickedFile
 import com.truehr.app.domain.model.LeaveBalance
+import com.truehr.app.presentation.components.FieldError
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.PrimaryButton
 import com.truehr.app.presentation.components.initials
 import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 import kotlinx.coroutines.delay
-import java.text.SimpleDateFormat
-import java.util.Date
-import java.util.Locale
-import java.util.TimeZone
+import kotlinx.coroutines.launch
 
-private val ISO_LV = SimpleDateFormat("yyyy-MM-dd", Locale.US).apply { timeZone = TimeZone.getTimeZone("UTC") }
-private val STRIP = listOf("EL", "CL", "SL", "RH", "MH")
-private val CHIP_COLORS = mapOf("EL" to Green, "CL" to Amber, "SL" to Rose, "RH" to Grape, "MH" to Pink)
+private val CHIP_COLORS = listOf(Green, Amber, Rose, Grape, Pink, Sky, Teal)
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun ApplyLeaveScreen(onBack: () -> Unit, onAvailCompOff: () -> Unit = {}, vm: LeaveViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
+fun ApplyLeaveScreen(onBack: () -> Unit, onAvailCompOff: () -> Unit = {}, onHolidays: () -> Unit = {}, vm: LeaveViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
   val ctx = LocalContext.current
+  val scope = rememberCoroutineScope()
   val p by profileVm.state.collectAsState()
   val bal by vm.balances.collectAsState()
   val types by vm.types.collectAsState()
+  val holidays by vm.holidays.collectAsState()
   val submitting by vm.submitting.collectAsState()
   val applyError by vm.applyError.collectAsState()
+  val errors by vm.fieldErrors.collectAsState()
   val applied by vm.applied.collectAsState()
 
-  var leaveCode by remember { mutableStateOf("") }
+  var leaveCode by rememberSaveable { mutableStateOf("") }
   var typeOpen by remember { mutableStateOf(false) }
-  // null = not chosen yet (half-day types start blank); "FULL" / "HALF" otherwise
-  var duration by remember { mutableStateOf<String?>(null) }
-  var fromDate by remember { mutableStateOf("") }
-  var toDate by remember { mutableStateOf("") }
-  var reason by remember { mutableStateOf("") }
+  var duration by rememberSaveable { mutableStateOf("FULL") }      // FULL | HALF
+  var session by rememberSaveable { mutableStateOf<String?>(null) } // FIRST | SECOND
+  var fromDate by rememberSaveable { mutableStateOf("") }
+  var toDate by rememberSaveable { mutableStateOf("") }
+  var reason by rememberSaveable { mutableStateOf("") }
   var certificate by remember { mutableStateOf<String?>(null) }
   var certMime by remember { mutableStateOf<String?>(null) }
+  var certName by remember { mutableStateOf<String?>(null) }
   var certInfo by remember { mutableStateOf<String?>(null) }
   var picker by remember { mutableStateOf<String?>(null) }
+  var rhOpen by remember { mutableStateOf(false) }
 
   val selected = types.firstOrNull { it.code == leaveCode }
   val halfDay = duration == "HALF"
-  val singleDate = selected?.singleDate == true || halfDay
-  val showDates = duration != null
+  val isRh = selected?.code == "RH"
+  val singleDate = selected?.singleDate == true || halfDay || isRh
   val balances = bal.data ?: emptyList()
-  val total = balances.filter { it.code in STRIP }.sumOf { it.remaining }
+  val today = remember { Dates.todayIso() }
+  val rhList = holidays.filter { it.restricted && it.date >= today }
 
   LaunchedEffect(Unit) { vm.loadApplyData() }
-  LaunchedEffect(applied) { if (applied) { delay(800); onBack() } }
-  // Half-day types (CL/SL/MSL) start with NO duration chosen and hide dates until picked;
-  // other types default to Full Day with dates shown immediately.
+  LaunchedEffect(applied) { if (applied != null) { delay(1500); onBack() } }
+  // A new type starts clean (half day only where the type allows it).
+  var lastCode by rememberSaveable { mutableStateOf("") }
   LaunchedEffect(leaveCode) {
-    duration = when {
-      selected == null -> null
-      selected.allowHalfDay -> null
-      else -> "FULL"
+    if (leaveCode != lastCode) {
+      if (lastCode.isNotEmpty()) { duration = "FULL"; session = null; fromDate = ""; toDate = "" }
+      lastCode = leaveCode
     }
-    fromDate = ""; toDate = ""
   }
 
   val fileLauncher = rememberLauncherForActivityResult(ActivityResultContracts.GetContent()) { uri ->
-    if (uri != null) {
-      val bytes = runCatching { ctx.contentResolver.openInputStream(uri)?.use { it.readBytes() } }.getOrNull()
-      when {
-        bytes == null -> certInfo = "Could not read file"
-        bytes.size > 5 * 1024 * 1024 -> certInfo = "File too large (max 5MB)"
-        else -> { certificate = Base64.encodeToString(bytes, Base64.NO_WRAP); certMime = ctx.contentResolver.getType(uri) ?: "application/octet-stream"; certInfo = "Attached (${bytes.size / 1024} KB)" }
-      }
+    if (uri != null) scope.launch {
+      readPickedFile(ctx, uri).onSuccess { f ->
+        certificate = f.base64; certMime = f.mime; certName = f.name; certInfo = "${f.name} (${f.sizeKb} KB)"; vm.clearFieldError("certificate")
+      }.onFailure { certInfo = it.message }
     }
   }
 
   if (picker != null) {
-    val state = rememberDatePickerState()
+    val initial = Dates.toPickerMillis(if (picker == "TO") toDate.ifBlank { fromDate } else fromDate)
+    val state = rememberDatePickerState(initialSelectedDateMillis = initial)
     DatePickerDialog(
       onDismissRequest = { picker = null },
       confirmButton = {
         TextButton(onClick = {
           state.selectedDateMillis?.let { ms ->
-            val v = ISO_LV.format(Date(ms))
+            val v = Dates.fromPickerMillis(ms)
             when (picker) {
-              "FROM" -> { fromDate = v; if (toDate.isBlank() || toDate < v) toDate = v }
-              "TO" -> toDate = v
-              "SINGLE" -> { fromDate = v; toDate = v }
+              "FROM" -> { fromDate = v; if (toDate.isBlank() || toDate < v) toDate = v; vm.clearFieldError("fromDate") }
+              "TO" -> { toDate = v; vm.clearFieldError("toDate") }
+              "SINGLE" -> { fromDate = v; toDate = v; vm.clearFieldError("fromDate"); vm.clearFieldError("toDate"); vm.clearFieldError("halfDay") }
             }
           }
           picker = null
@@ -141,137 +141,200 @@ fun ApplyLeaveScreen(onBack: () -> Unit, onAvailCompOff: () -> Unit = {}, vm: Le
     }
 
     Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(16.dp), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-      // Balance strip
-      Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp) {
-        Row(Modifier.padding(10.dp), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-          STRIP.forEach { code ->
-            val b = balances.firstOrNull { it.code == code }
-            BalanceChip(code, b?.remaining ?: 0.0, CHIP_COLORS[code] ?: Green, selected = leaveCode == code, modifier = Modifier.weight(1f))
-          }
-          Column(horizontalAlignment = Alignment.CenterHorizontally, modifier = Modifier.padding(start = 4.dp)) {
-            Text("Total", color = InkFaint, style = MaterialTheme.typography.labelSmall)
-            Text(fmtL(total), color = Green, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleMedium)
+      bal.error?.let { Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium) }
+      // E13: balances after pending requests (what you can actually apply for now).
+      if (balances.isNotEmpty()) {
+        Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp) {
+          Column(Modifier.padding(12.dp)) {
+            Text("Available balance (after pending requests)", color = InkFaint, style = MaterialTheme.typography.labelMedium)
+            Spacer(Modifier.height(8.dp))
+            balances.chunked(4).forEachIndexed { row, chunk ->
+              Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                chunk.forEachIndexed { i, b ->
+                  BalanceChip(b, CHIP_COLORS[(row * 4 + i) % CHIP_COLORS.size], leaveCode == b.code, Modifier.weight(1f)) { leaveCode = b.code; vm.clearFieldError("leaveCode") }
+                }
+                repeat(4 - chunk.size) { Spacer(Modifier.weight(1f)) }
+              }
+              Spacer(Modifier.height(8.dp))
+            }
           }
         }
       }
 
       Surface(color = Surface, shape = RoundedCornerShape(16.dp), shadowElevation = 2.dp) {
         Column(Modifier.padding(16.dp)) {
-          Text("Apply for Leave", fontWeight = FontWeight.Black, color = Ink, style = MaterialTheme.typography.titleLarge)
-          Spacer(Modifier.height(14.dp))
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text("Apply for Leave", fontWeight = FontWeight.Black, color = Ink, style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+            TextButton(onClick = onHolidays) { Text("Holiday list", color = Green) }
+          }
+          Spacer(Modifier.height(10.dp))
 
           ExposedDropdownMenuBox(expanded = typeOpen, onExpandedChange = { typeOpen = it }) {
             OutlinedTextField(
-              value = selected?.name ?: "", onValueChange = {}, readOnly = true, label = { Text("Leave Type") },
-              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeOpen) },
+              value = selected?.name ?: "", onValueChange = {}, readOnly = true, label = { Text("Leave type *") },
+              trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(typeOpen) }, isError = errors["leaveCode"] != null,
               shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
               modifier = Modifier.menuAnchor().fillMaxWidth(),
             )
             ExposedDropdownMenu(expanded = typeOpen, onDismissRequest = { typeOpen = false }) {
-              types.forEach { t -> DropdownMenuItem(text = { Text(t.name) }, onClick = { leaveCode = t.code; typeOpen = false }) }
+              // The server only lists the types this employee is eligible for (E8).
+              types.forEach { t -> DropdownMenuItem(text = { Text(t.name) }, onClick = { leaveCode = t.code; typeOpen = false; vm.clearFieldError("leaveCode") }) }
             }
           }
-          // Availability line
+          FieldError(errors["leaveCode"])
           if (selected != null) {
             Spacer(Modifier.height(6.dp))
-            val avail = balances.firstOrNull { it.code == leaveCode }
-            Text(
-              if (!selected.requiresBalance) "Balance Not Applicable" else "Available: ${fmtL(avail?.remaining ?: 0.0)} days",
-              color = InkFaint, style = MaterialTheme.typography.bodyMedium,
-            )
+            val b = balances.firstOrNull { it.code == leaveCode }
+            Text(availabilityText(selected.requiresBalance, selected.code, b), color = InkFaint, style = MaterialTheme.typography.bodyMedium)
+          }
+
+          if (selected?.allowHalfDay == true) {
+            Spacer(Modifier.height(14.dp))
+            Text("Apply for", color = Ink, fontWeight = FontWeight.SemiBold)
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Radio("Full day", duration == "FULL") { duration = "FULL"; session = null; vm.clearFieldError("halfDay") }
+              Spacer(Modifier.width(16.dp))
+              Radio("Half day", duration == "HALF") { duration = "HALF"; toDate = fromDate }
+            }
+            if (halfDay) {
+              // E12: a half day is one date, first or second half.
+              Row(verticalAlignment = Alignment.CenterVertically) {
+                Radio("First half", session == "FIRST") { session = "FIRST"; vm.clearFieldError("halfDaySession") }
+                Spacer(Modifier.width(16.dp))
+                Radio("Second half", session == "SECOND") { session = "SECOND"; vm.clearFieldError("halfDaySession") }
+              }
+              FieldError(errors["halfDaySession"])
+            }
+            FieldError(errors["halfDay"])
           }
 
           if (selected != null) {
             Spacer(Modifier.height(14.dp))
-            Text("Apply for:", color = Ink, fontWeight = FontWeight.SemiBold)
-            Spacer(Modifier.height(4.dp))
-            Row(verticalAlignment = Alignment.CenterVertically) {
-              Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { duration = "FULL" }) {
-                RadioButton(selected = duration == "FULL", onClick = { duration = "FULL" }, colors = RadioButtonDefaults.colors(selectedColor = Green))
-                Text("Full Day", color = Ink)
-              }
-              if (selected.allowHalfDay) {
-                Spacer(Modifier.width(24.dp))
-                Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable { duration = "HALF" }) {
-                  RadioButton(selected = duration == "HALF", onClick = { duration = "HALF" }, colors = RadioButtonDefaults.colors(selectedColor = Green))
-                  Text("Half Day", color = Ink)
-                }
-              }
-            }
-          }
-
-          // Sick-leave certificate
-          if (selected?.allowCertificate == true) {
-            Spacer(Modifier.height(12.dp))
-            Text("Medical/sickness certificate is optional for Sick Leave.", color = Amber, style = MaterialTheme.typography.bodyMedium)
-            Spacer(Modifier.height(8.dp))
-            Surface(shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, Line), color = Surface, modifier = Modifier.fillMaxWidth()) {
-              Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-                Text(certInfo ?: "Upload Medical Certificate (Max 5MB)", color = if (certificate != null) Green else InkSoft, style = MaterialTheme.typography.bodyMedium)
-                Spacer(Modifier.height(8.dp))
-                OutlinedButton(onClick = { fileLauncher.launch("*/*") }, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)) {
-                  Icon(Icons.Filled.UploadFile, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(if (certificate == null) "Add File" else "Replace")
-                }
-              }
-            }
-          }
-
-          if (showDates) {
-            Spacer(Modifier.height(14.dp))
-            if (singleDate) {
-              Text("Leave Date:", color = Ink, fontWeight = FontWeight.SemiBold)
+            if (isRh) {
+              // E11/E16: RH only on a listed restricted holiday.
+              Text("Restricted holiday *", color = Ink, fontWeight = FontWeight.SemiBold)
               Spacer(Modifier.height(6.dp))
-              LvDateField("Select Date", fromDate, Modifier.fillMaxWidth()) { picker = "SINGLE" }
+              ExposedDropdownMenuBox(expanded = rhOpen, onExpandedChange = { rhOpen = it }) {
+                OutlinedTextField(
+                  value = rhList.firstOrNull { it.date == fromDate }?.let { "${Dates.dmy(it.date)} · ${it.name}" } ?: "",
+                  onValueChange = {}, readOnly = true, placeholder = { Text(if (rhList.isEmpty()) "No restricted holidays listed" else "Pick a date") },
+                  trailingIcon = { ExposedDropdownMenuDefaults.TrailingIcon(rhOpen) }, isError = errors["fromDate"] != null,
+                  shape = RoundedCornerShape(12.dp), modifier = Modifier.menuAnchor().fillMaxWidth(),
+                )
+                ExposedDropdownMenu(expanded = rhOpen, onDismissRequest = { rhOpen = false }) {
+                  rhList.forEach { h -> DropdownMenuItem(text = { Text("${Dates.dmy(h.date)} · ${h.name}") }, onClick = { fromDate = h.date; toDate = h.date; rhOpen = false; vm.clearFieldError("fromDate") }) }
+                }
+              }
+              FieldError(errors["fromDate"] ?: errors["toDate"])
+            } else if (singleDate) {
+              Text("Leave date *", color = Ink, fontWeight = FontWeight.SemiBold)
+              Spacer(Modifier.height(6.dp))
+              LvDateField("Select date", fromDate, errors["fromDate"] != null, Modifier.fillMaxWidth()) { picker = "SINGLE" }
+              FieldError(errors["fromDate"] ?: errors["toDate"])
             } else {
               Row(horizontalArrangement = Arrangement.spacedBy(12.dp)) {
-                Column(Modifier.weight(1f)) { Text("Start Date:", color = Ink, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp)); LvDateField("Select Start Date", fromDate, Modifier.fillMaxWidth()) { picker = "FROM" } }
-                Column(Modifier.weight(1f)) { Text("End Date:", color = Ink, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp)); LvDateField("Select End Date", toDate, Modifier.fillMaxWidth()) { picker = "TO" } }
+                Column(Modifier.weight(1f)) {
+                  Text("From date *", color = Ink, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp))
+                  LvDateField("Start date", fromDate, errors["fromDate"] != null, Modifier.fillMaxWidth()) { picker = "FROM" }
+                  FieldError(errors["fromDate"])
+                }
+                Column(Modifier.weight(1f)) {
+                  Text("To date *", color = Ink, fontWeight = FontWeight.SemiBold); Spacer(Modifier.height(6.dp))
+                  LvDateField("End date", toDate, errors["toDate"] != null, Modifier.fillMaxWidth()) { picker = "TO" }
+                  FieldError(errors["toDate"])
+                }
               }
             }
+          }
+
+          // E16: certificate for types that take one (e.g. Sick Leave, Maternity Leave).
+          if (selected?.allowCertificate == true) {
+            Spacer(Modifier.height(12.dp))
+            val after = selected.certificateAfterDays
+            Text(
+              when {
+                after == null -> "A medical certificate is optional for ${selected.name}."
+                after <= 0.0 -> "A certificate is required for ${selected.name}."
+                else -> "A certificate is required for ${selected.name} of more than ${fmtL(after)} day(s)."
+              },
+              color = Amber, style = MaterialTheme.typography.bodyMedium,
+            )
+            Spacer(Modifier.height(8.dp))
+            Surface(shape = RoundedCornerShape(12.dp), border = androidx.compose.foundation.BorderStroke(1.dp, if (errors["certificate"] != null) Rose else Line), color = Surface, modifier = Modifier.fillMaxWidth()) {
+              Column(Modifier.padding(14.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+                Text(certInfo ?: "Upload certificate (PDF or image, max 5MB)", color = if (certificate != null) Green else InkSoft, style = MaterialTheme.typography.bodyMedium)
+                Spacer(Modifier.height(8.dp))
+                OutlinedButton(onClick = { fileLauncher.launchSafely(ctx, "*/*", "No file picker is available on this phone.") }, shape = RoundedCornerShape(10.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Green)) {
+                  Icon(Icons.Filled.UploadFile, null, modifier = Modifier.size(16.dp)); Spacer(Modifier.width(6.dp)); Text(if (certificate == null) "Add file" else "Replace")
+                }
+              }
+            }
+            FieldError(errors["certificate"])
           }
 
           Spacer(Modifier.height(12.dp))
-          OutlinedTextField(reason, { reason = it }, placeholder = { Text("Reason for Leave") }, minLines = 3,
+          OutlinedTextField(reason, { reason = it.take(500); vm.clearFieldError("reason") }, label = { Text("Reason *") }, minLines = 3,
+            isError = errors["reason"] != null, supportingText = { Text("${reason.trim().length}/500") },
             shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green), modifier = Modifier.fillMaxWidth())
+          FieldError(errors["reason"])
         }
       }
 
       applyError?.let { Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium) }
-      if (applied) Text("Your leave request has been submitted.", color = Green, fontWeight = FontWeight.SemiBold)
-      PrimaryButton(if (submitting) "" else "Submit Leave Request", loading = submitting, onClick = {
-        if (selected == null) { Toast.makeText(ctx, "Select a leave type", Toast.LENGTH_SHORT).show() }
-        else if (duration == null) { Toast.makeText(ctx, "Choose Full Day or Half Day", Toast.LENGTH_SHORT).show() }
-        else vm.apply(leaveCode, fromDate, toDate, reason, halfDay, certificate, certMime)
+      applied?.let { Text(it, color = Green, fontWeight = FontWeight.SemiBold) }
+      PrimaryButton(if (submitting) "" else "Submit Leave Request", loading = submitting, enabled = applied == null, onClick = {
+        vm.apply(selected, fromDate, toDate, reason, halfDay, session, certificate, certMime, certName)
       }, modifier = Modifier.fillMaxWidth())
       Spacer(Modifier.height(8.dp))
     }
   }
 }
 
+/** E13/E14: available after pending; allowance types and LWP described in words. */
+internal fun availabilityText(requiresBalance: Boolean, code: String, b: LeaveBalance?): String = when {
+  b == null -> ""
+  !requiresBalance && code == "LWP" -> "No limit (unpaid)"
+  !requiresBalance -> if ((b.available ?: 0.0) <= 0.0) "Not allocated to you (0 days) — ask HR to set a quota"
+    else "Allowance left this year: ${fmtL(b.available ?: 0.0)} day(s)"
+  else -> "Available: ${fmtL(b.available ?: b.remaining)} day(s)" + if (b.pending > 0) " · ${fmtL(b.pending)} pending" else ""
+}
+
 @Composable
-private fun BalanceChip(code: String, value: Double, color: Color, selected: Boolean, modifier: Modifier = Modifier) {
+private fun Radio(label: String, selected: Boolean, onClick: () -> Unit) {
+  Row(verticalAlignment = Alignment.CenterVertically, modifier = Modifier.clickable(onClick = onClick)) {
+    RadioButton(selected = selected, onClick = onClick, colors = RadioButtonDefaults.colors(selectedColor = Green))
+    Text(label, color = Ink)
+  }
+}
+
+@Composable
+private fun BalanceChip(b: LeaveBalance, color: Color, selected: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
   Surface(
-    color = color.copy(alpha = 0.08f), shape = RoundedCornerShape(12.dp), modifier = modifier,
+    color = color.copy(alpha = 0.08f), shape = RoundedCornerShape(12.dp), modifier = modifier.clickable(onClick = onClick),
     border = androidx.compose.foundation.BorderStroke(if (selected) 2.dp else 1.dp, if (selected) color else Line),
   ) {
-    Column(Modifier.padding(vertical = 10.dp), horizontalAlignment = Alignment.CenterHorizontally) {
-      Text(fmtL(value), color = color, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
-      Text(code, color = InkFaint, style = MaterialTheme.typography.labelSmall)
+    Column(Modifier.padding(vertical = 8.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+      val v = when {
+        !b.requiresBalance && b.code == "LWP" -> "∞"
+        else -> fmtL(b.available ?: b.remaining)
+      }
+      Text(v, color = color, fontWeight = FontWeight.Black, style = MaterialTheme.typography.titleSmall)
+      Text(b.code, color = InkFaint, style = MaterialTheme.typography.labelSmall)
     }
   }
 }
 
-private fun fmtL(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else "%.2f".format(d)
+internal fun fmtL(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else "%.1f".format(d)
 
 @Composable
-private fun LvDateField(hint: String, value: String, modifier: Modifier = Modifier, onClick: () -> Unit) {
+private fun LvDateField(hint: String, value: String, isError: Boolean, modifier: Modifier = Modifier, onClick: () -> Unit) {
   OutlinedTextField(
-    value = value, onValueChange = {}, readOnly = true, enabled = false,
+    value = if (value.isBlank()) "" else Dates.dmy(value), onValueChange = {}, readOnly = true, enabled = false,
     placeholder = { Text(hint) },
     trailingIcon = { Icon(Icons.Filled.CalendarMonth, null, tint = InkFaint) },
     shape = RoundedCornerShape(12.dp),
     colors = OutlinedTextFieldDefaults.colors(
-      disabledBorderColor = Line, disabledTextColor = Ink, disabledPlaceholderColor = InkFaint, disabledTrailingIconColor = InkFaint,
+      disabledBorderColor = if (isError) Rose else Line, disabledTextColor = Ink, disabledPlaceholderColor = InkFaint, disabledTrailingIconColor = InkFaint,
     ),
     modifier = modifier.clickable(onClick = onClick),
   )

@@ -79,9 +79,7 @@ class ForgotPasswordViewModel @Inject constructor(
     val s = _state.value
     val error = when {
       s.otp.length != 6 -> "Enter the 6-digit code from the email"
-      s.newPassword.length < 8 -> "Password must be at least 8 characters"
-      s.newPassword != s.confirmPassword -> "Passwords do not match"
-      else -> null
+      else -> com.truehr.app.core.Validators.password("", s.newPassword, s.confirmPassword, requireCurrent = false).values.firstOrNull()
     }
     if (error != null) { _state.update { it.copy(error = error) }; return }
     _state.update { it.copy(loading = true, error = null) }

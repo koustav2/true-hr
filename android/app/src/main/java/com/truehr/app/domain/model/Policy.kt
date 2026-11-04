@@ -8,4 +8,7 @@ data class Policy(
   val mime: String?,
   val uploadedAt: String?,
   val available: Boolean,
+  val kind: String? = null,
+  val version: String? = null,
+  val effectiveDate: String? = null,
 )

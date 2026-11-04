@@ -1,8 +1,13 @@
 package com.truehr.app.domain.model
 
-data class MonthCell(val day: Int, val status: String?)   // status: P/WO/A/L/H or null
+data class MonthCell(val day: Int, val status: String?, val holiday: String? = null)   // status: P/WO/A/L/H/NA or null
 
-data class MonthlyAttendance(val monthLabel: String, val year: Int, val month: Int, val cells: List<MonthCell>)
+data class MonthlyAttendance(
+  val monthLabel: String, val year: Int, val month: Int, val cells: List<MonthCell>,
+  val holidays: List<Pair<Int, String>> = emptyList(),
+  /** Earliest month that can be opened (joining month), as year*12+month-1; null = no limit. */
+  val minIndex: Int? = null,
+)
 
 data class TeamMember(
   val employeeId: Long,
@@ -29,6 +34,11 @@ data class MissPunch(
   val reviewNote: String? = null,
   val appliedAt: String?,
   val reviewedAt: String?,
+  val inTime: String? = null,
+  val outTime: String? = null,
+  val cancelledAt: String? = null,
+  val reviewedBy: String? = null,
+  val pendingWith: String? = null,
 )
 
 data class TeamMate(
@@ -51,9 +61,8 @@ data class DirectoryEntry(
   val designation: String?,
   val department: String?,
   val email: String?,
-  val phone: String?,
-  val city: String?,
-  val state: String?,
+  /** Official work location (branch / posting state). No personal phone (E54). */
+  val location: String?,
 )
 
 data class OnDuty(

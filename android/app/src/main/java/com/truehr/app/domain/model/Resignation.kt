@@ -6,6 +6,7 @@ data class Approver(
   val email: String?,
   val stage: String? = null,   // e.g. "Reporting Manager"
   val status: String? = null,  // PENDING | APPROVED | REJECTED | BYPASSED | null
+  val assignment: String? = null,
 )
 
 data class ResignationEmployee(
@@ -15,6 +16,9 @@ data class ResignationEmployee(
   val vertical: String?,
   val location: String?,
   val noticePeriodDays: Int,
+  val department: String? = null,
+  val dateOfJoining: String? = null,
+  val reportingManager: String? = null,
 )
 
 data class Resignation(
@@ -38,4 +42,10 @@ data class ResignationContext(
   val employee: ResignationEmployee?,
   val approvers: List<Approver>,
   val current: Resignation?,
+  val canSubmit: Boolean = true,
+  val missingStages: List<String> = emptyList(),
+  val today: String? = null,
+  val minResignationDate: String? = null,
+  val maxResignationDate: String? = null,
+  val suggestedLastWorkingDate: String? = null,
 )

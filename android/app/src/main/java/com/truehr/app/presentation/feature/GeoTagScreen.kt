@@ -13,6 +13,9 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.truehr.app.core.LocationHelper
+import com.truehr.app.core.launchSafely
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -49,12 +52,12 @@ fun GeoTagScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel(), profil
   val p by profileVm.state.collectAsState()
   val saved by vm.geotagSaved.collectAsState()
 
-  var hasPermission by remember {
-    mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED)
-  }
-  var remark by remember { mutableStateOf("") }
-  var status by remember { mutableStateOf<String?>(null) }
-  var pendingLocation by remember { mutableStateOf<Location?>(null) }
+  var hasPermission by remember { mutableStateOf(LocationHelper.hasAny(context)) }
+  var remark by rememberSaveable { mutableStateOf("") }
+  var status by rememberSaveable { mutableStateOf<String?>(null) }
+  // Saved across process death while the camera is open (A4).
+  var fixLat by rememberSaveable { mutableStateOf<Double?>(null) }
+  var fixLng by rememberSaveable { mutableStateOf<Double?>(null) }
 
   val cameraState = rememberCameraPositionState {
     position = CameraPosition.fromLatLngZoom(LatLng(22.5726, 88.3639), 5f)
@@ -71,9 +74,10 @@ fun GeoTagScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel(), profil
   val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
     if (bitmap == null) { status = "Capture cancelled."; return@rememberLauncherForActivityResult }
     status = "Saving geo-tag…"
+    val lat = fixLat; val lng = fixLng
+    if (lat == null || lng == null) { status = "Location was lost. Please try again."; return@rememberLauncherForActivityResult }
     scope.launch {
-      val loc = pendingLocation
-      val addr = loc?.let { reverseGeocode(context, it.latitude, it.longitude) }
+      val addr = reverseGeocode(context, lat, lng)
       val now = SimpleDateFormat("dd-MM-yyyy HH:mm:ss", Locale.getDefault()).format(Date())
       val lines = listOf(
         "True HR ESS",
@@ -81,28 +85,32 @@ fun GeoTagScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel(), profil
         "Emp Code: ${p.data?.employeeCode ?: "-"}",
         now,
         "Address: ${addr ?: "-"}",
-        "Lat: ${loc?.latitude?.let { String.format(Locale.US, "%.5f", it) } ?: "-"}, " +
-          "Lon: ${loc?.longitude?.let { String.format(Locale.US, "%.5f", it) } ?: "-"}",
+        "Lat: ${String.format(Locale.US, "%.5f", lat)}, Lon: ${String.format(Locale.US, "%.5f", lng)}",
         "Details: ${remark.ifBlank { "-" }}",
       )
       val stamped = stampGeotag(bitmap, lines)
-      vm.captureGeotag(loc?.latitude, loc?.longitude, addr, stamped.toJpegBase64(70), remark.ifBlank { null })
+      vm.captureGeotag(lat, lng, addr, stamped.toJpegBase64(70), remark.ifBlank { null })
     }
   }
 
-  val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    hasPermission = granted
-    if (granted) status = "Permission granted — tap Capture again." else status = "Location permission is required."
+  val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+    hasPermission = LocationHelper.granted(result)
+    status = if (hasPermission) "Permission granted — tap Capture again." else LocationHelper.MSG_DENIED
   }
 
   fun capture() {
-    if (!hasPermission) { permLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION); return }
+    if (!hasPermission) { permLauncher.launch(LocationHelper.PERMISSIONS); return }
     status = "Getting location…"
-    try {
-      fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-        .addOnSuccessListener { l -> pendingLocation = l; status = "Opening camera…"; cameraLauncher.launch(null) }
-        .addOnFailureListener { pendingLocation = null; status = "Opening camera…"; cameraLauncher.launch(null) }
-    } catch (_: SecurityException) { status = "Location permission is required." }
+    scope.launch {
+      when (val fix = LocationHelper.current(context)) {
+        is LocationHelper.Fix.Ok -> {
+          fixLat = fix.location.latitude; fixLng = fix.location.longitude
+          status = "Opening camera…"
+          if (!cameraLauncher.launchSafely(context, null)) status = "No camera app is available on this phone."
+        }
+        is LocationHelper.Fix.Failed -> status = fix.message
+      }
+    }
   }
 
   Box(Modifier.fillMaxSize().background(Canvas)) {

@@ -28,7 +28,7 @@ import com.truehr.app.presentation.components.NoTeamState
 import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 
-private val LV_TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
+private val LV_TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected", "CANCELLED" to "Cancelled")
 
 @Composable
 fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: LeaveViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
@@ -38,7 +38,20 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
   val noTeam = teamView && prof.data?.isManager == false
   val reviewBusy by vm.reviewBusy.collectAsState()
   var rejectId by remember { mutableStateOf<Long?>(null) }
-  LaunchedEffect(tab) { vm.load(LV_TABS[tab].first, teamView) }
+  var cancelId by remember { mutableStateOf<Long?>(null) }
+  val actionError by vm.actionError.collectAsState()
+  val tabs = if (teamView) LV_TABS.take(3) else LV_TABS
+  LaunchedEffect(tab) { vm.load(tabs[tab].first, teamView) }
+
+  // E15: cancelling asks first.
+  cancelId?.let { id ->
+    com.truehr.app.presentation.components.ConfirmDialog(
+      title = "Cancel this leave?",
+      body = "Your request will be withdrawn and the days returned to your balance.",
+      confirmLabel = "Cancel leave", dismissLabel = "Keep it",
+      onConfirm = { vm.cancel(id); cancelId = null }, onDismiss = { cancelId = null },
+    )
+  }
 
   rejectId?.let { id ->
     var note by remember { mutableStateOf("") }
@@ -66,15 +79,16 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
         Text(title, color = Surface, style = MaterialTheme.typography.titleLarge)
       }
     }
-    if (!noTeam) TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
-      LV_TABS.forEachIndexed { i, (_, label) -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }) }
+    actionError?.let { Text(it, color = Rose, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.padding(horizontal = 16.dp, vertical = 6.dp)) }
+    if (!noTeam) ScrollableTabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green, edgePadding = 8.dp) {
+      tabs.forEachIndexed { i, (_, label) -> Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) }) }
     }
     when {
       noTeam -> NoTeamState()
       s.loading -> CenterLoader()
-      s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(LV_TABS[tab].first, teamView) })
+      s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(tabs[tab].first, teamView) })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("No ${LV_TABS[tab].second.lowercase()} requests.", color = InkSoft)
+        Text("No ${tabs[tab].second.lowercase()} requests.", color = InkSoft)
       }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(s.data!!) { lr ->
@@ -86,7 +100,7 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
             busy = reviewBusy == lr.id,
             onApprove = { vm.review(lr.id, "APPROVED", null) },
             onReject = { rejectId = lr.id },
-            onCancel = { vm.cancel(lr.id) },
+            onCancel = { cancelId = lr.id },
           )
         }
       }
@@ -96,7 +110,8 @@ fun LeaveListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: Le
 
 @Composable
 private fun LeaveCard(lr: LeaveRequest, teamView: Boolean, showActions: Boolean, showCancel: Boolean, busy: Boolean, onApprove: () -> Unit, onReject: () -> Unit, onCancel: () -> Unit) {
-  val statusColor = when (lr.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
+  val statusColor = when (lr.status) { "APPROVED" -> Green; "REJECTED" -> Rose; "CANCELLED" -> InkFaint; else -> Amber }
+  val half = if (lr.halfDay) " · " + (lr.halfDaySession?.let { com.truehr.app.core.Labels.of(it) } ?: "Half day") else ""
   val days = fmtDaysOnly(lr.days)
   Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
     Column(Modifier.padding(16.dp)) {
@@ -109,7 +124,7 @@ private fun LeaveCard(lr: LeaveRequest, teamView: Boolean, showActions: Boolean,
         Text(lr.leaveType, color = Grape, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
         HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
         KVL("Duration", "($days) ${dmy(lr.fromDate)} - ${dmy(lr.toDate)}")
-        KVL("Total Days", "$days day(s)" + if (lr.halfDay) " · Half Day" else "")
+        KVL("Total Days", "$days day(s)$half")
         if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
         Certificate(lr)
         Spacer(Modifier.height(10.dp))
@@ -128,10 +143,18 @@ private fun LeaveCard(lr: LeaveRequest, teamView: Boolean, showActions: Boolean,
         }
         HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
         KVL("Leave Type", lr.leaveType)
-        KVL("Duration", "${dmy(lr.fromDate)} - ${dmy(lr.toDate)} ($days day${if (days == "1") "" else "s"})" + if (lr.halfDay) " · Half Day" else "")
+        KVL("Duration", "${dmy(lr.fromDate)} - ${dmy(lr.toDate)} ($days day${if (days == "1") "" else "s"})$half")
         KVL("Applied Date", lr.appliedAt?.let { dmy(it) } ?: "—")
         if (!lr.reason.isNullOrBlank()) KVL("Reason", lr.reason)
-        KVL("Reporting Remark", lr.reviewNote?.takeIf { it.isNotBlank() } ?: if (lr.status == "PENDING") "Awaiting review" else "—")
+        // E9: who it waits with (HR when there is no reporting manager).
+        if (lr.status == "PENDING") KVL("Pending with", lr.pendingWith ?: "Your reporting manager")
+        if (lr.status in setOf("APPROVED", "REJECTED") && !lr.reviewedBy.isNullOrBlank()) KVL("${com.truehr.app.core.Labels.of(lr.status)} by", lr.reviewedBy)
+        // E15: when and by whom it was cancelled.
+        if (lr.status == "CANCELLED") {
+          KVL("Cancelled on", com.truehr.app.core.Dates.dmyTime(lr.cancelledAt ?: lr.reviewedAt))
+          KVL("Cancelled by", lr.cancelledBy ?: "—")
+        }
+        if (!lr.reviewNote.isNullOrBlank()) KVL("Remark", lr.reviewNote)
         Certificate(lr)
       }
 
@@ -175,18 +198,14 @@ private fun Certificate(lr: LeaveRequest) {
 @Composable
 private fun StatusPill(status: String, color: androidx.compose.ui.graphics.Color) {
   Surface(color = color.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-    Text(status.lowercase().replaceFirstChar { it.uppercase() }, color = color,
+    Text(com.truehr.app.core.Labels.of(status), color = color,
       style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
   }
 }
 
 private fun fmtDaysOnly(d: Double): String = if (d == d.toLong().toDouble()) d.toLong().toString() else "%.1f".format(d)
 
-// yyyy-MM-dd -> dd/MM/yyyy
-private fun dmy(iso: String): String {
-  val p = iso.take(10).split("-")
-  return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
-}
+private fun dmy(iso: String): String = com.truehr.app.core.Dates.dmy(iso)
 
 @Composable
 private fun KVL(k: String, v: String) {

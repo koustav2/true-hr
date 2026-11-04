@@ -18,6 +18,7 @@ object DatabaseModule {
   @Provides @Singleton
   fun database(@ApplicationContext context: Context): TrueHrDatabase =
     Room.databaseBuilder(context, TrueHrDatabase::class.java, "truehr.db")
+      .addMigrations(com.truehr.app.data.local.db.MIGRATION_1_2)
       .fallbackToDestructiveMigration()
       .build()
 

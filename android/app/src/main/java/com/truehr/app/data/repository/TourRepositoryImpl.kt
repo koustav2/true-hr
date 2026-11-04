@@ -7,6 +7,7 @@ import androidx.work.ExistingWorkPolicy
 import androidx.work.NetworkType
 import androidx.work.OneTimeWorkRequestBuilder
 import androidx.work.WorkManager
+import com.truehr.app.core.apiMessage
 import com.truehr.app.core.pathDistanceKm
 import com.truehr.app.data.local.db.GeotagEntity
 import com.truehr.app.data.local.db.TourDao
@@ -44,8 +45,11 @@ import javax.inject.Singleton
 class TourRepositoryImpl @Inject constructor(
   private val dao: TourDao,
   private val api: ApiService,
+  private val tokenStore: com.truehr.app.data.local.TokenStore,
   @ApplicationContext private val context: Context,
-) : TourRepository {
+) : TourRepository, com.truehr.app.data.LocalBufferStore {
+
+  private suspend fun owner(): String? = tokenStore.userId()
 
   override fun activeTour(): Flow<ActiveTour?> =
     dao.activeTourFlow().map { t ->
@@ -63,6 +67,7 @@ class TourRepositoryImpl @Inject constructor(
     val localId = dao.insertTour(
       TourEntity(
         clientUuid = UUID.randomUUID().toString(),
+        ownerUserId = owner(),
         status = "ACTIVE",
         startedAt = isoNow(),
         startLat = lat, startLng = lng, startAddress = address,
@@ -98,47 +103,84 @@ class TourRepositoryImpl @Inject constructor(
 
   override suspend fun recordGeotag(lat: Double?, lng: Double?, address: String?, photoBase64: String, remark: String?) {
     dao.insertGeotag(
-      GeotagEntity(lat = lat, lng = lng, address = address, photo = photoBase64, remark = remark, capturedAt = isoNow()),
+      GeotagEntity(lat = lat, lng = lng, address = address, photo = photoBase64, remark = remark, capturedAt = isoNow(), ownerUserId = owner()),
     )
     enqueueSync()
   }
 
+  /**
+   * Uploads the signed-in user's buffered data. One item the server refuses for good
+   * (a 4xx other than 401/408/429) is parked with its error and skipped, so it can't
+   * stall everything behind it. Network / 5xx / auth problems stop the run and the
+   * worker retries later. Returns true when nothing retryable is left.
+   */
   override suspend fun syncNow(): Boolean {
-    return try {
+    val me = owner() ?: return true   // signed out: nothing to send as anyone
+    var retry = false
+    suspend fun attempt(onPermanent: suspend (String) -> Unit, block: suspend () -> Unit): Boolean =
+      try { block(); true } catch (e: Exception) {
+        if (com.truehr.app.data.SyncPolicy.isPermanent(e)) { onPermanent(e.apiMessageSafe()); false }
+        else { retry = true; throw StopSync() }
+      }
+    try {
       // 1) Reconcile offline-created tours (get their server id).
-      dao.toursNeedingStartSync().forEach { t ->
-        val dto = api.tourStart(StartTourRequest(t.clientUuid, t.startedAt, t.startLat, t.startLng, t.startAddress))
-        dao.markStartSynced(t.localId, dto.id)
+      for (t in dao.toursNeedingStartSync(me)) {
+        attempt({ dao.parkTour(t.localId, it) }) {
+          val dto = api.tourStart(StartTourRequest(t.clientUuid, t.startedAt, t.startLat, t.startLng, t.startAddress))
+          dao.markStartSynced(t.localId, dto.id)
+        }
       }
       // 2) Flush buffered points, then 3) finalize ended tours.
-      dao.toursWithServer().forEach { t ->
-        val serverId = t.serverId ?: return@forEach
-        dao.unsyncedPoints(t.localId).chunked(500).forEach { batch ->
-          api.tourAddPoints(serverId, AddPointsRequest(batch.map {
-            TourPointDto(it.lat, it.lng, it.accuracy, it.capturedAt, it.seq)
-          }))
-          dao.markPointsSynced(batch.map { it.id })
+      for (t in dao.toursWithServer(me)) {
+        val serverId = t.serverId ?: continue
+        for (batch in dao.unsyncedPoints(t.localId).chunked(500)) {
+          attempt({ dao.parkPoints(batch.map { p -> p.id }) }) {
+            api.tourAddPoints(serverId, AddPointsRequest(batch.map {
+              TourPointDto(it.lat, it.lng, it.accuracy, it.capturedAt, it.seq)
+            }))
+            dao.markPointsSynced(batch.map { it.id })
+          }
         }
-        val fresh = dao.getTour(t.localId) ?: return@forEach
+        val fresh = dao.getTour(t.localId) ?: continue
         if (fresh.status == "ENDED" && !fresh.endSynced && dao.unsyncedPointCount(t.localId) == 0) {
-          api.tourEnd(serverId, EndTourRequest(
-            endedAt = fresh.endedAt ?: isoNow(),
-            lat = fresh.endLat, lng = fresh.endLng, address = fresh.endAddress,
-            distanceKm = fresh.distanceKm,
-          ))
-          dao.markEndSynced(t.localId)
+          attempt({ dao.parkTour(t.localId, it) }) {
+            api.tourEnd(serverId, EndTourRequest(
+              endedAt = fresh.endedAt ?: isoNow(),
+              lat = fresh.endLat, lng = fresh.endLng, address = fresh.endAddress,
+              distanceKm = fresh.distanceKm,
+            ))
+            dao.markEndSynced(t.localId)
+          }
         }
       }
-      // 4) Upload buffered geo-tags.
-      dao.unsyncedGeotags().forEach { g ->
-        api.geotagCreate(CreateGeotagRequest(g.lat, g.lng, g.address, g.photo, g.remark))
-        dao.markGeotagSynced(g.id)
+      // 4) Upload buffered geo-tags (with the time they were taken).
+      for (g in dao.unsyncedGeotags(me)) {
+        attempt({ dao.parkGeotag(g.id, it) }) {
+          api.geotagCreate(CreateGeotagRequest(g.lat, g.lng, g.address, g.photo, g.remark, g.capturedAt))
+          dao.markGeotagSynced(g.id)
+        }
       }
-      true
-    } catch (e: Exception) {
-      false
+    } catch (_: StopSync) {
+      // retry later
     }
+    return !retry
   }
+
+  private class StopSync : Exception()
+  private fun Throwable.apiMessageSafe(): String = apiMessage().take(300)
+
+  override suspend fun activeTourLocalId(): Long? = dao.getActiveTour()?.localId
+
+  // ── LocalBufferStore ────────────────────────────────────────────────────
+  override suspend fun clearAll() {
+    dao.deleteAllPoints(); dao.deleteAllTours(); dao.deleteAllGeotags()
+  }
+
+  override suspend fun keepOnly(userId: String) {
+    dao.deletePointsNotOwnedBy(userId); dao.deleteToursNotOwnedBy(userId); dao.deleteGeotagsNotOwnedBy(userId)
+  }
+
+  override suspend fun flush() { kotlinx.coroutines.withTimeoutOrNull(8_000) { syncNow() } }
 
   override fun enqueueSync() {
     val req = OneTimeWorkRequestBuilder<TourSyncWorker>()

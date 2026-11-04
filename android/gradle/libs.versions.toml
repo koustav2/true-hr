@@ -23,6 +23,7 @@ workManager = "2.9.1"
 hiltWork = "1.2.0"
 mapsCompose = "6.1.2"
 playServicesMaps = "19.0.0"
+junit = "4.13.2"
 
 [libraries]
 androidx-core-ktx = { module = "androidx.core:core-ktx", version.ref = "coreKtx" }
@@ -58,6 +59,8 @@ androidx-hilt-work = { module = "androidx.hilt:hilt-work", version.ref = "hiltWo
 androidx-hilt-compiler = { module = "androidx.hilt:hilt-compiler", version.ref = "hiltWork" }
 maps-compose = { module = "com.google.maps.android:maps-compose", version.ref = "mapsCompose" }
 play-services-maps = { module = "com.google.android.gms:play-services-maps", version.ref = "playServicesMaps" }
+
+junit = { module = "junit:junit", version.ref = "junit" }
 
 [plugins]
 android-application = { id = "com.android.application", version.ref = "agp" }

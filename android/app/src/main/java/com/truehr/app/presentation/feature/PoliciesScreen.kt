@@ -17,6 +17,7 @@ import androidx.compose.material.icons.filled.Description
 import androidx.compose.material.icons.filled.Download
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.truehr.app.core.startActivitySafely
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -49,21 +50,22 @@ fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel(), pr
   LaunchedEffect(openFile) {
     openFile?.let { f ->
       try {
-        val dir = File(context.cacheDir, "policies").apply { mkdirs() }
         val safe = f.filename.replace(Regex("[^A-Za-z0-9._-]"), "_")
-        val out = File(dir, safe)
-        out.writeBytes(f.bytes)
+        val out = kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) {
+          File(File(context.cacheDir, "policies").apply { mkdirs() }, safe).apply { writeBytes(f.bytes) }
+        }
         val uri = FileProvider.getUriForFile(context, "${context.packageName}.fileprovider", out)
         val intent = Intent(Intent.ACTION_VIEW).apply {
           setDataAndType(uri, f.mime)
           addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION or Intent.FLAG_ACTIVITY_NEW_TASK)
         }
-        context.startActivity(intent)
+        context.startActivitySafely(intent, "No app on this phone can open this file type. Install a PDF/document viewer.")
       } catch (e: Exception) {
-        Toast.makeText(context, "No app to open this file type.", Toast.LENGTH_SHORT).show()
+        Toast.makeText(context, "Could not save the file on this phone.", Toast.LENGTH_SHORT).show()
       } finally { vm.consumeOpen() }
     }
   }
+  var kindTab by remember { mutableStateOf(0) }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -89,8 +91,19 @@ fun PoliciesScreen(onBack: () -> Unit, vm: PolicyViewModel = hiltViewModel(), pr
       s.loading -> CenterLoader()
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No policies available yet.", color = InkSoft) }
-      else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(s.data!!) { p -> PolicyCard(p, busy = opening != null && opening == p.id, onOpen = { vm.open(p) }) }
+      else -> Column {
+        // E44: policies and formats apart (v2 sends kind = POLICY | FORMAT).
+        val all = s.data!!
+        val hasKinds = all.any { it.kind != null }
+        val shown = if (!hasKinds) all else all.filter { (it.kind ?: "POLICY") == if (kindTab == 0) "POLICY" else "FORMAT" }
+        if (hasKinds) TabRow(selectedTabIndex = kindTab, containerColor = Surface, contentColor = Green) {
+          Tab(selected = kindTab == 0, onClick = { kindTab = 0 }, text = { Text("Policies") })
+          Tab(selected = kindTab == 1, onClick = { kindTab = 1 }, text = { Text("Formats") })
+        }
+        if (shown.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No documents here yet.", color = InkSoft) }
+        else LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+          items(shown) { p -> PolicyCard(p, busy = opening != null && opening == p.id, onOpen = { vm.open(p) }) }
+        }
       }
     }
   }
@@ -107,6 +120,12 @@ private fun PolicyCard(p: Policy, busy: Boolean, onOpen: () -> Unit) {
       Column(Modifier.weight(1f)) {
         Text(p.title, fontWeight = FontWeight.SemiBold, color = Ink)
         if (!p.available) Text("Not uploaded yet", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+        val meta = listOfNotNull(
+          p.category?.takeIf { it.isNotBlank() }?.let { com.truehr.app.core.Labels.of(it) },
+          p.version?.takeIf { it.isNotBlank() }?.let { "Version $it" },
+          p.effectiveDate?.let { "Effective ${com.truehr.app.core.Dates.dmy(it)}" },
+        )
+        if (meta.isNotEmpty()) Text(meta.joinToString(" · "), color = InkSoft, style = MaterialTheme.typography.labelSmall)
       }
       if (busy) {
         CircularProgressIndicator(color = Green, strokeWidth = 2.dp, modifier = Modifier.size(20.dp))

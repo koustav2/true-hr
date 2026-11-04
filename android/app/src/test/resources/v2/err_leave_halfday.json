@@ -1,0 +1,1 @@
+{"error":"Please fix 3 fields: Reason is required; Half day is allowed only when From and To are the same date; Choose First half or Second half","fields":{"reason":"Reason is required","halfDay":"Half day is allowed only when From and To are the same date","halfDaySession":"Choose First half or Second half"}}

@@ -1,5 +1,7 @@
 package com.truehr.app.data.repository
 
+import com.truehr.app.data.SessionCleaner
+import com.truehr.app.data.local.SessionState
 import com.truehr.app.data.local.TokenStore
 import com.truehr.app.data.remote.ApiService
 import com.truehr.app.data.remote.dto.ChangePasswordRequest
@@ -16,35 +18,45 @@ class AuthRepositoryImpl @Inject constructor(
   private val api: ApiService,
   private val tokenStore: TokenStore,
   private val pushTokenManager: PushTokenManager,
+  tourBuffer: TourRepositoryImpl,
 ) : AuthRepository {
 
+  private val cleaner = SessionCleaner(pushTokenManager, tourBuffer, tokenStore)
+
   override val isLoggedIn: Flow<Boolean> = tokenStore.token.map { !it.isNullOrBlank() }
+  override val sessionState: Flow<SessionState> = tokenStore.sessionState
 
   override suspend fun login(email: String, password: String): LoginResult {
-    // Trim stray whitespace some keyboards / auto-fill prepend to the fields.
-    val res = api.login(LoginRequest(email.trim(), password.trim()))
+    // The username may carry stray spaces from auto-fill; a password is sent exactly
+    // as typed (a leading/trailing space can be part of it).
+    val res = api.login(LoginRequest(email.trim(), password))
     if (res.otpRequired) return LoginResult(otpRequired = true, maskedEmail = res.email)
     return LoginResult(user = establish(res))
   }
 
+  // The masked address the server shows ("s****@…") is for display only; the code
+  // is verified against the username the person typed.
   override suspend fun verifyLoginOtp(email: String, otp: String): SessionUser =
     establish(api.loginVerifyOtp(com.truehr.app.data.remote.dto.LoginOtpRequest(email.trim(), otp.trim())))
 
   private suspend fun establish(res: com.truehr.app.data.remote.dto.LoginResponse): SessionUser {
-    val token = res.token ?: throw IllegalStateException("No session token in response")
+    val token = res.token ?: throw IllegalStateException("The server did not start a session. Please try again.")
     val user = res.user
-    tokenStore.save(token, user?.email, user?.role)
-    // Point this device's FCM token at the account that just signed in.
+    val must = user?.mustChangePassword ?: false
+    val uid = user?.id?.toString()
+    // The forced-change flag is stored with the token, so killing the app on the
+    // change-password screen cannot skip it (Splash routes back there).
+    tokenStore.save(token, user?.email, user?.role, uid, must)
+    if (uid != null) cleaner.adopt(uid)
     runCatching { pushTokenManager.register() }
-    return SessionUser(
-      email = user?.email.orEmpty(),
-      role = user?.role.orEmpty(),
-      mustChangePassword = user?.mustChangePassword ?: false,
-    )
+    return SessionUser(email = user?.email.orEmpty(), role = user?.role.orEmpty(), mustChangePassword = must)
   }
 
-  override suspend fun changePassword(new: String) {
-    api.changePassword(ChangePasswordRequest(new))
+  override suspend fun mustChangePassword(): Boolean = tokenStore.mustChangePassword()
+
+  override suspend fun changePassword(current: String?, new: String) {
+    api.changePassword(ChangePasswordRequest(currentPassword = current?.takeIf { it.isNotEmpty() }, newPassword = new))
+    tokenStore.setMustChangePassword(false)
   }
 
   override suspend fun forgotPassword(email: String) {
@@ -55,9 +67,5 @@ class AuthRepositoryImpl @Inject constructor(
     api.resetPassword(com.truehr.app.data.remote.dto.ResetPasswordRequest(email.trim(), otp.trim(), newPassword))
   }
 
-  override suspend fun logout() {
-    // Best-effort: stop pushes to this device while the auth token is still valid.
-    runCatching { pushTokenManager.unregister() }
-    tokenStore.clear()
-  }
+  override suspend fun logout() { cleaner.signOut() }
 }

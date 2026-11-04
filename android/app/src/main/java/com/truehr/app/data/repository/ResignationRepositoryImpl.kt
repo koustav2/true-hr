@@ -17,7 +17,7 @@ class ResignationRepositoryImpl @Inject constructor(
 
   private fun ResignationDto.toModel() = Resignation(
     id = id, employeeCode = employeeCode, name = name, designation = designation, department = department,
-    location = location, resignationDate = resignationDate, lastWorkingDate = lastWorkingDate,
+    location = location, resignationDate = com.truehr.app.core.Dates.isoDay(resignationDate), lastWorkingDate = com.truehr.app.core.Dates.isoDay(lastWorkingDate),
     noticePeriodDays = noticePeriodDays, reason = reason, status = status, reviewNote = reviewNote,
     appliedAt = appliedAt, reviewedAt = reviewedAt,
   )
@@ -26,15 +26,22 @@ class ResignationRepositoryImpl @Inject constructor(
     val c = api.resignationContext()
     return ResignationContext(
       employee = c.employee?.let {
-        ResignationEmployee(it.employeeCode, it.name, it.designation, it.vertical, it.location, it.noticePeriodDays)
+        ResignationEmployee(it.employeeCode, it.name, it.designation, it.vertical, it.location, it.noticePeriodDays,
+          it.department, com.truehr.app.core.Dates.isoDay(it.dateOfJoining), it.reportingManager)
       },
-      approvers = c.approvers.map { Approver(it.employeeCode, it.name, it.email, it.stage, it.status) },
+      approvers = c.approvers.map { Approver(it.employeeCode, it.name, it.email, it.stage, it.status, it.assignment) },
       current = c.current?.toModel(),
+      canSubmit = c.canSubmit,
+      missingStages = c.missingStages,
+      today = c.policy?.today,
+      minResignationDate = c.policy?.minResignationDate,
+      maxResignationDate = c.policy?.maxResignationDate,
+      suggestedLastWorkingDate = c.policy?.suggestedLastWorkingDate,
     )
   }
 
-  override suspend fun apply(resignationDate: String, lastWorkingDate: String, reason: String?) =
-    api.resignationApply(ApplyResignationRequest(resignationDate, lastWorkingDate, reason))
+  override suspend fun apply(resignationDate: String, lastWorkingDate: String, reason: String?, letter: com.truehr.app.core.PickedFile?) =
+    api.resignationApply(ApplyResignationRequest(resignationDate, lastWorkingDate, reason, letter?.base64, letter?.mime, letter?.name))
 
   override suspend fun withdraw(id: Long) = api.resignationWithdraw(id)
 

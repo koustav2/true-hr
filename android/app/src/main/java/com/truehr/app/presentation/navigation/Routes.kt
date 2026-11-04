@@ -5,6 +5,9 @@ object Routes {
   const val LOGIN = "login"
   const val FORGOT_PASSWORD = "forgot_password"
   const val CHANGE_PASSWORD = "change_password"
+  // Forced first change (temporary password): no way back into the app until done.
+  const val CHANGE_PASSWORD_FORCED = "change_password_forced"
+  const val CHANGE_REQUEST = "change_request"
   const val DASHBOARD = "dashboard"
   const val NOTIFICATIONS = "notifications"
   const val PROFILE = "profile"
@@ -31,6 +34,7 @@ object Routes {
   const val LEAVE = "leave"
   const val APPLY_LEAVE = "apply_leave"
   const val VIEW_LEAVE = "view_leave"
+  const val HOLIDAYS = "holidays"
   const val TEAM_LEAVE = "team_leave"
   const val AVAIL_COMPOFF = "avail_compoff"
   const val TEAM_COMPOFF = "team_compoff"

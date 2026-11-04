@@ -3,6 +3,7 @@ package com.truehr.app.presentation.feature
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.truehr.app.core.UiState
+import com.truehr.app.core.apiError
 import com.truehr.app.core.apiMessage
 import com.truehr.app.domain.model.MissPunch
 import com.truehr.app.domain.repository.MissPunchRepository
@@ -22,12 +23,29 @@ class MissPunchViewModel @Inject constructor(
   val applyError = MutableStateFlow<String?>(null)
   val applied = MutableStateFlow(false)
 
-  fun apply(days: String, month: Int, year: Int, remarks: String) = viewModelScope.launch {
-    if (days.isBlank()) { applyError.value = "Enter day(s) of the month."; return@launch }
+  val fieldErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+  fun clearFieldError(k: String) = fieldErrors.update { it - k }
+
+  /** E7: every rule checked at once, here and again on the server. */
+  fun apply(days: String, month: Int, year: Int?, inTime: String, outTime: String, remarks: String) = viewModelScope.launch {
+    val errs = com.truehr.app.core.Validators.missPunch(days, month, year, inTime, outTime, remarks, com.truehr.app.core.Dates.todayIso())
+    fieldErrors.value = errs
+    if (errs.isNotEmpty()) { applyError.value = null; return@launch }
     submitting.value = true; applyError.value = null
-    try { repo.apply(days, month, year, remarks.ifBlank { null }); applied.value = true }
-    catch (e: Exception) { applyError.value = e.apiMessage("Failed to submit request") }
+    try { repo.apply(days.split(',').map { it.trim() }.filter { it.isNotEmpty() }.joinToString(","), month, year!!, remarks.trim(), inTime.trim(), outTime.trim()); applied.value = true }
+    catch (e: Exception) {
+      val err = e.apiError("Failed to submit request")
+      fieldErrors.value = err.fields
+      applyError.value = err.summary(setOf("days", "month", "year", "inTime", "outTime", "remarks"))
+    }
     finally { submitting.value = false }
+  }
+
+  fun cancel(id: Long) = viewModelScope.launch {
+    reviewBusy.value = id
+    try { repo.cancel(id); load(lastStatus, lastTeam) }
+    catch (e: Exception) { list.update { it.copy(error = e.apiMessage("Could not cancel request")) } }
+    finally { reviewBusy.value = null }
   }
 
   // list (own or team)

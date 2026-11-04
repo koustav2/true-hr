@@ -1,5 +1,6 @@
 package com.truehr.app.data.local.db
 
+import androidx.room.ColumnInfo
 import androidx.room.Entity
 import androidx.room.Index
 import androidx.room.PrimaryKey
@@ -23,6 +24,11 @@ data class TourEntity(
   val distanceKm: Double = 0.0,
   val startSynced: Boolean = false,
   val endSynced: Boolean = false,
+  // v2 (DB version 2): whose tour this is, and "parked" when the server refused it
+  // permanently (4xx) so it no longer blocks the rest of the sync queue.
+  val ownerUserId: String? = null,
+  @ColumnInfo(defaultValue = "0") val parked: Boolean = false,
+  val lastError: String? = null,
 )
 
 // One GPS fix on a tour's path. Buffered locally; uploaded in batches when online.
@@ -39,6 +45,7 @@ data class TourPointEntity(
   val accuracy: Double? = null,
   val capturedAt: String,
   val synced: Boolean = false,
+  @ColumnInfo(defaultValue = "0") val parked: Boolean = false,
 )
 
 // A geo-tagged photo, buffered locally and uploaded when online.
@@ -52,4 +59,7 @@ data class GeotagEntity(
   val remark: String? = null,
   val capturedAt: String,
   val synced: Boolean = false,
+  val ownerUserId: String? = null,
+  @ColumnInfo(defaultValue = "0") val parked: Boolean = false,
+  val lastError: String? = null,
 )

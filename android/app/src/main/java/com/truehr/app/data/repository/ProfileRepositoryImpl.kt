@@ -65,10 +65,9 @@ class ProfileRepositoryImpl @Inject constructor(
       name = it.name.orEmpty(),
       designation = it.designation,
       department = it.department,
+      // E55: exactly as stored (no trimming at '+').
       email = it.email,
-      phone = it.phone,
-      city = it.city,
-      state = it.state,
+      location = it.location ?: it.state,
     )
   }
 }

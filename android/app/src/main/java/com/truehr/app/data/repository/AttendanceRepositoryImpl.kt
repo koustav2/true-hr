@@ -82,7 +82,9 @@ class AttendanceRepositoryImpl @Inject constructor(
     val label = "${DateFormatSymbols().months[(dto.month - 1).coerceIn(0, 11)]} ${dto.year}"
     return MonthlyAttendance(
       monthLabel = label, year = dto.year, month = dto.month,
-      cells = dto.days.map { MonthCell(it.day, it.status) },
+      cells = dto.days.map { MonthCell(it.day, it.status, it.holiday) },
+      holidays = dto.holidays.map { it.day to it.name.orEmpty() },
+      minIndex = dto.minMonth?.let { it.year * 12 + it.month - 1 },
     )
   }
 

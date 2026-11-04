@@ -26,7 +26,7 @@ data class LoginResponse(
 data class LoginOtpRequest(val email: String, val otp: String)
 
 @Serializable
-data class ChangePasswordRequest(val newPassword: String)
+data class ChangePasswordRequest(val currentPassword: String? = null, val newPassword: String)
 
 @Serializable
 data class ForgotPasswordRequest(val email: String)
@@ -46,4 +46,7 @@ data class MeDto(
   val first_name: String? = null,
   val last_name: String? = null,
   val employee_code: String? = null,
+  val name: String? = null,
+  val display_name: String? = null,
+  val organisationName: String? = null,
 )

@@ -3,10 +3,24 @@ package com.truehr.app.data.remote.dto
 import kotlinx.serialization.Serializable
 
 @Serializable
-data class MonthDayDto(val day: Int, val status: String? = null)
+data class MonthDayDto(val day: Int, val status: String? = null, val holiday: String? = null)
 
 @Serializable
-data class MonthlyDto(val year: Int, val month: Int, val days: List<MonthDayDto> = emptyList())
+data class MonthHolidayDto(val day: Int, val name: String? = null)
+
+@Serializable
+data class YearMonthDto(val year: Int, val month: Int)
+
+@Serializable
+data class MonthlyDto(
+  val year: Int,
+  val month: Int,
+  val days: List<MonthDayDto> = emptyList(),
+  // v2 (E4/E5): joining date, the month's holidays, and the earliest month to open.
+  val joiningDate: String? = null,
+  val holidays: List<MonthHolidayDto> = emptyList(),
+  val minMonth: YearMonthDto? = null,
+)
 
 @Serializable
 data class TeamMemberDto(
@@ -50,10 +64,12 @@ data class DirectoryEntryDto(
   val phone: String? = null,
   val city: String? = null,
   val state: String? = null,
+  // v2: official work location (branch / posting state); no personal phone (E54).
+  val location: String? = null,
 )
 
 @Serializable
-data class ApplyMissPunchRequest(val days: String, val month: Int, val year: Int, val remarks: String? = null)
+data class ApplyMissPunchRequest(val days: String, val month: Int, val year: Int, val remarks: String? = null, val inTime: String? = null, val outTime: String? = null)
 
 @Serializable
 data class MissPunchDto(
@@ -68,6 +84,11 @@ data class MissPunchDto(
   val reviewNote: String? = null,
   val appliedAt: String? = null,
   val reviewedAt: String? = null,
+  val inTime: String? = null,
+  val outTime: String? = null,
+  val cancelledAt: String? = null,
+  val reviewedBy: String? = null,
+  val pendingWith: String? = null,
 )
 
 @Serializable

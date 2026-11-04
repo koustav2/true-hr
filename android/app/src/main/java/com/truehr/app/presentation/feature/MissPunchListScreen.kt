@@ -19,13 +19,14 @@ import androidx.compose.ui.unit.dp
 import androidx.hilt.navigation.compose.hiltViewModel
 import com.truehr.app.domain.model.MissPunch
 import com.truehr.app.presentation.components.CenterLoader
+import com.truehr.app.presentation.components.ConfirmDialog
 import com.truehr.app.presentation.components.ErrorState
 import com.truehr.app.presentation.components.GradientHeader
 import com.truehr.app.presentation.components.NoTeamState
 import com.truehr.app.presentation.profile.ProfileViewModel
 import com.truehr.app.presentation.theme.*
 
-private val TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected")
+private val TABS = listOf("PENDING" to "Pending", "APPROVED" to "Approved", "REJECTED" to "Rejected", "CANCELLED" to "Cancelled")
 
 @Composable
 fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm: MissPunchViewModel = hiltViewModel(), profileVm: ProfileViewModel = hiltViewModel()) {
@@ -35,7 +36,17 @@ fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm
   val noTeam = teamView && prof.data?.isManager == false
   val reviewBusy by vm.reviewBusy.collectAsState()
   var rejectId by remember { mutableStateOf<Long?>(null) }
-  LaunchedEffect(tab) { vm.load(TABS[tab].first, teamView) }
+  var cancelId by remember { mutableStateOf<Long?>(null) }
+  val tabs = if (teamView) TABS.take(3) else TABS
+  LaunchedEffect(tab) { vm.load(tabs[tab].first, teamView) }
+
+  cancelId?.let { id ->
+    ConfirmDialog(
+      title = "Cancel this request?", body = "Your miss-punch request will be withdrawn.",
+      confirmLabel = "Cancel request", dismissLabel = "Keep it",
+      onConfirm = { vm.cancel(id); cancelId = null }, onDismiss = { cancelId = null },
+    )
+  }
 
   rejectId?.let { id ->
     var note by remember { mutableStateOf("") }
@@ -63,17 +74,17 @@ fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm
         Text(title, color = Surface, style = MaterialTheme.typography.titleLarge)
       }
     }
-    if (!noTeam) TabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green) {
-      TABS.forEachIndexed { i, (_, label) ->
+    if (!noTeam) ScrollableTabRow(selectedTabIndex = tab, containerColor = Surface, contentColor = Green, edgePadding = 8.dp) {
+      tabs.forEachIndexed { i, (_, label) ->
         Tab(selected = tab == i, onClick = { tab = i }, text = { Text(label) })
       }
     }
     when {
       noTeam -> NoTeamState()
       s.loading -> CenterLoader()
-      s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(TABS[tab].first, teamView) })
+      s.error != null -> ErrorState(s.error!!, onRetry = { vm.load(tabs[tab].first, teamView) })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-        Text("No ${TABS[tab].second.lowercase()} requests.", color = InkSoft)
+        Text("No ${tabs[tab].second.lowercase()} requests.", color = InkSoft)
       }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
         items(s.data!!) { m ->
@@ -83,6 +94,8 @@ fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm
             busy = reviewBusy == m.id,
             onApprove = { vm.review(m.id, "APPROVED", null) },
             onReject = { rejectId = m.id },
+            showCancel = !teamView && m.status == "PENDING",
+            onCancel = { cancelId = m.id },
           )
         }
       }
@@ -91,8 +104,8 @@ fun MissPunchListScreen(title: String, teamView: Boolean, onBack: () -> Unit, vm
 }
 
 @Composable
-private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Boolean = false, onApprove: () -> Unit = {}, onReject: () -> Unit = {}) {
-  val statusColor = when (m.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
+private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Boolean = false, onApprove: () -> Unit = {}, onReject: () -> Unit = {}, showCancel: Boolean = false, onCancel: () -> Unit = {}) {
+  val statusColor = when (m.status) { "APPROVED" -> Green; "REJECTED" -> Rose; "CANCELLED" -> InkFaint; else -> Amber }
   Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
     Column(Modifier.padding(16.dp)) {
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
@@ -101,7 +114,7 @@ private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Bool
           Text("Emp Code: ${m.employeeCode}", color = InkFaint, style = MaterialTheme.typography.bodyMedium)
         }
         Surface(color = statusColor.copy(alpha = 0.12f), shape = RoundedCornerShape(20.dp)) {
-          Text(m.status.lowercase().replaceFirstChar { it.uppercase() }, color = statusColor,
+          Text(com.truehr.app.core.Labels.of(m.status), color = statusColor,
             style = MaterialTheme.typography.labelSmall, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
         }
       }
@@ -109,11 +122,19 @@ private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Bool
       KV("Request Date", m.days)
       KV("Month", m.month)
       KV("Year", m.year.toString())
-      KV("Apply Date", m.appliedAt ?: "—")
-      if (m.reviewedAt != null) KV("Reviewed On", m.reviewedAt)
+      if (m.inTime != null || m.outTime != null) KV("In / Out", "${m.inTime ?: "—"} – ${m.outTime ?: "—"}")
+      KV("Apply Date", m.appliedAt?.let { com.truehr.app.core.Dates.dmy(it) } ?: "—")
+      if (m.status == "PENDING" && m.pendingWith != null) KV("Pending with", m.pendingWith)
+      if (m.status == "CANCELLED") KV("Cancelled on", com.truehr.app.core.Dates.dmyTime(m.cancelledAt))
+      else if (m.reviewedAt != null) KV("Reviewed On", com.truehr.app.core.Dates.dmy(m.reviewedAt) + (m.reviewedBy?.let { " by $it" } ?: ""))
       if (!m.remarks.isNullOrBlank()) KV("Remarks", m.remarks)
       if (!m.reviewNote.isNullOrBlank()) KV("Review Note", m.reviewNote)
 
+      if (showCancel) {
+        Spacer(Modifier.height(12.dp))
+        OutlinedButton(onClick = onCancel, enabled = !busy, modifier = Modifier.fillMaxWidth(), shape = RoundedCornerShape(10.dp),
+          colors = ButtonDefaults.outlinedButtonColors(contentColor = Rose)) { Text("Cancel Request", fontWeight = FontWeight.SemiBold) }
+      }
       if (showActions) {
         Spacer(Modifier.height(12.dp))
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
@@ -140,6 +161,6 @@ private fun MissPunchCard(m: MissPunch, showActions: Boolean = false, busy: Bool
 private fun KV(k: String, v: String) {
   Row(Modifier.fillMaxWidth().padding(vertical = 3.dp)) {
     Text(k, color = InkFaint, modifier = Modifier.width(120.dp), style = MaterialTheme.typography.bodyMedium)
-    Text(v, color = Ink, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium)
+    Text(v, color = Ink, fontWeight = FontWeight.Medium, style = MaterialTheme.typography.bodyMedium, modifier = Modifier.weight(1f))
   }
 }

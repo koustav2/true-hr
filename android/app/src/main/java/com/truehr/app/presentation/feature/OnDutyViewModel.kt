@@ -3,6 +3,7 @@ package com.truehr.app.presentation.feature
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.truehr.app.core.UiState
+import com.truehr.app.core.apiError
 import com.truehr.app.core.apiMessage
 import com.truehr.app.domain.model.OnDuty
 import com.truehr.app.domain.repository.OnDutyRepository
@@ -26,10 +27,30 @@ class OnDutyViewModel @Inject constructor(
   val canApply = MutableStateFlow(true)
   val eligibilityReason = MutableStateFlow<String?>(null)
   fun loadEligibility() = viewModelScope.launch {
-    runCatching { repo.eligibility() }.onSuccess { (ok, reason) -> canApply.value = ok; eligibilityReason.value = reason }
+    try { val (ok, reason) = repo.eligibility(); canApply.value = ok; eligibilityReason.value = reason }
+    catch (e: Exception) { eligibilityReason.value = e.apiMessage("Couldn't check whether OD can be applied today") }
+  }
+
+  val fieldErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+  fun clearFieldError(k: String) = fieldErrors.update { it - k }
+
+  /** Same rules as the v2 server: place 2–200, purpose 3–500 characters. */
+  fun checkFields(place: String, purpose: String): Boolean {
+    val e = LinkedHashMap<String, String>()
+    when {
+      place.isBlank() -> e["place"] = "Place of duty is required"
+      place.trim().length < 2 -> e["place"] = "Place of duty must be at least 2 characters"
+    }
+    when {
+      purpose.isBlank() -> e["reason"] = "Purpose is required"
+      purpose.trim().length < 3 -> e["reason"] = "Purpose must be at least 3 characters"
+    }
+    fieldErrors.value = e
+    return e.isEmpty()
   }
 
   fun apply(fromDate: String, toDate: String, dayType: String, place: String, reason: String, photo: String?, lat: Double?, lng: Double?, address: String?) = viewModelScope.launch {
+    if (!checkFields(place, reason)) return@launch
     if (fromDate.isBlank() || toDate.isBlank()) { applyError.value = "Select both From and To dates."; return@launch }
     if (fromDate > toDate) { applyError.value = "From date cannot be after To date."; return@launch }
     if (photo == null) { applyError.value = "Capture a photo with your location to apply."; return@launch }
@@ -37,7 +58,11 @@ class OnDutyViewModel @Inject constructor(
     try {
       repo.apply(fromDate, toDate, dayType, place.ifBlank { null }, reason.ifBlank { null }, photo, lat, lng, address)
       applied.value = true
-    } catch (e: Exception) { applyError.value = e.apiMessage("Failed to submit request") }
+    } catch (e: Exception) {
+      val err = e.apiError("Failed to submit request")
+      fieldErrors.value = err.fields
+      applyError.value = err.message
+    }
     finally { submitting.value = false }
   }
 

@@ -30,7 +30,7 @@ import com.truehr.app.presentation.theme.*
 import java.util.Calendar
 
 private fun statusColor(s: String?): Color? = when (s) {
-  "P" -> Green; "A" -> Rose; "L" -> Sky; "WO" -> Amber; "H" -> InkFaint; else -> null
+  "P" -> Green; "A" -> Rose; "L" -> Sky; "WO" -> Amber; "H" -> Grape; "NA" -> InkFaint; else -> null
 }
 
 @Composable
@@ -67,11 +67,11 @@ fun MonthlyAttendanceScreen(onBack: () -> Unit, employeeId: Long? = null, name: 
         Column(Modifier.padding(16.dp)) {
           // Month switcher
           Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.SpaceBetween) {
-            FilledTonalIconButton(onClick = { vm.changeMonth(-1) }, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Green.copy(alpha = 0.10f))) {
+            FilledTonalIconButton(onClick = { vm.changeMonth(-1) }, enabled = vm.canGo(-1) && !s.loading, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Green.copy(alpha = 0.10f))) {
               Icon(Icons.Filled.ChevronLeft, null, tint = Green)
             }
             Text(s.data?.monthLabel ?: "$month/$year", fontWeight = FontWeight.Bold, color = Ink, style = MaterialTheme.typography.titleMedium)
-            FilledTonalIconButton(onClick = { vm.changeMonth(1) }, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Green.copy(alpha = 0.10f))) {
+            FilledTonalIconButton(onClick = { vm.changeMonth(1) }, enabled = vm.canGo(1) && !s.loading, colors = IconButtonDefaults.filledTonalIconButtonColors(containerColor = Green.copy(alpha = 0.10f))) {
               Icon(Icons.Filled.ChevronRight, null, tint = Green)
             }
           }
@@ -91,6 +91,7 @@ fun MonthlyAttendanceScreen(onBack: () -> Unit, employeeId: Long? = null, name: 
                 StatChip("Absent", count("A"), Rose, Modifier.weight(1f))
                 StatChip("Leave", count("L"), Sky, Modifier.weight(1f))
                 StatChip("WO", count("WO"), Amber, Modifier.weight(1f))
+                StatChip("Holiday", count("H"), Grape, Modifier.weight(1f))
               }
               Spacer(Modifier.height(16.dp))
               HorizontalDivider(color = Line)
@@ -122,6 +123,13 @@ fun MonthlyAttendanceScreen(onBack: () -> Unit, employeeId: Long? = null, name: 
               HorizontalDivider(color = Line)
               Spacer(Modifier.height(10.dp))
               FlowLegend()
+              // E5: the month's holidays by name.
+              val hols = s.data!!.holidays
+              if (hols.isNotEmpty()) {
+                Spacer(Modifier.height(12.dp))
+                Text("Holidays this month", color = Ink, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.bodyMedium)
+                hols.forEach { (d, n) -> Text("%02d — %s".format(d, n), color = InkSoft, style = MaterialTheme.typography.bodySmall) }
+              }
             }
           }
         }
@@ -142,7 +150,11 @@ private fun DayCell(day: Int, status: String?, isToday: Boolean) {
   ) {
     Column(horizontalAlignment = Alignment.CenterHorizontally) {
       Text(day.toString(), color = c ?: Ink, fontWeight = if (c != null || isToday) FontWeight.Bold else FontWeight.Normal, style = MaterialTheme.typography.bodyMedium)
-      if (status == "WO") Text("WO", color = Amber, style = MaterialTheme.typography.labelSmall)
+      when (status) {
+        "WO" -> Text("WO", color = Amber, style = MaterialTheme.typography.labelSmall)
+        "H" -> Text("Hol", color = Grape, style = MaterialTheme.typography.labelSmall)
+        "NA" -> Text("N/A", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+      }
     }
   }
 }
@@ -159,8 +171,9 @@ private fun StatChip(label: String, value: Int, color: Color, modifier: Modifier
 
 @Composable
 private fun FlowLegend() {
-  val items = listOf("Present" to Green, "Absent" to Rose, "Leave" to Sky, "WFH/WO" to Amber, "Hold" to InkFaint)
-  Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+  val items = listOf("Present" to Green, "Absent" to Rose, "Leave" to Sky, "Week off" to Amber, "Holiday" to Grape, "Not joined" to InkFaint)
+  @OptIn(androidx.compose.foundation.layout.ExperimentalLayoutApi::class)
+  FlowRow(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(12.dp)) {
     items.forEach { (l, col) ->
       Row(verticalAlignment = Alignment.CenterVertically) {
         Box(Modifier.size(9.dp).clip(CircleShape).background(col)); Spacer(Modifier.width(4.dp))

@@ -18,6 +18,9 @@ import androidx.compose.material.icons.filled.Groups
 import androidx.compose.material.icons.filled.WorkHistory
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
+import androidx.compose.material.icons.filled.Celebration
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -32,17 +35,19 @@ import com.truehr.app.presentation.theme.*
 private data class LeaveTile(val label: String, val icon: ImageVector, val route: String, val tint: androidx.compose.ui.graphics.Color)
 
 @Composable
-fun LeaveMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
-  // All tiles show for everyone. Team screens themselves display a "No team yet" message
-  // when the signed-in user has nobody reporting to them.
+fun LeaveMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, gate: TeamGateViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+  // E2: team approval tiles only for someone with reportees.
+  val hasTeam by gate.hasTeam.collectAsState()
+  val teamRoutes = setOf(Routes.TEAM_COMPOFF, Routes.TEAM_LEAVE, Routes.TEAM_OD)
   val tiles = listOf(
     LeaveTile("Apply Leave", Icons.Filled.EditCalendar, Routes.APPLY_LEAVE, Green),
     LeaveTile("View Leave", Icons.Filled.EventNote, Routes.VIEW_LEAVE, Sky),
+    LeaveTile("Holidays", Icons.Filled.Celebration, Routes.HOLIDAYS, Rose),
     LeaveTile("Avail CompOff", Icons.Filled.EventAvailable, Routes.AVAIL_COMPOFF, Teal),
     LeaveTile("Team CompOff", Icons.Filled.WorkHistory, Routes.TEAM_COMPOFF, Amber),
     LeaveTile("Team Leave", Icons.Filled.Groups, Routes.TEAM_LEAVE, Violet),
     LeaveTile("Team OD", Icons.Filled.FactCheck, Routes.TEAM_OD, Grape),
-  )
+  ).filter { hasTeam || it.route !in teamRoutes }
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
       Row(verticalAlignment = Alignment.CenterVertically) {

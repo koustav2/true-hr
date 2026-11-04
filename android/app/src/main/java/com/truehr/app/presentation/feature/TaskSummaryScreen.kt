@@ -81,7 +81,7 @@ fun statusColor(status: String): Color = when (status) { "CLOSED" -> Green; "ONG
 fun TaskStatusPill(status: String) {
   val c = statusColor(status)
   Surface(color = c.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-    Text(status.lowercase().replaceFirstChar { it.uppercase() }, color = c, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+    Text(com.truehr.app.core.Labels.of(status), color = c, style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
   }
 }
 
@@ -97,7 +97,7 @@ private fun TaskCard(t: Task, busy: Boolean, onStart: () -> Unit, onClose: () ->
       Spacer(Modifier.height(8.dp))
       Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
         t.dueDate?.let { Text("Due: ${taskDmy(it)}", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
-        t.aroundTime?.let { Text("Time: $it", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
+        t.aroundTime?.let { Text("Due time: $it", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
       }
       if (!t.assignedByName.isNullOrBlank()) Text("Assigned by ${t.assignedByName}", color = InkFaint, style = MaterialTheme.typography.labelSmall)
       if (t.status != "CLOSED") {
@@ -118,7 +118,5 @@ private fun TaskCard(t: Task, busy: Boolean, onStart: () -> Unit, onClose: () ->
   }
 }
 
-internal fun taskDmy(iso: String): String {
-  val p = iso.take(10).split("-")
-  return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
-}
+// dueDate is a UTC timestamp of IST midnight → read the IST calendar day.
+internal fun taskDmy(iso: String): String = com.truehr.app.core.Dates.dmy(iso)

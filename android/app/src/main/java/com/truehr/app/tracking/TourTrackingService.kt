@@ -87,9 +87,23 @@ class TourTrackingService : Service() {
       stopTracking()
       return START_NOT_STICKY
     }
-    tourLocalId = intent?.getLongExtra(EXTRA_TOUR_ID, -1L) ?: -1L
     startForegroundNotification()
-    startLocationUpdates()
+    val fromIntent = intent?.getLongExtra(EXTRA_TOUR_ID, -1L) ?: -1L
+    if (fromIntent > 0) {
+      tourLocalId = fromIntent
+      startLocationUpdates()
+    } else {
+      // A6: START_STICKY restart after the process was killed delivers a null
+      // intent. Resume the tour that is still ACTIVE in Room, or stop — never
+      // keep running while silently dropping every fix.
+      scope.launch {
+        val active = runCatching { repo.activeTourLocalId() }.getOrNull()
+        launch(Dispatchers.Main) {
+          if (active != null && active > 0) { tourLocalId = active; startLocationUpdates() }
+          else stopTracking()
+        }
+      }
+    }
     return START_STICKY
   }
 

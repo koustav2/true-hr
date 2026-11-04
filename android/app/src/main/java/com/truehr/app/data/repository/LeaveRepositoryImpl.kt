@@ -17,6 +17,7 @@ class LeaveRepositoryImpl @Inject constructor(
     LeaveType(
       code = it.code, name = it.name, requiresBalance = it.requiresBalance,
       allowHalfDay = it.allowHalfDay, singleDate = it.singleDate, allowCertificate = it.allowCertificate,
+      certificateAfterDays = it.certificateAfterDays,
     )
   }
 
@@ -24,12 +25,19 @@ class LeaveRepositoryImpl @Inject constructor(
     LeaveBalance(
       code = it.code, name = it.name, requiresBalance = it.requiresBalance,
       allocated = it.allocated, used = it.used, remaining = it.remaining,
+      pending = it.pending,
+      // v2 sends `available`; null there means "no limit" only for LWP.
+      available = it.available ?: if (it.requiresBalance) it.remaining - it.pending else null,
     )
   }
 
-  override suspend fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String?, halfDay: Boolean, certificate: String?, certificateMime: String?) {
-    api.leaveApply(ApplyLeaveRequest(leaveCode = leaveCode, fromDate = fromDate, toDate = toDate, reason = reason, halfDay = halfDay, certificate = certificate, certificateMime = certificateMime))
-  }
+  override suspend fun apply(leaveCode: String, fromDate: String, toDate: String, reason: String?, halfDay: Boolean, halfDaySession: String?, certificate: String?, certificateMime: String?, certificateName: String?): String? =
+    api.leaveApply(ApplyLeaveRequest(leaveCode = leaveCode, fromDate = fromDate, toDate = toDate, reason = reason, halfDay = halfDay,
+      halfDaySession = if (halfDay) halfDaySession else null, certificate = certificate, certificateMime = certificateMime, certificateName = certificateName)).approver
+
+  override suspend fun holidays(year: Int): List<com.truehr.app.domain.model.Holiday> =
+    api.leaveHolidays(year).map { com.truehr.app.domain.model.Holiday(it.date.take(10), it.name.orEmpty(), it.kind == "RESTRICTED") }
+      .sortedBy { it.date }
 
   override suspend fun list(status: String): List<LeaveRequest> = api.leaveList(status).map { it.toModel() }
   override suspend fun team(status: String): List<LeaveRequest> = api.leaveTeam(status).map { it.toModel() }
@@ -46,8 +54,9 @@ private fun com.truehr.app.data.remote.dto.LeaveRequestDto.toModel() = LeaveRequ
   name = name.orEmpty(),
   leaveType = leaveType.orEmpty(),
   leaveCode = leaveCode.orEmpty(),
-  fromDate = fromDate?.take(10).orEmpty(),
-  toDate = toDate?.take(10).orEmpty(),
+  // fromIso/toIso are the calendar dates; fromDate is a UTC timestamp of IST midnight.
+  fromDate = fromIso ?: com.truehr.app.core.Dates.isoDay(fromDate).orEmpty(),
+  toDate = toIso ?: com.truehr.app.core.Dates.isoDay(toDate).orEmpty(),
   days = days,
   halfDay = halfDay,
   reason = reason,
@@ -55,6 +64,11 @@ private fun com.truehr.app.data.remote.dto.LeaveRequestDto.toModel() = LeaveRequ
   reviewNote = reviewNote,
   hasCertificate = hasCertificate,
   certificateUrl = if (hasCertificate) "${com.truehr.app.BuildConfig.BASE_URL}leave/$id/certificate" else null,
-  appliedAt = appliedAt?.take(10),
-  reviewedAt = reviewedAt?.take(10),
+  appliedAt = com.truehr.app.core.Dates.isoDay(appliedAt),
+  reviewedAt = com.truehr.app.core.Dates.isoDay(reviewedAt),
+  halfDaySession = halfDaySession,
+  reviewedBy = reviewedBy,
+  cancelledAt = cancelledAt,
+  cancelledBy = cancelledBy,
+  pendingWith = pendingWith,
 )

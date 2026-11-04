@@ -25,21 +25,33 @@ class PushTokenManager @Inject constructor(
   @ApplicationContext private val context: Context,
   private val api: ApiService,
   private val tokenStore: TokenStore,
-) {
+) : com.truehr.app.data.DeviceTokenUnregistrar {
   private val firebaseReady: Boolean get() = FirebaseApp.getApps(context).isNotEmpty()
 
-  suspend fun register() {
-    if (!firebaseReady || tokenStore.current() == null) return
-    val fcmToken = currentFcmToken() ?: return
-    runCatching { api.registerDevice(DeviceTokenRequest(fcmToken)) }
+  /** Returns true when the server accepted the token (false = not configured / failed; logged). */
+  suspend fun register(): Boolean {
+    if (!firebaseReady || tokenStore.current() == null) return false
+    val fcmToken = currentFcmToken() ?: run { android.util.Log.w(TAG, "No FCM token available"); return false }
+    // Two attempts: a flaky network at app start should not leave pushes off until next launch.
+    repeat(2) { attemptNo ->
+      try { api.registerDevice(DeviceTokenRequest(fcmToken)); return true }
+      catch (e: Exception) {
+        android.util.Log.w(TAG, "Device-token registration failed (attempt ${attemptNo + 1})", e)
+        if (attemptNo == 0) kotlinx.coroutines.delay(3_000)
+      }
+    }
+    return false
   }
 
   /** Call while the auth token is still valid (i.e. before TokenStore.clear()). */
-  suspend fun unregister() {
-    if (!firebaseReady) return
-    val fcmToken = currentFcmToken() ?: return
-    runCatching { api.unregisterDevice(DeviceTokenRequest(fcmToken)) }
+  override suspend fun unregister(): Boolean {
+    if (!firebaseReady) return true // nothing was ever registered from this build
+    val fcmToken = currentFcmToken() ?: return false
+    return try { api.unregisterDevice(DeviceTokenRequest(fcmToken)); true }
+    catch (e: Exception) { android.util.Log.w(TAG, "Device-token unregister failed", e); false }
   }
+
+  private companion object { const val TAG = "PushTokenManager" }
 
   private suspend fun currentFcmToken(): String? = suspendCancellableCoroutine { cont ->
     FirebaseMessaging.getInstance().token

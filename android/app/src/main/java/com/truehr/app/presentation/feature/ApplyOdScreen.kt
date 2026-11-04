@@ -1,11 +1,9 @@
 package com.truehr.app.presentation.feature
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,11 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.truehr.app.core.LocationHelper
+import com.truehr.app.core.launchSafely
 import com.truehr.app.core.reverseGeocode
 import com.truehr.app.core.toJpegBase64
 import com.truehr.app.presentation.components.GradientHeader
@@ -40,16 +37,20 @@ import java.util.Locale
 fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
-  val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
   val submitting by vm.submitting.collectAsState()
   val applyError by vm.applyError.collectAsState()
+  val fieldErrors by vm.fieldErrors.collectAsState()
   val applied by vm.applied.collectAsState()
   val canApply by vm.canApply.collectAsState()
   val eligibilityReason by vm.eligibilityReason.collectAsState()
 
-  var location by remember { mutableStateOf<Location?>(null) }
-  var status by remember { mutableStateOf("Tap \"Apply OD\" to capture your on-duty location & photo.") }
+  // Saved across process death (the camera can push the app out of memory).
+  var place by rememberSaveable { mutableStateOf("") }
+  var purpose by rememberSaveable { mutableStateOf("") }
+  var fixLat by rememberSaveable { mutableStateOf<Double?>(null) }
+  var fixLng by rememberSaveable { mutableStateOf<Double?>(null) }
+  var status by rememberSaveable { mutableStateOf("Enter the place and purpose, then tap \"Apply OD\" to capture your location & photo.") }
 
   LaunchedEffect(Unit) { vm.loadEligibility() }
   LaunchedEffect(eligibilityReason) { eligibilityReason?.let { status = it } }
@@ -57,35 +58,43 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
   LaunchedEffect(applied) { if (applied) { status = "On-duty submitted successfully."; delay(900); onBack() } }
 
   val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
-    if (bitmap != null) {
+    val lat = fixLat; val lng = fixLng
+    if (bitmap != null && lat != null && lng != null) {
       status = "Submitting your on-duty…"
       scope.launch {
-        val addr = location?.let { reverseGeocode(context, it.latitude, it.longitude) }
-        val today = SimpleDateFormat("yyyy-MM-dd", Locale.US).format(Date())
-        vm.apply(today, today, "FULL", addr ?: "", "", bitmap.toJpegBase64(), location?.latitude, location?.longitude, addr)
+        val addr = reverseGeocode(context, lat, lng)
+        val today = com.truehr.app.core.Dates.todayIso()
+        vm.apply(today, today, "FULL", place, purpose, bitmap.toJpegBase64(), lat, lng, addr)
       }
-    } else status = "Photo capture cancelled."
+    } else status = if (bitmap == null) "Photo capture cancelled." else "Location was lost. Please try again."
   }
 
   fun fetchLocationThenCamera() {
     status = "Getting your location…"
-    try {
-      fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-        .addOnSuccessListener { l -> location = l; status = "Opening camera…"; cameraLauncher.launch(null) }
-        .addOnFailureListener { location = null; status = "Opening camera…"; cameraLauncher.launch(null) }
-    } catch (e: SecurityException) { status = "Location permission is required." }
+    scope.launch {
+      when (val fix = LocationHelper.current(context)) {
+        is LocationHelper.Fix.Ok -> {
+          fixLat = fix.location.latitude; fixLng = fix.location.longitude
+          status = "Opening camera…"
+          if (!cameraLauncher.launchSafely(context, null)) status = "No camera app is available on this phone."
+        }
+        is LocationHelper.Fix.Failed -> status = fix.message
+      }
+    }
   }
 
-  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (granted) fetchLocationThenCamera() else status = "Location permission denied. Enable it to apply OD."
+  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+    if (LocationHelper.granted(result)) fetchLocationThenCamera() else status = LocationHelper.MSG_DENIED
   }
 
   fun start() {
-    val ok = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    if (ok) fetchLocationThenCamera() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    // Place and purpose are required (v2) — check before the camera opens.
+    if (!vm.checkFields(place, purpose)) { status = "Please fill in the highlighted fields."; return }
+    if (LocationHelper.hasAny(context)) fetchLocationThenCamera() else permissionLauncher.launch(LocationHelper.PERMISSIONS)
   }
 
-  val now = remember { Date() }
+  var now by remember { mutableStateOf(Date()) }
+  LaunchedEffect(Unit) { while (true) { now = Date(); delay(1_000) } }
   val dateFmt = remember { SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()) }
   val timeFmt = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
 
@@ -97,7 +106,7 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
         Spacer(Modifier.width(40.dp))
       }
     }
-    Column(Modifier.fillMaxSize().padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
+    Column(Modifier.fillMaxSize().verticalScroll(androidx.compose.foundation.rememberScrollState()).padding(20.dp), horizontalAlignment = Alignment.CenterHorizontally) {
       Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp, modifier = Modifier.fillMaxWidth()) {
         Column(Modifier.padding(16.dp)) {
           Text("${dateFmt.format(now)}  |  ${timeFmt.format(now)}", fontWeight = FontWeight.SemiBold, color = Ink)
@@ -105,7 +114,13 @@ fun ApplyOdScreen(onBack: () -> Unit, vm: OnDutyViewModel = hiltViewModel()) {
           Text("On-Duty / Field work for today", color = Teal)
         }
       }
-      Spacer(Modifier.height(40.dp))
+      Spacer(Modifier.height(16.dp))
+      com.truehr.app.presentation.components.AppTextField(place, { place = it.take(200); vm.clearFieldError("place") }, "Place of duty *")
+      com.truehr.app.presentation.components.FieldError(fieldErrors["place"])
+      Spacer(Modifier.height(10.dp))
+      com.truehr.app.presentation.components.AppTextField(purpose, { purpose = it.take(500); vm.clearFieldError("reason") }, "Purpose *")
+      com.truehr.app.presentation.components.FieldError(fieldErrors["reason"])
+      Spacer(Modifier.height(24.dp))
       Button(
         onClick = { if (!submitting && canApply) start() },
         enabled = !submitting && canApply,

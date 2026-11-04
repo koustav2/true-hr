@@ -37,8 +37,8 @@ android {
     applicationId = "com.truehr.app"
     minSdk = 24
     targetSdk = 35
-    versionCode = 3
-    versionName = "1.1.0"
+    versionCode = 4
+    versionName = "1.2.0"
     vectorDrawables { useSupportLibrary = true }
 
     // Injected into AndroidManifest as the Google Maps API key.
@@ -61,7 +61,7 @@ android {
   productFlavors {
     create("prod") {
       dimension = "env"
-      buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/\"")
+      buildConfigField("String", "BASE_URL", "\"https://api.truehr.co.in/api/v2/\"")
       buildConfigField("String", "WEB_URL", "\"https://truehr.co.in/app\"")
     }
     create("staging") {
@@ -72,7 +72,7 @@ android {
       // emulator. For a physical device on the same Wi-Fi, set your Mac's LAN IP in
       // local.properties:  STAGING_HOST=192.168.1.35
       val stagingHost = localProps.getProperty("STAGING_HOST") ?: "10.0.2.2"
-      buildConfigField("String", "BASE_URL", "\"http://$stagingHost:4000/api/\"")
+      buildConfigField("String", "BASE_URL", "\"http://$stagingHost:4000/api/v2/\"")
       buildConfigField("String", "WEB_URL", "\"http://$stagingHost:5173\"")
     }
   }
@@ -93,6 +93,10 @@ android {
   buildFeatures {
     compose = true
     buildConfig = true
+  }
+  testOptions {
+    // JVM unit tests: android.* stubs return defaults instead of throwing.
+    unitTests.isReturnDefaultValues = true
   }
 }
 
@@ -141,6 +145,8 @@ dependencies {
   implementation(libs.androidx.work.runtime)
   implementation(libs.androidx.hilt.work)
   ksp(libs.androidx.hilt.compiler)
+
+  testImplementation(libs.junit)
 }
 
 // Parse google-services.json into resources only when it exists (Firebase

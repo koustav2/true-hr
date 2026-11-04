@@ -1,11 +1,9 @@
 package com.truehr.app.presentation.feature
 
-import android.Manifest
-import android.content.pm.PackageManager
-import android.location.Location
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.background
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
@@ -20,11 +18,10 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
-import androidx.core.content.ContextCompat
 import androidx.hilt.navigation.compose.hiltViewModel
-import com.google.android.gms.location.LocationServices
-import com.google.android.gms.location.Priority
-import com.google.android.gms.tasks.CancellationTokenSource
+import androidx.compose.runtime.saveable.rememberSaveable
+import com.truehr.app.core.LocationHelper
+import com.truehr.app.core.launchSafely
 import com.truehr.app.core.reverseGeocode
 import com.truehr.app.core.toJpegBase64
 import com.truehr.app.presentation.components.GradientHeader
@@ -37,7 +34,6 @@ import java.util.*
 fun MarkAttendanceScreen(onBack: () -> Unit, vm: AttendanceViewModel = hiltViewModel()) {
   val context = LocalContext.current
   val scope = rememberCoroutineScope()
-  val fused = remember { LocationServices.getFusedLocationProviderClient(context) }
 
   val punchedIn by vm.punchedIn.collectAsState()
   val completed by vm.completed.collectAsState()
@@ -45,55 +41,64 @@ fun MarkAttendanceScreen(onBack: () -> Unit, vm: AttendanceViewModel = hiltViewM
   val todayOut by vm.todayOut.collectAsState()
   val submitting by vm.submitting.collectAsState()
   val message by vm.message.collectAsState()
+  val todayError by vm.todayError.collectAsState()
 
-  var pendingType by remember { mutableStateOf<String?>(null) }
-  var location by remember { mutableStateOf<Location?>(null) }
-  var status by remember { mutableStateOf("Click the \"Punch In\" button to mark your attendance") }
+  // Kept across process death: the camera app may push us out of memory (A4).
+  var pendingType by rememberSaveable { mutableStateOf<String?>(null) }
+  var fixLat by rememberSaveable { mutableStateOf<Double?>(null) }
+  var fixLng by rememberSaveable { mutableStateOf<Double?>(null) }
+  var status by rememberSaveable { mutableStateOf("Click the \"Punch In\" button to mark your attendance") }
 
   LaunchedEffect(Unit) { vm.refreshToday() }
   LaunchedEffect(message) { message?.let { status = it } }
   LaunchedEffect(completed) { if (completed) status = "You have completed today's attendance." }
 
-  // Camera (thumbnail) → on capture, reverse-geocode + submit
+  // Camera (thumbnail) → on capture, reverse-geocode + submit (only with a real fix).
   val cameraLauncher = rememberLauncherForActivityResult(ActivityResultContracts.TakePicturePreview()) { bitmap ->
     val type = pendingType
-    if (bitmap != null && type != null) {
+    val lat = fixLat; val lng = fixLng
+    if (bitmap != null && type != null && lat != null && lng != null) {
       status = "Submitting your attendance…"
       scope.launch {
-        val addr = location?.let { reverseGeocode(context, it.latitude, it.longitude) }
-        vm.submitPunch(type, location?.latitude, location?.longitude, addr, bitmap.toJpegBase64())
+        val addr = reverseGeocode(context, lat, lng)
+        vm.submitPunch(type, lat, lng, addr, bitmap.toJpegBase64())
+        pendingType = null
       }
     } else {
-      status = "Photo capture cancelled."
+      status = if (bitmap == null) "Photo capture cancelled." else "Location was lost. Please try again."
+      pendingType = null
     }
   }
 
   fun fetchLocationThenCamera() {
     status = "Getting your location…"
-    val hasPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    if (!hasPerm) { status = "Location permission is required."; return }
-    try {
-      fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-        .addOnSuccessListener { loc -> location = loc; status = "Opening camera…"; cameraLauncher.launch(null) }
-        .addOnFailureListener { location = null; status = "Opening camera…"; cameraLauncher.launch(null) }
-    } catch (e: SecurityException) {
-      status = "Location permission is required."
+    scope.launch {
+      when (val fix = LocationHelper.current(context)) {
+        is LocationHelper.Fix.Ok -> {
+          fixLat = fix.location.latitude; fixLng = fix.location.longitude
+          status = "Opening camera…"
+          if (!cameraLauncher.launchSafely(context, null)) status = "No camera app is available on this phone."
+        }
+        // A4: never punch with an empty location — say why and stop.
+        is LocationHelper.Fix.Failed -> { status = fix.message; pendingType = null }
+      }
     }
   }
 
-  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { granted ->
-    if (granted) fetchLocationThenCamera() else status = "Location permission denied. Enable it to mark attendance."
+  val permissionLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
+    if (LocationHelper.granted(result)) fetchLocationThenCamera() else { status = LocationHelper.MSG_DENIED; pendingType = null }
   }
 
   fun startPunch(type: String) {
     pendingType = type
-    val hasPerm = ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED
-    if (hasPerm) fetchLocationThenCamera() else permissionLauncher.launch(Manifest.permission.ACCESS_FINE_LOCATION)
+    if (LocationHelper.hasAny(context)) fetchLocationThenCamera() else permissionLauncher.launch(LocationHelper.PERMISSIONS)
   }
 
-  val now = remember { Date() }
+  // A9: a live clock, not the time the screen was opened.
+  var now by remember { mutableStateOf(Date()) }
+  LaunchedEffect(Unit) { while (true) { now = Date(); kotlinx.coroutines.delay(1_000) } }
   val dateFmt = remember { SimpleDateFormat("EEEE, dd MMMM yyyy", Locale.getDefault()) }
-  val timeFmt = remember { SimpleDateFormat("hh:mm a", Locale.getDefault()) }
+  val timeFmt = remember { SimpleDateFormat("hh:mm:ss a", Locale.getDefault()) }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -108,7 +113,22 @@ fun MarkAttendanceScreen(onBack: () -> Unit, vm: AttendanceViewModel = hiltViewM
         Column(Modifier.padding(16.dp)) {
           Text("${dateFmt.format(now)}  |  ${timeFmt.format(now)}", fontWeight = FontWeight.SemiBold, color = Ink)
           Spacer(Modifier.height(8.dp))
-          Text("General Shift · 9:30 AM to 6:30 PM", color = Teal)
+          // A9: no hard-coded shift — the API has no shift model yet, so show today's state.
+          Text(
+            when {
+              completed -> "Today: punched in and out"
+              punchedIn -> "Today: punched in — remember to punch out"
+              else -> "Today: not punched in yet"
+            },
+            color = Teal,
+          )
+          todayError?.let {
+            Spacer(Modifier.height(6.dp))
+            Row(verticalAlignment = Alignment.CenterVertically) {
+              Text(it, color = Rose, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+              TextButton(onClick = { vm.refreshToday() }) { Text("Retry", color = Green) }
+            }
+          }
         }
       }
       Spacer(Modifier.height(40.dp))

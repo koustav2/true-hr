@@ -26,11 +26,16 @@ interface TourDao {
   @Query("SELECT * FROM tours WHERE localId=:localId")
   suspend fun getTour(localId: Long): TourEntity?
 
-  @Query("SELECT * FROM tours WHERE startSynced=0")
-  suspend fun toursNeedingStartSync(): List<TourEntity>
+  // Only the signed-in user's rows (rows from before v2 have no owner and belong
+  // to whoever was signed in during the update), and never parked ones.
+  @Query("SELECT * FROM tours WHERE startSynced=0 AND parked=0 AND (ownerUserId IS NULL OR ownerUserId=:owner)")
+  suspend fun toursNeedingStartSync(owner: String): List<TourEntity>
 
-  @Query("SELECT * FROM tours WHERE serverId IS NOT NULL")
-  suspend fun toursWithServer(): List<TourEntity>
+  @Query("SELECT * FROM tours WHERE serverId IS NOT NULL AND parked=0 AND (ownerUserId IS NULL OR ownerUserId=:owner)")
+  suspend fun toursWithServer(owner: String): List<TourEntity>
+
+  @Query("UPDATE tours SET parked=1, lastError=:error WHERE localId=:localId")
+  suspend fun parkTour(localId: Long, error: String?)
 
   @Query("UPDATE tours SET serverId=:serverId, startSynced=1 WHERE localId=:localId")
   suspend fun markStartSynced(localId: Long, serverId: Long)
@@ -48,10 +53,13 @@ interface TourDao {
   @Query("SELECT * FROM tour_points WHERE tourLocalId=:tourLocalId ORDER BY seq")
   suspend fun allPoints(tourLocalId: Long): List<TourPointEntity>
 
-  @Query("SELECT * FROM tour_points WHERE tourLocalId=:tourLocalId AND synced=0 ORDER BY seq")
+  @Query("SELECT * FROM tour_points WHERE tourLocalId=:tourLocalId AND synced=0 AND parked=0 ORDER BY seq")
   suspend fun unsyncedPoints(tourLocalId: Long): List<TourPointEntity>
 
-  @Query("SELECT COUNT(*) FROM tour_points WHERE tourLocalId=:tourLocalId AND synced=0")
+  @Query("UPDATE tour_points SET parked=1 WHERE id IN (:ids)")
+  suspend fun parkPoints(ids: List<Long>)
+
+  @Query("SELECT COUNT(*) FROM tour_points WHERE tourLocalId=:tourLocalId AND synced=0 AND parked=0")
   suspend fun unsyncedPointCount(tourLocalId: Long): Int
 
   @Query("SELECT COALESCE(MAX(seq), -1) FROM tour_points WHERE tourLocalId=:tourLocalId")
@@ -64,8 +72,30 @@ interface TourDao {
   @Insert
   suspend fun insertGeotag(geotag: GeotagEntity): Long
 
-  @Query("SELECT * FROM geotags WHERE synced=0 ORDER BY id")
-  suspend fun unsyncedGeotags(): List<GeotagEntity>
+  @Query("SELECT * FROM geotags WHERE synced=0 AND parked=0 AND (ownerUserId IS NULL OR ownerUserId=:owner) ORDER BY id")
+  suspend fun unsyncedGeotags(owner: String): List<GeotagEntity>
+
+  @Query("UPDATE geotags SET parked=1, lastError=:error WHERE id=:id")
+  suspend fun parkGeotag(id: Long, error: String?)
+
+  // ── Sign-out / account switch (A5) ───────────────────────────────────────
+  @Query("DELETE FROM tour_points")
+  suspend fun deleteAllPoints()
+
+  @Query("DELETE FROM tours")
+  suspend fun deleteAllTours()
+
+  @Query("DELETE FROM geotags")
+  suspend fun deleteAllGeotags()
+
+  @Query("DELETE FROM tour_points WHERE tourLocalId IN (SELECT localId FROM tours WHERE ownerUserId IS NOT NULL AND ownerUserId<>:owner)")
+  suspend fun deletePointsNotOwnedBy(owner: String)
+
+  @Query("DELETE FROM tours WHERE ownerUserId IS NOT NULL AND ownerUserId<>:owner")
+  suspend fun deleteToursNotOwnedBy(owner: String)
+
+  @Query("DELETE FROM geotags WHERE ownerUserId IS NOT NULL AND ownerUserId<>:owner")
+  suspend fun deleteGeotagsNotOwnedBy(owner: String)
 
   @Query("UPDATE geotags SET synced=1 WHERE id=:id")
   suspend fun markGeotagSynced(id: Long)

@@ -28,12 +28,19 @@ class AttendanceViewModel @Inject constructor(
   val message = MutableStateFlow<String?>(null)
   val daily = MutableStateFlow(UiState<List<AttendanceDay>>())
 
+  /** Set when today's status could not be read; the screen shows it with a retry. */
+  val todayError = MutableStateFlow<String?>(null)
   fun refreshToday() = viewModelScope.launch {
-    runCatching { repo.todayStatus() }.onSuccess {
+    try {
+      val it = repo.todayStatus()
       punchedIn.value = it.punchedIn
       completed.value = it.completed
       todayIn.value = it.punchIn
       todayOut.value = it.punchOut
+      todayError.value = null
+    } catch (e: Exception) {
+      android.util.Log.w("Attendance", "today status failed", e)
+      todayError.value = e.apiMessage("Couldn't load today's attendance")
     }
   }
 
@@ -79,7 +86,16 @@ class AttendanceViewModel @Inject constructor(
     catch (e: Exception) { monthly.value = UiState(error = e.apiMessage("Failed to load")) }
   }
 
+  /** E4: navigation stops at the joining month and at the current month. */
+  fun canGo(delta: Int): Boolean {
+    val idx = curYear.value * 12 + curMonth.value - 1 + delta
+    val now = Calendar.getInstance().let { it.get(Calendar.YEAR) * 12 + it.get(Calendar.MONTH) }
+    val min = monthly.value.data?.minIndex
+    return idx <= now && (min == null || idx >= min)
+  }
+
   fun changeMonth(delta: Int) {
+    if (!canGo(delta)) return
     var m = curMonth.value + delta
     var y = curYear.value
     if (m < 1) { m = 12; y-- }

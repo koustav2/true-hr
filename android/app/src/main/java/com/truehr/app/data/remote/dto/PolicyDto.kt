@@ -11,4 +11,9 @@ data class PolicyDto(
   val mime: String? = null,
   val uploadedAt: String? = null,
   val available: Boolean = false,
+  // v2 (E44): POLICY | FORMAT, version and effective date.
+  val kind: String? = null,
+  val version: String? = null,
+  val effectiveDate: String? = null,
+  val policyType: String? = null,
 )

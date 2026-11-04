@@ -62,6 +62,21 @@ interface ApiService {
   @GET("me/profile")
   suspend fun profile(): ProfileDto
 
+  @GET("me/full-profile")
+  suspend fun fullProfile(): com.truehr.app.data.remote.dto.FullProfileDto
+
+  @GET("me/change-requests")
+  suspend fun myChangeRequests(): List<com.truehr.app.data.remote.dto.ChangeRequestDto>
+
+  @POST("me/change-request")
+  suspend fun submitChangeRequest(@Body body: com.truehr.app.data.remote.dto.ChangeRequestBody): com.truehr.app.data.remote.dto.ChangeRequestDto
+
+  @retrofit2.http.PATCH("me/change-requests/{id}")
+  suspend fun editChangeRequest(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.ChangeRequestEdit): com.truehr.app.data.remote.dto.ChangeRequestDto
+
+  @POST("me/change-requests/{id}/withdraw")
+  suspend fun withdrawChangeRequest(@Path("id") id: Long): com.truehr.app.data.remote.dto.ChangeRequestDto
+
   @GET("me/team")
   suspend fun myTeam(): List<com.truehr.app.data.remote.dto.TeamMateDto>
 
@@ -100,6 +115,9 @@ interface ApiService {
   @POST("misspunch")
   suspend fun missPunchApply(@Body body: ApplyMissPunchRequest)
 
+  @POST("misspunch/{id}/cancel")
+  suspend fun missPunchCancel(@Path("id") id: Long)
+
   @GET("misspunch")
   suspend fun missPunchList(@Query("status") status: String): List<MissPunchDto>
 
@@ -133,7 +151,10 @@ interface ApiService {
   suspend fun leaveBalances(): List<com.truehr.app.data.remote.dto.LeaveBalanceDto>
 
   @POST("leave")
-  suspend fun leaveApply(@Body body: com.truehr.app.data.remote.dto.ApplyLeaveRequest)
+  suspend fun leaveApply(@Body body: com.truehr.app.data.remote.dto.ApplyLeaveRequest): com.truehr.app.data.remote.dto.ApplyLeaveResponse
+
+  @GET("leave/holidays")
+  suspend fun leaveHolidays(@Query("year") year: Int): List<com.truehr.app.data.remote.dto.HolidayDto>
 
   @GET("leave")
   suspend fun leaveList(@Query("status") status: String): List<com.truehr.app.data.remote.dto.LeaveRequestDto>
@@ -357,7 +378,19 @@ interface ApiService {
   suspend fun supportCatalog(): com.truehr.app.data.remote.dto.SupportCatalogDto
 
   @POST("support")
-  suspend fun supportCreate(@Body body: com.truehr.app.data.remote.dto.CreateTicketRequest)
+  suspend fun supportCreate(@Body body: com.truehr.app.data.remote.dto.CreateTicketRequest): com.truehr.app.data.remote.dto.CreateTicketResponse
+
+  @GET("support/{id}")
+  suspend fun supportDetail(@Path("id") id: Long): com.truehr.app.data.remote.dto.TicketDetailDto
+
+  @POST("support/{id}/comments")
+  suspend fun supportComment(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.TicketCommentRequest)
+
+  @POST("support/{id}/cancel")
+  suspend fun supportCancel(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.TicketReasonRequest)
+
+  @POST("support/{id}/reopen")
+  suspend fun supportReopen(@Path("id") id: Long, @Body body: com.truehr.app.data.remote.dto.TicketReasonRequest)
 
   @GET("support")
   suspend fun supportList(

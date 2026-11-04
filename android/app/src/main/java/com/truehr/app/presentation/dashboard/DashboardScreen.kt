@@ -105,7 +105,7 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
             Column(Modifier.weight(1f)) {
               Text(greeting(), color = Surface.copy(alpha = 0.72f), style = MaterialTheme.typography.labelMedium)
               Text(
-                header.name.ifBlank { "Welcome" },
+                header.name.ifBlank { "Welcome" },  // name from the profile, never the email (E63)
                 color = Surface,
                 style = MaterialTheme.typography.titleLarge,
                 maxLines = 1,
@@ -138,7 +138,7 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
             }
           }
           Spacer(Modifier.width(8.dp))
-          AccountMenu(onOpen = onOpen, onLogout = { vm.logout(onLoggedOut) })
+          AccountMenu(hasTeam = header.hasTeam, onOpen = onOpen, onLogout = { vm.logout(onLoggedOut) })
         }
         Spacer(Modifier.height(14.dp))
         Row(
@@ -158,7 +158,8 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
         }
       }
     }
-    val items = dashboardItems // Team List always visible; non-managers see an empty state
+    // E2: team shortcuts only for someone with reportees.
+    val items = dashboardItems.filter { !it.teamOnly || header.hasTeam }
     LazyVerticalGrid(
       columns = GridCells.Fixed(3),
       modifier = Modifier.fillMaxSize(),
@@ -169,6 +170,14 @@ fun DashboardScreen(onOpen: (String) -> Unit, onLoggedOut: () -> Unit, vm: Dashb
       if (banners.isNotEmpty()) {
         item(span = { GridItemSpan(maxLineSpan) }) {
           BannerCarousel(banners)
+        }
+      }
+      header.error?.let { msg ->
+        item(span = { GridItemSpan(maxLineSpan) }) {
+          Row(verticalAlignment = Alignment.CenterVertically) {
+            Text(msg, color = Rose, style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+            TextButton(onClick = { vm.load() }) { Text("Retry", color = Green) }
+          }
         }
       }
       item(span = { GridItemSpan(maxLineSpan) }) {
@@ -238,7 +247,7 @@ private fun BannerCarousel(banners: List<BannerDto>) {
 
 /** Top-right account menu: profile, team actions, password (+ flagged NFA suite) + logout. */
 @Composable
-private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
+private fun AccountMenu(hasTeam: Boolean, onOpen: (String) -> Unit, onLogout: () -> Unit) {
   var open by remember { mutableStateOf(false) }
   var confirmLogout by remember { mutableStateOf(false) }
 
@@ -247,11 +256,11 @@ private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
       onDismissRequest = { confirmLogout = false },
       shape = RoundedCornerShape(22.dp),
       containerColor = Surface,
-      title = { Text("Logout", style = MaterialTheme.typography.titleLarge, color = Ink) },
-      text = { Text("Do you want to logout?", style = MaterialTheme.typography.bodyLarge, color = InkSoft) },
+      title = { Text("Sign out", style = MaterialTheme.typography.titleLarge, color = Ink) },
+      text = { Text("Are you sure you want to sign out?", style = MaterialTheme.typography.bodyLarge, color = InkSoft) },
       confirmButton = {
         TextButton(onClick = { confirmLogout = false; onLogout() }) {
-          Text("Okay", color = Rose, style = MaterialTheme.typography.labelLarge)
+          Text("Sign out", color = Rose, style = MaterialTheme.typography.labelLarge)
         }
       },
       dismissButton = {
@@ -269,7 +278,7 @@ private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
       onDismissRequest = { open = false },
       modifier = Modifier.background(Surface).widthIn(min = 224.dp),
     ) {
-      settingsMenuItems.forEach { item ->
+      settingsMenuItems.filter { !it.teamOnly || hasTeam }.forEach { item ->
         DropdownMenuItem(
           text = { Text(item.label, style = MaterialTheme.typography.bodyLarge, color = Ink) },
           leadingIcon = {
@@ -285,7 +294,7 @@ private fun AccountMenu(onOpen: (String) -> Unit, onLogout: () -> Unit) {
       }
       HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 4.dp))
       DropdownMenuItem(
-        text = { Text("Logout", style = MaterialTheme.typography.bodyLarge, color = Rose, fontWeight = FontWeight.SemiBold) },
+        text = { Text("Sign out", style = MaterialTheme.typography.bodyLarge, color = Rose, fontWeight = FontWeight.SemiBold) },
         leadingIcon = {
           Box(
             modifier = Modifier.size(32.dp).clip(RoundedCornerShape(10.dp)).background(Rose.copy(alpha = 0.12f)),

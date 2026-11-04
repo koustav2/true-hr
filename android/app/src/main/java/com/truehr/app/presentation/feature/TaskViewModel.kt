@@ -3,6 +3,7 @@ package com.truehr.app.presentation.feature
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.truehr.app.core.UiState
+import com.truehr.app.core.apiError
 import com.truehr.app.core.apiMessage
 import com.truehr.app.domain.model.Task
 import com.truehr.app.domain.model.TaskSummary
@@ -42,16 +43,29 @@ class TaskViewModel @Inject constructor(
 
   // ── Manager: assign ──
   val teamMembers = MutableStateFlow<List<TeamMate>>(emptyList())
+  val teamLoaded = MutableStateFlow(false)
   fun loadTeamMembers() = viewModelScope.launch {
-    runCatching { profileRepo.myTeam() }.onSuccess { teamMembers.value = it }
+    try { teamMembers.value = profileRepo.myTeam() }
+    catch (e: Exception) { message.value = e.apiMessage("Couldn't load your team") }
+    finally { teamLoaded.value = true }
   }
+  val fieldErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+  fun clearFieldError(k: String) { fieldErrors.value = fieldErrors.value - k }
   val submitting = MutableStateFlow(false)
   val message = MutableStateFlow<String?>(null)
   val created = MutableStateFlow(false)
-  fun assign(assignedTo: Long, title: String, description: String, dueDate: String?, aroundTime: String) = viewModelScope.launch {
+  /** E32: every field problem shown at once. */
+  fun assign(assignedTo: Long?, title: String, description: String, dueDate: String, aroundTime: String) = viewModelScope.launch {
+    val errs = com.truehr.app.core.Validators.task(assignedTo, title, description, dueDate, aroundTime, com.truehr.app.core.Dates.todayIso())
+    fieldErrors.value = errs
+    if (errs.isNotEmpty()) return@launch
     submitting.value = true; message.value = null
-    try { repo.create(assignedTo, title, description.ifBlank { null }, dueDate, aroundTime.ifBlank { null }); created.value = true }
-    catch (e: Exception) { message.value = e.apiMessage("Could not assign task") }
+    try { repo.create(assignedTo!!, title.trim(), description.trim().ifBlank { null }, dueDate, aroundTime.trim().ifBlank { null }); created.value = true }
+    catch (e: Exception) {
+      val err = e.apiError("Could not assign task")
+      fieldErrors.value = err.fields
+      if (err.fields.isEmpty()) message.value = err.message
+    }
     finally { submitting.value = false }
   }
   fun consumeMessage() { message.value = null }

@@ -11,6 +11,8 @@ data class LeaveTypeDto(
   val allowHalfDay: Boolean = false,
   val singleDate: Boolean = false,
   val allowCertificate: Boolean = false,
+  val eligibility: String? = null,
+  val certificateAfterDays: Double? = null,
 )
 
 @Serializable
@@ -21,6 +23,10 @@ data class LeaveBalanceDto(
   val allocated: Double = 0.0,
   val used: Double = 0.0,
   val remaining: Double = 0.0,
+  // v2 (E13/E14): pending days and what can actually be applied for now.
+  val pending: Double = 0.0,
+  val available: Double? = null,
+  val basis: String? = null,
 )
 
 @Serializable
@@ -30,8 +36,28 @@ data class ApplyLeaveRequest(
   val toDate: String,
   val reason: String? = null,
   val halfDay: Boolean = false,
+  val halfDaySession: String? = null,
   val certificate: String? = null,
   val certificateMime: String? = null,
+  val certificateName: String? = null,
+)
+
+@Serializable
+data class ApplyLeaveResponse(
+  val ok: Boolean = false,
+  val id: Long? = null,
+  val days: Double? = null,
+  val sandwichDays: Double = 0.0,
+  val approver: String? = null,
+)
+
+@Serializable
+data class HolidayDto(
+  val date: String,
+  val name: String? = null,
+  val state: String? = null,
+  val location: String? = null,
+  val kind: String? = null,
 )
 
 @Serializable
@@ -51,4 +77,13 @@ data class LeaveRequestDto(
   val hasCertificate: Boolean = false,
   val appliedAt: String? = null,
   val reviewedAt: String? = null,
+  val fromIso: String? = null,
+  val toIso: String? = null,
+  val halfDaySession: String? = null,
+  val sandwichDays: Double = 0.0,
+  val reviewedBy: String? = null,
+  val cancelledAt: String? = null,
+  val cancelledBy: String? = null,
+  val pendingWith: String? = null,
+  val pendingWithKind: String? = null,
 )

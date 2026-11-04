@@ -111,7 +111,7 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
   }
 
   // Tapped push notification → open its screen once the user is inside the app.
-  val authRoutes = setOf(Routes.SPLASH, Routes.LOGIN, Routes.FORGOT_PASSWORD, Routes.CHANGE_PASSWORD)
+  val authRoutes = setOf(Routes.SPLASH, Routes.LOGIN, Routes.FORGOT_PASSWORD, Routes.CHANGE_PASSWORD, Routes.CHANGE_PASSWORD_FORCED)
   fun consumePushRoute() {
     val cur = nav.currentBackStackEntry?.destination?.route ?: return
     if (cur in authRoutes) return // not signed in yet — keep it pending
@@ -128,25 +128,37 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
 
   NavHost(navController = nav, startDestination = Routes.SPLASH) {
     composable(Routes.SPLASH) {
-      SplashScreen(onLoggedIn = { toDashboard() }, onGuest = { nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } } })
+      SplashScreen(
+        onLoggedIn = { toDashboard() },
+        onGuest = { nav.navigate(Routes.LOGIN) { popUpTo(Routes.SPLASH) { inclusive = true } } },
+        onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD_FORCED) { popUpTo(Routes.SPLASH) { inclusive = true } } },
+      )
     }
     composable(Routes.LOGIN) {
-      LoginScreen(onLoggedIn = { toDashboard() }, onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD) },
+      LoginScreen(onLoggedIn = { toDashboard() },
+        onMustChange = { nav.navigate(Routes.CHANGE_PASSWORD_FORCED) { popUpTo(Routes.LOGIN) { inclusive = true } } },
         onForgotPassword = { nav.navigate(Routes.FORGOT_PASSWORD) })
     }
     screen(Routes.FORGOT_PASSWORD) {
       ForgotPasswordScreen(onBack = { nav.popBackStack() })
     }
     screen(Routes.CHANGE_PASSWORD) {
-      ChangePasswordScreen(onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() })
+      ChangePasswordScreen(forced = false, onDone = { nav.popBackStack() }, onBack = { nav.popBackStack() }, onSignedOut = { toLogin() })
     }
+    screen(Routes.CHANGE_PASSWORD_FORCED) {
+      // After success → Dashboard (not back to Login). Back = sign out, never "skip".
+      ChangePasswordScreen(forced = true, onDone = {
+        nav.navigate(Routes.DASHBOARD) { popUpTo(0) { inclusive = true }; launchSingleTop = true }
+      }, onBack = {}, onSignedOut = { toLogin() })
+    }
+    screen(Routes.CHANGE_REQUEST) { com.truehr.app.presentation.profile.ChangeRequestScreen(onBack = { nav.popBackStack() }) }
     screen(Routes.DASHBOARD) {
       DashboardScreen(onOpen = { route -> nav.navigate(route) }, onLoggedOut = { toLogin() })
     }
     screen(Routes.NOTIFICATIONS) {
       NotificationsScreen(onBack = { nav.popBackStack() }, onOpen = { nav.navigate(it) })
     }
-    screen(Routes.PROFILE) { ProfileScreen(onBack = { nav.popBackStack() }) }
+    screen(Routes.PROFILE) { ProfileScreen(onBack = { nav.popBackStack() }, onRequestChange = { nav.navigate(Routes.CHANGE_REQUEST) }) }
     screen(Routes.PF) { PfScreen(onBack = { nav.popBackStack() }) }
 
     screen(Routes.ATTENDANCE) { AttendanceMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
@@ -192,7 +204,8 @@ fun AppNavGraph(nav: NavHostController = rememberNavController(), rootVm: RootVi
     screen(Routes.TEAM_OD) { OdListScreen("Team OD", teamView = true, onBack = { nav.popBackStack() }) }
 
     screen(Routes.LEAVE) { LeaveMenuScreen(onOpen = { nav.navigate(it) }, onBack = { nav.popBackStack() }) }
-    screen(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }, onAvailCompOff = { nav.navigate(Routes.AVAIL_COMPOFF) }) }
+    screen(Routes.APPLY_LEAVE) { ApplyLeaveScreen(onBack = { nav.popBackStack() }, onAvailCompOff = { nav.navigate(Routes.AVAIL_COMPOFF) }, onHolidays = { nav.navigate(Routes.HOLIDAYS) }) }
+    screen(Routes.HOLIDAYS) { com.truehr.app.presentation.feature.HolidaysScreen(onBack = { nav.popBackStack() }) }
     screen(Routes.VIEW_LEAVE) { LeaveListScreen("View Leave", teamView = false, onBack = { nav.popBackStack() }) }
     screen(Routes.TEAM_LEAVE) { LeaveListScreen("Team Leave", teamView = true, onBack = { nav.popBackStack() }) }
     screen(Routes.AVAIL_COMPOFF) { CompOffScreen("Avail CompOff", teamView = false, onBack = { nav.popBackStack() }) }

@@ -88,4 +88,6 @@ data class CreateGeotagRequest(
   val address: String? = null,
   val photo: String? = null,
   val remark: String? = null,
+  // When the photo was taken (it may upload much later from the offline buffer).
+  val capturedAt: String? = null,
 )

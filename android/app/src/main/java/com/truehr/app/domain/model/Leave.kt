@@ -7,6 +7,7 @@ data class LeaveType(
   val allowHalfDay: Boolean = false,
   val singleDate: Boolean = false,
   val allowCertificate: Boolean = false,
+  val certificateAfterDays: Double? = null,
 )
 
 data class LeaveBalance(
@@ -16,6 +17,9 @@ data class LeaveBalance(
   val allocated: Double,
   val used: Double,
   val remaining: Double,
+  val pending: Double = 0.0,
+  /** What apply allows now (allocated − used − pending); null = no limit (LWP). */
+  val available: Double? = remaining,
 )
 
 data class LeaveRequest(
@@ -35,4 +39,11 @@ data class LeaveRequest(
   val certificateUrl: String?,
   val appliedAt: String?,
   val reviewedAt: String?,
+  val halfDaySession: String? = null,
+  val reviewedBy: String? = null,
+  val cancelledAt: String? = null,
+  val cancelledBy: String? = null,
+  val pendingWith: String? = null,
 )
+
+data class Holiday(val date: String, val name: String, val restricted: Boolean)

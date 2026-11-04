@@ -42,10 +42,10 @@ fun TeamResignationScreen(onBack: () -> Unit, vm: ResignationViewModel = hiltVie
       onDismissRequest = { rejectId = null },
       title = { Text("Reject resignation") },
       text = {
-        OutlinedTextField(note, { note = it }, label = { Text("Remark (optional)") }, minLines = 2,
+        OutlinedTextField(note, { note = it }, label = { Text("Reason for rejection *") }, supportingText = { if (note.isNotEmpty() && note.trim().length < 5) Text("Reason for rejection must be at least 5 characters", color = Rose) }, minLines = 2,
           shape = RoundedCornerShape(12.dp), colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green), modifier = Modifier.fillMaxWidth())
       },
-      confirmButton = { TextButton(onClick = { vm.review(id, "REJECTED", note.ifBlank { null }, TABS[tab].first); rejectId = null }) { Text("Reject", color = Rose) } },
+      confirmButton = { TextButton(enabled = note.trim().length >= 5, onClick = { vm.review(id, "REJECTED", note.trim(), TABS[tab].first); rejectId = null }) { Text("Reject", color = Rose) } },
       dismissButton = { TextButton(onClick = { rejectId = null }) { Text("Cancel") } },
     )
   }

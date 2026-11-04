@@ -2,6 +2,7 @@ package com.truehr.app.presentation.auth
 
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
+import com.truehr.app.core.apiError
 import com.truehr.app.domain.repository.AuthRepository
 import dagger.hilt.android.lifecycle.HiltViewModel
 import kotlinx.coroutines.flow.MutableStateFlow
@@ -91,14 +92,13 @@ class LoginViewModel @Inject constructor(
   }
 }
 
-private fun friendlyOtp(e: Throwable): String = when {
-  e.message?.contains("Invalid", true) == true || e.message?.contains("400") == true -> "Invalid or expired code"
-  e.message?.contains("429") == true -> "Too many wrong attempts — sign in again for a new code"
-  else -> friendly(e)
+/**
+ * Sign-in errors in the server's own words ("Invalid credentials", "Your account opens
+ * on 05-11-2026", "Your account has been disabled…"), never "HTTP 401".
+ */
+fun friendly(e: Throwable): String {
+  val err = e.apiError("Could not sign in. Please try again.")
+  return if (err.status == 401 && err.message.equals("Invalid credentials", true)) "Invalid username or password" else err.message
 }
 
-fun friendly(e: Throwable): String = when {
-  e.message?.contains("401") == true || e.message?.contains("Invalid", true) == true -> "Invalid username or password"
-  e.message?.contains("Unable to resolve host") == true || e.message?.contains("Failed to connect") == true -> "Can't reach the server. Check your connection."
-  else -> e.message ?: "Something went wrong"
-}
+private fun friendlyOtp(e: Throwable): String = e.apiError("Could not verify the code. Please try again.").message

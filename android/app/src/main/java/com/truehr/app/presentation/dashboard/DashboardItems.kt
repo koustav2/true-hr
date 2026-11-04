@@ -11,7 +11,8 @@ import com.truehr.app.core.FeatureFlags
 import com.truehr.app.presentation.navigation.Routes
 import com.truehr.app.presentation.theme.*
 
-data class DashItem(val label: String, val icon: ImageVector, val route: String, val tint: Color = Green)
+/** [teamOnly] items appear only for someone with reportees (E2). */
+data class DashItem(val label: String, val icon: ImageVector, val route: String, val tint: Color = Green, val teamOnly: Boolean = false)
 
 val dashboardItems = listOfNotNull(
   DashItem("Attendance", Icons.Filled.EventAvailable, Routes.ATTENDANCE, Green),
@@ -23,7 +24,7 @@ val dashboardItems = listOfNotNull(
   DashItem("Address Book", Icons.Filled.Place, Routes.ADDRESS_BOOK, Sky),
   // My ESS opens the web employee portal (SSO) — NFA & co. live there.
   if (FeatureFlags.MY_ESS) DashItem("My ESS", Icons.Filled.Spa, Routes.ESS, Teal) else null,
-  DashItem("Team List", Icons.Filled.Groups, Routes.TEAM, Violet),
+  DashItem("Team List", Icons.Filled.Groups, Routes.TEAM, Violet, teamOnly = true),
   DashItem("PF, ESIC & Insurance", Icons.Filled.HealthAndSafety, Routes.PF, Teal),
   DashItem("Policies", Icons.AutoMirrored.Filled.MenuBook, Routes.POLICIES, Grape),
   DashItem("Resignation", Icons.AutoMirrored.Filled.ExitToApp, Routes.RESIGNATION, Rose),
@@ -32,11 +33,12 @@ val dashboardItems = listOfNotNull(
 /** Everything not on the dashboard grid lives here — the top-right three-dot menu. */
 val settingsMenuItems = listOfNotNull(
   DashItem("My Profile", Icons.Filled.Person, Routes.PROFILE, Violet),
+  DashItem("Request a change", Icons.Filled.EditNote, Routes.CHANGE_REQUEST, Sky),
   // NFA / PMS suite — hidden behind FeatureFlags.NFA_SUITE for this release.
   if (FeatureFlags.NFA_SUITE) DashItem("NFA", Icons.Filled.RequestQuote, Routes.NFA, Grape) else null,
   if (FeatureFlags.NFA_SUITE) DashItem("My Performance", Icons.Filled.Insights, Routes.MY_PERFORMANCE, Sky) else null,
   if (FeatureFlags.NFA_SUITE) DashItem("Team KPI & PMS", Icons.Filled.Grade, Routes.TEAM_PMS, Amber) else null,
-  DashItem("Team Tasks", Icons.Filled.AddTask, Routes.TEAM_TASK, Green),
-  DashItem("Team Resignation", Icons.Filled.HowToReg, Routes.TEAM_RESIGNATION, Violet),
+  DashItem("Team Tasks", Icons.Filled.AddTask, Routes.TEAM_TASK, Green, teamOnly = true),
+  DashItem("Team Resignation", Icons.Filled.HowToReg, Routes.TEAM_RESIGNATION, Violet, teamOnly = true),
   DashItem("Change Password", Icons.Filled.Lock, Routes.CHANGE_PASSWORD, Green),
 )

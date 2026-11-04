@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.*
 import androidx.compose.material3.*
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.collectAsState
+import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -27,8 +29,10 @@ import com.truehr.app.presentation.theme.*
 private data class AttItem(val label: String, val icon: ImageVector, val route: String, val tint: androidx.compose.ui.graphics.Color)
 
 @Composable
-fun AttendanceMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
-  // All tiles show for everyone; team screens show a "No team yet" message when applicable.
+fun AttendanceMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit, gate: TeamGateViewModel = androidx.hilt.navigation.compose.hiltViewModel()) {
+  // E2: team tiles only for someone with reportees.
+  val hasTeam by gate.hasTeam.collectAsState()
+  val teamRoutes = setOf(Routes.TEAM_ATTENDANCE, Routes.TEAM_MISS_PUNCH, Routes.HOLD_TEAM_ATTENDANCE)
   val items = listOf(
     AttItem("Mark Attendance", Icons.Filled.TouchApp, Routes.MARK_ATTENDANCE, Green),
     AttItem("Daily Attendance", Icons.Filled.FactCheck, Routes.DAILY_ATTENDANCE, Sky),
@@ -40,7 +44,7 @@ fun AttendanceMenuScreen(onOpen: (String) -> Unit, onBack: () -> Unit) {
     AttItem("View Miss Punch", Icons.Filled.EventNote, Routes.VIEW_MISS_PUNCH, Sky),
     AttItem("Team Miss Punch", Icons.Filled.Groups, Routes.TEAM_MISS_PUNCH, Violet),
     AttItem("Hold Team Attendance", Icons.Filled.PauseCircle, Routes.HOLD_TEAM_ATTENDANCE, Amber),
-  )
+  ).filter { hasTeam || it.route !in teamRoutes }
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
       Row(verticalAlignment = Alignment.CenterVertically) {

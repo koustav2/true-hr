@@ -12,9 +12,13 @@ data class LoginResult(
 
 interface AuthRepository {
   val isLoggedIn: Flow<Boolean>
+  /** NONE / MUST_CHANGE_PASSWORD / ACTIVE — Splash routes on this. */
+  val sessionState: Flow<com.truehr.app.data.local.SessionState>
+  suspend fun mustChangePassword(): Boolean
   suspend fun login(email: String, password: String): LoginResult
   suspend fun verifyLoginOtp(email: String, otp: String): SessionUser
-  suspend fun changePassword(new: String)
+  /** [current] is required for a voluntary change, null on the forced first change. */
+  suspend fun changePassword(current: String?, new: String)
   suspend fun forgotPassword(email: String)
   suspend fun resetPassword(email: String, otp: String, newPassword: String)
   suspend fun logout()

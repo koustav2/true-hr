@@ -27,14 +27,20 @@ import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.first
 
 @Composable
-fun SplashScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit, vm: SplashViewModel = hiltViewModel()) {
+fun SplashScreen(onLoggedIn: () -> Unit, onGuest: () -> Unit, onMustChange: () -> Unit, vm: SplashViewModel = hiltViewModel()) {
   var visible by remember { mutableStateOf(false) }
   val alpha by animateFloatAsState(if (visible) 1f else 0f, tween(700), label = "splash-fade")
 
   LaunchedEffect(Unit) {
     visible = true
     delay(1100)
-    if (vm.isLoggedIn.first()) onLoggedIn() else onGuest()
+    // A forced password change that was not completed (app killed on that screen)
+    // still has to happen before anything else opens.
+    when (vm.sessionState.first()) {
+      com.truehr.app.data.local.SessionState.ACTIVE -> onLoggedIn()
+      com.truehr.app.data.local.SessionState.MUST_CHANGE_PASSWORD -> onMustChange()
+      com.truehr.app.data.local.SessionState.NONE -> onGuest()
+    }
   }
 
   Box(

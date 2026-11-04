@@ -28,6 +28,9 @@ interface TourRepository {
   /** Push all buffered data to the server. Returns true if everything synced. Used by the worker. */
   suspend fun syncNow(): Boolean
 
+  /** Local id of the tour still marked ACTIVE (used to resume tracking after a restart). */
+  suspend fun activeTourLocalId(): Long?
+
   /** Enqueue a one-off background sync (network-constrained). */
   fun enqueueSync()
 

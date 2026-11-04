@@ -37,7 +37,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
   LaunchedEffect(Unit) { vm.load() }
   LaunchedEffect(q) {
     if (q.isBlank()) debouncedQ = ""
-    else { kotlinx.coroutines.delay(600); debouncedQ = q }
+    else { kotlinx.coroutines.delay(400); debouncedQ = q }
   }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
@@ -49,7 +49,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
     }
     OutlinedTextField(
       value = q, onValueChange = { q = it },
-      placeholder = { Text("Please type employee id or name to search") },
+      placeholder = { Text("Search name, ID, department or designation") },
       leadingIcon = { Icon(Icons.Filled.Search, null, tint = Green) },
       singleLine = true, shape = RoundedCornerShape(14.dp),
       colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green),
@@ -61,7 +61,7 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
         Column(horizontalAlignment = Alignment.CenterHorizontally) {
           Icon(Icons.Filled.Search, null, tint = InkFaint, modifier = Modifier.size(40.dp))
           Spacer(Modifier.height(10.dp))
-          Text("Search by employee ID or name\nto find a colleague.", color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
+          Text("Search by name, employee ID, department\nor designation to find a colleague.", color = InkSoft, textAlign = androidx.compose.ui.text.style.TextAlign.Center)
         }
       }
       // Still typing — hold the list back until the user pauses.
@@ -69,14 +69,15 @@ fun AddressBookScreen(onBack: () -> Unit, vm: AddressBookViewModel = hiltViewMod
       s.loading -> CenterLoader()
       s.error != null -> ErrorState(s.error!!, onRetry = { vm.load() })
       else -> {
+        // E56: trimmed; matches name, ID, department and designation.
         val filtered = (s.data ?: emptyList()).filter {
-          matchesQuery("${it.name} ${it.employeeCode}", debouncedQ)
+          com.truehr.app.core.Validators.directoryMatches(debouncedQ, it.name, it.employeeCode, it.department, it.designation)
         }
         if (filtered.isEmpty()) Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) {
-          Text("No employees found.", color = InkSoft)
+          Text("No matches.", color = InkSoft)
         } else {
-          // Group by state (blank -> "Other")
-          val groups = filtered.groupBy { it.state?.trim()?.takeIf { s -> s.isNotBlank() } ?: "Other" }
+          // Group by work location (blank -> "Other")
+          val groups = filtered.groupBy { it.location?.trim()?.takeIf { s -> s.isNotBlank() } ?: "Other" }
             .toSortedMap(compareBy { if (it == "Other") "~" else it.lowercase() })
           LazyColumn(contentPadding = PaddingValues(horizontal = 14.dp, vertical = 4.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             groups.forEach { (state, people) ->
@@ -113,13 +114,13 @@ private fun DirectoryCard(m: DirectoryEntry) {
         Column(Modifier.weight(1f)) {
           Text(m.name, fontWeight = FontWeight.Bold, color = Ink)
           Text("${m.employeeCode}  ·  ${m.designation ?: "—"}", color = InkFaint, style = MaterialTheme.typography.bodyMedium)
-          if (!m.city.isNullOrBlank()) Text(m.city, color = InkSoft, style = MaterialTheme.typography.labelMedium)
+          if (!m.department.isNullOrBlank()) Text(m.department, color = InkSoft, style = MaterialTheme.typography.labelMedium)
         }
       }
-      if (!m.email.isNullOrBlank() || !m.phone.isNullOrBlank()) {
+      // E54: official email only — personal phone numbers are not shown.
+      if (!m.email.isNullOrBlank()) {
         Spacer(Modifier.height(8.dp))
-        if (!m.phone.isNullOrBlank()) ContactLine(Icons.Filled.Phone, m.phone)
-        if (!m.email.isNullOrBlank()) { Spacer(Modifier.height(4.dp)); ContactLine(Icons.Filled.Mail, m.email) }
+        ContactLine(Icons.Filled.Mail, m.email)
       }
     }
   }
@@ -130,52 +131,9 @@ private fun ContactLine(icon: ImageVector, value: String) {
   Row(verticalAlignment = Alignment.CenterVertically) {
     Icon(icon, null, tint = InkFaint, modifier = Modifier.size(14.dp))
     Spacer(Modifier.width(8.dp))
-    Text(value, color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+    // E55: one unbroken line so a "+alias" address is never split visually.
+    Text(value, color = InkSoft, style = MaterialTheme.typography.bodyMedium, softWrap = false,
+      overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, maxLines = 1)
   }
 }
 
-/**
- * Comma-separated, fuzzy search. The query is split on commas into terms; an entry
- * matches only if EVERY term matches somewhere in its text. Each term matches by
- * substring OR a typo-tolerant (edit-distance) match against any word.
- * Matching runs over the employee's name and employee code only;
- * e.g. "sharma" or "TKF5001" — "sharme" still hits "sharma" (typo-tolerant).
- */
-private fun matchesQuery(haystack: String, query: String): Boolean {
-  val terms = query.split(',').map { it.trim().lowercase() }.filter { it.isNotEmpty() }
-  if (terms.isEmpty()) return true
-  val hay = haystack.lowercase()
-  val tokens = hay.split(' ', ',', '·', '.', '-', '/').filter { it.isNotBlank() }
-  return terms.all { term ->
-    hay.contains(term) || tokens.any { fuzzyWord(it, term) }
-  }
-}
-
-private fun fuzzyWord(token: String, term: String): Boolean {
-  if (token.contains(term) || term.contains(token)) return true
-  if (term.length < 3) return token.startsWith(term)
-  // People usually type the start of a name right: a shared prefix of 4+ letters
-  // covering at least half the query counts (e.g. "nishiiikaa" → "nishikanta").
-  val prefix = token.commonPrefixWith(term).length
-  if (prefix >= 4 && prefix * 2 >= term.length) return true
-  // Otherwise allow typos scaled to word length (~1 per 3 letters).
-  val maxDist = maxOf(1, term.length / 3)
-  return levenshtein(token, term) <= maxDist
-}
-
-private fun levenshtein(a: String, b: String): Int {
-  if (a == b) return 0
-  if (a.isEmpty()) return b.length
-  if (b.isEmpty()) return a.length
-  var prev = IntArray(b.length + 1) { it }
-  var curr = IntArray(b.length + 1)
-  for (i in 1..a.length) {
-    curr[0] = i
-    for (j in 1..b.length) {
-      val cost = if (a[i - 1] == b[j - 1]) 0 else 1
-      curr[j] = minOf(curr[j - 1] + 1, prev[j] + 1, prev[j - 1] + cost)
-    }
-    val tmp = prev; prev = curr; curr = tmp
-  }
-  return prev[b.length]
-}

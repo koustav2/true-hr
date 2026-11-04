@@ -30,5 +30,7 @@ class PayrollRepositoryImpl @Inject constructor(
     )
   }
 
-  override suspend fun pdfBytes(id: Long): ByteArray = api.payslipPdf(id).bytes()
+  // A3: a @Streaming body is read from the network as it is consumed — never on Main.
+  override suspend fun pdfBytes(id: Long): ByteArray =
+    kotlinx.coroutines.withContext(kotlinx.coroutines.Dispatchers.IO) { api.payslipPdf(id).use { it.bytes() } }
 }

@@ -11,4 +11,5 @@ class SplashViewModel @Inject constructor(
   authRepository: AuthRepository,
 ) : ViewModel() {
   val isLoggedIn: Flow<Boolean> = authRepository.isLoggedIn
+  val sessionState: Flow<com.truehr.app.data.local.SessionState> = authRepository.sessionState
 }

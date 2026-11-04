@@ -2,6 +2,7 @@ package com.truehr.app.presentation.feature
 
 import androidx.compose.foundation.background
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.verticalScroll
 import androidx.compose.foundation.layout.*
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
@@ -35,10 +36,13 @@ fun ViewTicketsScreen(category: String, onBack: () -> Unit, vm: SupportViewModel
   val withDates = category != "HR"
   val title = when (category) { "HR" -> "HR Ticket Details"; "IT" -> "IT Ticket Details"; else -> "View Admin Support" }
 
-  val today = remember { ISO_T.format(Date()) }
-  var from by remember { mutableStateOf(today) }
+  val today = remember { com.truehr.app.core.Dates.todayIso() }
+  var from by remember { mutableStateOf(com.truehr.app.core.Dates.addDays(today, -30)) }
   var to by remember { mutableStateOf(today) }
   var picker by remember { mutableStateOf<String?>(null) }
+
+  val detail by vm.detail.collectAsState()
+  if (detail.loading || detail.data != null || detail.error != null) TicketDetailDialog(vm, detail)
 
   LaunchedEffect(from, to) {
     if (withDates) vm.load(category, from, to) else vm.load(category)
@@ -71,7 +75,7 @@ fun ViewTicketsScreen(category: String, onBack: () -> Unit, vm: SupportViewModel
       s.error != null -> ErrorState(s.error!!, onRetry = { if (withDates) vm.load(category, from, to) else vm.load(category) })
       s.data.isNullOrEmpty() -> Box(Modifier.fillMaxSize(), contentAlignment = Alignment.Center) { Text("No tickets found.", color = InkSoft) }
       else -> LazyColumn(contentPadding = PaddingValues(14.dp), verticalArrangement = Arrangement.spacedBy(12.dp)) {
-        items(s.data!!) { TicketCard(it) }
+        items(s.data!!) { t -> TicketCard(t) { vm.openDetail(t.id) } }
       }
     }
   }
@@ -87,38 +91,99 @@ private fun DateBox(label: String, value: String, modifier: Modifier = Modifier,
 }
 
 @Composable
-private fun TicketCard(t: SupportTicket) {
-  val statusColor = when (t.status) { "RESOLVED" -> Green; else -> Sky }
-  Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp) {
+private fun TicketCard(t: SupportTicket, onView: () -> Unit) {
+  val statusColor = when (t.status) { "RESOLVED", "CLOSED" -> Green; "CANCELLED" -> InkFaint; else -> Sky }
+  Surface(color = Surface, shape = RoundedCornerShape(14.dp), shadowElevation = 1.dp, modifier = Modifier.fillMaxWidth().clickable(onClick = onView)) {
     Column(Modifier.padding(16.dp)) {
       Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween, verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
-          Text("Ticket ID: ${t.id}", fontWeight = FontWeight.Bold, color = Green)
-          t.appliedAt?.let { Text("Applied on: ${dmyT(it)}", color = InkFaint, style = MaterialTheme.typography.labelSmall) }
+          // E42: ticket number and date.
+          Text("Ticket #${t.ticketNo ?: t.id}", fontWeight = FontWeight.Bold, color = Green)
+          t.appliedAt?.let { Text("Raised on ${com.truehr.app.core.Dates.dmyTime(it)}", color = InkFaint, style = MaterialTheme.typography.labelSmall) }
         }
         Surface(color = statusColor.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-          Text(t.status.lowercase().replaceFirstChar { it.uppercase() }, color = statusColor,
+          Text(com.truehr.app.core.Labels.of(t.status), color = statusColor,
             style = MaterialTheme.typography.labelSmall, fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
         }
       }
       HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
-      Text(t.name, color = Ink, fontWeight = FontWeight.SemiBold)
-      if (!t.email.isNullOrBlank()) Text(t.email, color = InkSoft, style = MaterialTheme.typography.bodyMedium)
-      if (!t.phone.isNullOrBlank()) Text(t.phone, color = InkSoft, style = MaterialTheme.typography.bodyMedium)
-      HorizontalDivider(color = Line, modifier = Modifier.padding(vertical = 10.dp))
-      Text("Issue Details", fontWeight = FontWeight.Bold, color = Ink)
-      Spacer(Modifier.height(4.dp))
-      Text("Issue Type: ${t.issueType}${t.issueDetail?.let { " · $it" } ?: ""}", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+      t.subject?.takeIf { it.isNotBlank() }?.let { Text(it, color = Ink, fontWeight = FontWeight.SemiBold) }
+      Text("${t.issueType}${t.issueDetail?.let { " · $it" } ?: ""}", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
       if (!t.description.isNullOrBlank()) {
-        Spacer(Modifier.height(2.dp))
-        Text("Issue Description: ${t.description}", color = InkSoft, style = MaterialTheme.typography.bodyMedium)
+        Spacer(Modifier.height(4.dp))
+        // Long unbroken text wraps inside the card (no sideways scroll).
+        Text(t.description, color = InkSoft, style = MaterialTheme.typography.bodyMedium, maxLines = 4,
+          overflow = androidx.compose.ui.text.style.TextOverflow.Ellipsis, softWrap = true)
       }
       if (!t.resolutionNote.isNullOrBlank()) {
-        Spacer(Modifier.height(2.dp))
+        Spacer(Modifier.height(4.dp))
         Text("Resolution: ${t.resolutionNote}", color = Green, style = MaterialTheme.typography.bodyMedium)
       }
+      Spacer(Modifier.height(6.dp))
+      Text("View details & reply", color = Sky, style = MaterialTheme.typography.labelMedium)
     }
   }
+}
+
+/** E42: full ticket with its updates; reply, cancel (while open) and reopen (after resolved). */
+@Composable
+private fun TicketDetailDialog(vm: SupportViewModel, st: com.truehr.app.core.UiState<com.truehr.app.domain.model.TicketDetail>) {
+  val busy by vm.detailBusy.collectAsState()
+  val err by vm.detailError.collectAsState()
+  var reply by remember { mutableStateOf("") }
+  var confirmCancel by remember { mutableStateOf(false) }
+  val d = st.data
+  if (confirmCancel && d != null) {
+    com.truehr.app.presentation.components.ConfirmDialog("Cancel this ticket?", "The support desk will stop working on it.", "Cancel ticket",
+      onConfirm = { confirmCancel = false; vm.cancel(d.ticket.id) }, onDismiss = { confirmCancel = false }, dismissLabel = "Keep it")
+  }
+  AlertDialog(
+    onDismissRequest = { vm.closeDetail() },
+    title = { Text(d?.let { "Ticket #${it.ticket.ticketNo ?: it.ticket.id}" } ?: "Ticket") },
+    text = {
+      Column(Modifier.heightIn(max = 460.dp).verticalScroll(androidx.compose.foundation.rememberScrollState())) {
+        when {
+          st.loading -> CircularProgressIndicator(color = Green)
+          st.error != null -> Text(st.error!!, color = Rose)
+          d != null -> {
+            val t = d.ticket
+            Text(com.truehr.app.core.Labels.of(t.status), color = Sky, fontWeight = FontWeight.SemiBold)
+            t.subject?.let { Text(it, color = Ink, fontWeight = FontWeight.SemiBold) }
+            Text("${t.issueType}${t.issueDetail?.let { " · $it" } ?: ""}", color = InkSoft, style = MaterialTheme.typography.bodySmall)
+            t.description?.let { Spacer(Modifier.height(6.dp)); Text(it, color = Ink, style = MaterialTheme.typography.bodyMedium) }
+            if (d.comments.isNotEmpty()) {
+              Spacer(Modifier.height(10.dp)); Text("Updates", fontWeight = FontWeight.Bold, color = Ink)
+              d.comments.forEach { c ->
+                Spacer(Modifier.height(6.dp))
+                Text("${c.author} · ${com.truehr.app.core.Dates.dmyTime(c.at)}", color = InkFaint, style = MaterialTheme.typography.labelSmall)
+                Text(c.body, color = Ink, style = MaterialTheme.typography.bodyMedium)
+              }
+            }
+            if (t.status !in setOf("CLOSED", "CANCELLED")) {
+              Spacer(Modifier.height(10.dp))
+              OutlinedTextField(reply, { reply = it.take(2000) }, label = { Text(if (t.canReopen) "Reason for reopening" else "Reply") }, minLines = 2, modifier = Modifier.fillMaxWidth())
+            }
+            err?.let { Spacer(Modifier.height(6.dp)); Text(it, color = Rose, style = MaterialTheme.typography.bodySmall) }
+          }
+        }
+      }
+    },
+    confirmButton = {
+      val t = d?.ticket
+      if (t != null && t.status !in setOf("CLOSED", "CANCELLED")) {
+        TextButton(enabled = !busy, onClick = {
+          val ok = if (t.canReopen) vm.reopen(t.id, reply) else vm.reply(t.id, reply)
+          if (ok) reply = ""
+        }) { Text(if (t.canReopen) "Reopen" else "Send reply", color = Green) }
+      }
+    },
+    dismissButton = {
+      Row {
+        if (d?.ticket?.canCancel == true) TextButton(enabled = !busy, onClick = { confirmCancel = true }) { Text("Cancel ticket", color = Rose) }
+        TextButton(onClick = { vm.closeDetail() }) { Text("Close") }
+      }
+    },
+  )
 }
 
 private fun dmyT(iso: String): String {

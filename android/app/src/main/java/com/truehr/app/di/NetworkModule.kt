@@ -20,7 +20,7 @@ import javax.inject.Singleton
 object NetworkModule {
 
   @Provides @Singleton
-  fun json(): Json = Json { ignoreUnknownKeys = true; isLenient = true }
+  fun json(): Json = AppJson
 
   @Provides @Singleton
   fun okHttp(authInterceptor: AuthInterceptor): OkHttpClient {
@@ -44,3 +44,10 @@ object NetworkModule {
   @Provides @Singleton
   fun apiService(retrofit: Retrofit): ApiService = retrofit.create(ApiService::class.java)
 }
+
+/**
+ * One JSON config for the API. coerceInputValues: an explicit `null` for a
+ * non-null field with a default (e.g. `"noticePeriodDays": null`) uses the
+ * default instead of failing the whole response.
+ */
+val AppJson: Json = Json { ignoreUnknownKeys = true; isLenient = true; coerceInputValues = true; explicitNulls = false }

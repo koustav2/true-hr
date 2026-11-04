@@ -200,3 +200,48 @@ fun ErrorState(message: String, onRetry: (() -> Unit)? = null) {
     if (onRetry != null) { Spacer(Modifier.height(14.dp)); PrimaryButton("Retry", onClick = onRetry) }
   }
 }
+
+/** A field's validation message, shown right under the field (red). */
+@Composable
+fun FieldError(message: String?) {
+  if (!message.isNullOrBlank()) {
+    Text(message, color = Rose, style = MaterialTheme.typography.bodySmall, modifier = Modifier.padding(start = 4.dp, top = 4.dp))
+  }
+}
+
+/** Yes/No confirmation for destructive actions (sign out, cancel, withdraw). */
+@Composable
+fun ConfirmDialog(
+  title: String,
+  body: String,
+  confirmLabel: String,
+  onConfirm: () -> Unit,
+  onDismiss: () -> Unit,
+  dismissLabel: String = "Cancel",
+) {
+  AlertDialog(
+    onDismissRequest = onDismiss,
+    shape = RoundedCornerShape(22.dp),
+    containerColor = Surface,
+    title = { Text(title, style = MaterialTheme.typography.titleLarge, color = Ink) },
+    text = { Text(body, style = MaterialTheme.typography.bodyLarge, color = InkSoft) },
+    confirmButton = { TextButton(onClick = onConfirm) { Text(confirmLabel, color = Rose, fontWeight = FontWeight.SemiBold) } },
+    dismissButton = { TextButton(onClick = onDismiss) { Text(dismissLabel, color = InkSoft) } },
+  )
+}
+
+/** Readable status chip (never a raw code). */
+@Composable
+fun StatusChip(code: String?) {
+  val c = when (code?.uppercase()) {
+    "APPROVED", "RESOLVED", "CLOSED", "COMPLETED", "P" -> Green
+    "REJECTED", "MISSING" -> Rose
+    "CANCELLED", "WITHDRAWN", "BYPASSED", "SKIPPED" -> InkFaint
+    "OPEN", "REOPENED", "IN_PROGRESS", "ONGOING" -> Sky
+    else -> Amber
+  }
+  Surface(color = c.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
+    Text(com.truehr.app.core.Labels.of(code), color = c, style = MaterialTheme.typography.labelSmall,
+      fontWeight = FontWeight.SemiBold, modifier = Modifier.padding(horizontal = 10.dp, vertical = 4.dp))
+  }
+}

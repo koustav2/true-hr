@@ -3,6 +3,7 @@ package com.truehr.app.presentation.feature
 import androidx.lifecycle.ViewModel
 import androidx.lifecycle.viewModelScope
 import com.truehr.app.core.UiState
+import com.truehr.app.core.apiError
 import com.truehr.app.core.apiMessage
 import com.truehr.app.domain.model.Resignation
 import com.truehr.app.domain.model.ResignationContext
@@ -29,16 +30,35 @@ class ResignationViewModel @Inject constructor(
   val submitting = MutableStateFlow(false)
   val message = MutableStateFlow<String?>(null)
   val done = MutableStateFlow(false)
-  // Client policy: submitting a resignation blocks the account immediately.
-  // We show a farewell dialog, then the next API call 401s → global logout.
-  val blocked = MutableStateFlow(false)
-  fun apply(resignationDate: String, lastWorkingDate: String, reason: String) = viewModelScope.launch {
+  val fieldErrors = MutableStateFlow<Map<String, String>>(emptyMap())
+  fun clearFieldError(k: String) { fieldErrors.value = fieldErrors.value - k }
+
+  /** E51 rules, checked before the confirm step (and again by the server). */
+  fun validate(resignationDate: String, lastWorkingDate: String, reason: String): Boolean {
+    val c = context.value.data
+    val errs = com.truehr.app.core.Validators.resignation(resignationDate, lastWorkingDate, reason, c?.minResignationDate, c?.maxResignationDate)
+    fieldErrors.value = errs
+    return errs.isEmpty()
+  }
+
+  // D2 (v2): applying no longer blocks the account; access continues until the
+  // approved last working day and the request can be withdrawn until then.
+  fun apply(resignationDate: String, lastWorkingDate: String, reason: String, letter: com.truehr.app.core.PickedFile?) = viewModelScope.launch {
+    if (!validate(resignationDate, lastWorkingDate, reason)) return@launch
     submitting.value = true; message.value = null
-    try { repo.apply(resignationDate, lastWorkingDate, reason.ifBlank { null }); done.value = true; blocked.value = true }
-    catch (e: Exception) { message.value = e.apiMessage("Could not submit resignation") }
+    try {
+      repo.apply(resignationDate, lastWorkingDate, reason.trim(), letter)
+      done.value = true
+      message.value = "Resignation submitted. You can keep using the app during your notice period."
+      loadContext()
+    }
+    catch (e: Exception) {
+      val err = e.apiError("Could not submit resignation")
+      fieldErrors.value = err.fields
+      message.value = err.summary(setOf("resignationDate", "lastWorkingDate", "reason", "letter"))
+    }
     finally { submitting.value = false }
   }
-  fun acknowledgeBlocked() { blocked.value = false; loadContext() } // context call 401s → auto logout
   fun withdraw(id: Long) = viewModelScope.launch {
     submitting.value = true; message.value = null
     try { repo.withdraw(id); loadContext() }

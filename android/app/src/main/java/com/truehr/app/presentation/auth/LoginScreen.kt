@@ -2,6 +2,7 @@ package com.truehr.app.presentation.auth
 
 import android.content.Intent
 import android.net.Uri
+import com.truehr.app.core.startActivitySafely
 import androidx.compose.foundation.BorderStroke
 import androidx.compose.foundation.Image
 import androidx.compose.foundation.background
@@ -178,7 +179,7 @@ fun LoginScreen(onLoggedIn: () -> Unit, onMustChange: () -> Unit, onForgotPasswo
 
     Spacer(Modifier.height(6.dp))
     val context = LocalContext.current
-    fun open(url: String) = runCatching { context.startActivity(Intent(Intent.ACTION_VIEW, Uri.parse(url))) }
+    fun open(url: String) = context.startActivitySafely(Intent(Intent.ACTION_VIEW, Uri.parse(url)), "No web browser is available on this phone.")
     Row(verticalAlignment = Alignment.CenterVertically) {
       TextButton(onClick = { open("https://truehr.co.in/privacy") }) { Text("Privacy Policy", color = InkFaint, style = MaterialTheme.typography.labelMedium) }
       Text("·", color = InkFaint)

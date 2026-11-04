@@ -38,6 +38,7 @@ import com.google.maps.android.compose.rememberCameraPositionState
 import com.truehr.app.core.reverseGeocode
 import com.truehr.app.presentation.theme.*
 import kotlinx.coroutines.launch
+import com.truehr.app.core.LocationHelper
 
 @Composable
 fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
@@ -49,11 +50,7 @@ fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
   val path by vm.path.collectAsState()
   val status by vm.status.collectAsState()
 
-  var hasLocationPermission by remember {
-    mutableStateOf(
-      ContextCompat.checkSelfPermission(context, Manifest.permission.ACCESS_FINE_LOCATION) == PackageManager.PERMISSION_GRANTED,
-    )
-  }
+  var hasLocationPermission by remember { mutableStateOf(LocationHelper.hasAny(context)) }
 
   val cameraState = rememberCameraPositionState {
     position = CameraPosition.fromLatLngZoom(LatLng(22.5726, 88.3639), 5f) // India default
@@ -76,12 +73,14 @@ fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
 
   val backgroundPermLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) { }
   val permLauncher = rememberLauncherForActivityResult(ActivityResultContracts.RequestMultiplePermissions()) { result ->
-    hasLocationPermission = result[Manifest.permission.ACCESS_FINE_LOCATION] == true
+    // Approximate location is accepted too (A4).
+    hasLocationPermission = LocationHelper.hasAny(context)
+    if (!hasLocationPermission) android.widget.Toast.makeText(context, LocationHelper.MSG_DENIED, android.widget.Toast.LENGTH_LONG).show()
   }
 
   fun ensurePermissions(): Boolean {
     if (!hasLocationPermission) {
-      val perms = mutableListOf(Manifest.permission.ACCESS_FINE_LOCATION)
+      val perms = LocationHelper.PERMISSIONS.toMutableList()
       if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) perms.add(Manifest.permission.POST_NOTIFICATIONS)
       permLauncher.launch(perms.toTypedArray())
       return false
@@ -94,31 +93,32 @@ fun LiveTourScreen(onBack: () -> Unit, vm: TourViewModel = hiltViewModel()) {
     return true
   }
 
-  fun withLocation(onResult: (Location?) -> Unit) {
-    try {
-      fused.getCurrentLocation(Priority.PRIORITY_HIGH_ACCURACY, CancellationTokenSource().token)
-        .addOnSuccessListener(onResult)
-        .addOnFailureListener { onResult(null) }
-    } catch (_: SecurityException) { onResult(null) }
-  }
+  fun toast(msg: String) = android.widget.Toast.makeText(context, msg, android.widget.Toast.LENGTH_LONG).show()
 
   fun onStart() {
     if (!ensurePermissions()) return
-    withLocation { l ->
-      scope.launch {
-        val addr = l?.let { reverseGeocode(context, it.latitude, it.longitude) }
-        vm.startTour(l?.latitude, l?.longitude, addr)
+    scope.launch {
+      // A tour cannot start without a real start point (GPS off → say so).
+      when (val fix = LocationHelper.current(context)) {
+        is LocationHelper.Fix.Ok -> {
+          val l = fix.location
+          vm.startTour(l.latitude, l.longitude, reverseGeocode(context, l.latitude, l.longitude))
+        }
+        is LocationHelper.Fix.Failed -> toast(fix.message)
       }
     }
   }
 
   fun onEnd() {
     val a = active ?: return
-    withLocation { l ->
-      scope.launch {
-        val addr = l?.let { reverseGeocode(context, it.latitude, it.longitude) }
-        vm.endTour(a, l?.latitude, l?.longitude, addr)
-      }
+    scope.launch {
+      // Ending must always be possible; without a fix the last recorded point is the end.
+      val l = (LocationHelper.current(context) as? LocationHelper.Fix.Ok)?.location
+      if (l == null) toast("Ending the tour without a final location — the last recorded point is used.")
+      val last = path.lastOrNull()
+      val lat = l?.latitude ?: last?.lat; val lng = l?.longitude ?: last?.lng
+      val addr = if (lat != null && lng != null) reverseGeocode(context, lat, lng) else null
+      vm.endTour(a, lat, lng, addr)
     }
   }
 

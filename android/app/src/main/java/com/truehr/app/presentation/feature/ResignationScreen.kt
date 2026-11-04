@@ -13,6 +13,8 @@ import androidx.compose.material.icons.automirrored.filled.ArrowBack
 import androidx.compose.material.icons.filled.CalendarMonth
 import androidx.compose.material3.*
 import androidx.compose.runtime.*
+import com.truehr.app.core.launchSafely
+import kotlinx.coroutines.launch
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -39,25 +41,9 @@ fun ResignationScreen(onBack: () -> Unit, vm: ResignationViewModel = hiltViewMod
   val s by vm.context.collectAsState()
   val submitting by vm.submitting.collectAsState()
   val message by vm.message.collectAsState()
-  val blocked by vm.blocked.collectAsState()
 
   LaunchedEffect(Unit) { vm.loadContext() }
-  LaunchedEffect(message) { message?.let { Toast.makeText(context, it, Toast.LENGTH_SHORT).show(); vm.consumeMessage() } }
-
-  if (blocked) {
-    AlertDialog(
-      onDismissRequest = {},
-      title = { Text("Resignation submitted") },
-      text = {
-        Text(
-          "As per company policy, your account has now been blocked from the system. " +
-            "Your resignation will move through the approval chain. " +
-            "Please contact HR if you need access restored.",
-        )
-      },
-      confirmButton = { TextButton(onClick = { vm.acknowledgeBlocked() }) { Text("OK") } },
-    )
-  }
+  LaunchedEffect(message) { message?.let { Toast.makeText(context, it, Toast.LENGTH_LONG).show(); vm.consumeMessage() } }
 
   Column(Modifier.fillMaxSize().background(Canvas)) {
     GradientHeader {
@@ -82,20 +68,32 @@ private fun Body(ctx: com.truehr.app.domain.model.ResignationContext, submitting
 
   Column(Modifier.fillMaxSize().verticalScroll(rememberScrollState()).padding(14.dp), verticalArrangement = Arrangement.spacedBy(14.dp)) {
     // Employee details
+    // E49: filled from the employee master.
     Section("Employee Details") {
       KV("Employee Code", emp?.employeeCode)
       KV("Full Name", emp?.name)
       KV("Vertical", emp?.vertical)
-      KV("Office Location", emp?.location)
+      KV("Department", emp?.department)
       KV("Designation", emp?.designation)
+      KV("Office Location", emp?.location)
+      KV("Date of Joining", emp?.dateOfJoining?.let { com.truehr.app.core.Dates.dmy(it) })
+      KV("Reporting Manager", emp?.reportingManager)
       KV("Notice Period", emp?.noticePeriodDays?.let { "$it Days" })
     }
 
     if (current != null) {
       // Already submitted — show status instead of the form
       CurrentStatus(current, submitting) { vm.withdraw(current.id) }
+    } else if (!ctx.canSubmit) {
+      // E50: a required approval stage has nobody assigned.
+      Section("Submit Resignation") {
+        Text(
+          "Your resignation cannot be submitted yet: no ${ctx.missingStages.joinToString(", ")} approver is set up for you. Please ask HR to assign one.",
+          color = Rose, style = MaterialTheme.typography.bodyMedium,
+        )
+      }
     } else {
-      ResignForm(emp?.noticePeriodDays ?: 30, submitting, context) { rd, lwd, reason -> vm.apply(rd, lwd, reason) }
+      ResignForm(ctx, vm, submitting)
     }
 
     // Approvals — GreenHR-style stage table: role → approver → status
@@ -115,7 +113,7 @@ private fun Body(ctx: com.truehr.app.domain.model.ResignationContext, submitting
             Column(Modifier.weight(1f)) {
               Text(
                 listOfNotNull(a.employeeCode, a.name).joinToString(" - ")
-                  .ifBlank { "Not assigned" },
+                  .ifBlank { if (a.assignment == "SKIPPED") "Not assigned — will be skipped" else "Not assigned (required)" },
                 fontWeight = FontWeight.SemiBold, color = if (a.name != null) Ink else InkFaint,
                 style = MaterialTheme.typography.bodyMedium,
               )
@@ -130,7 +128,7 @@ private fun Body(ctx: com.truehr.app.domain.model.ResignationContext, submitting
                 else -> Color(0xFFF1F5F9) to Color(0xFF64748B)
               }
               Text(
-                st.lowercase().replaceFirstChar { it.uppercase() },
+                com.truehr.app.core.Labels.of(st),
                 color = fg,
                 style = MaterialTheme.typography.labelSmall,
                 modifier = Modifier
@@ -148,63 +146,83 @@ private fun Body(ctx: com.truehr.app.domain.model.ResignationContext, submitting
 }
 
 @Composable
-private fun ResignForm(noticeDays: Int, submitting: Boolean, context: android.content.Context, onSubmit: (String, String, String) -> Unit) {
-  val resignCal = remember { Calendar.getInstance() }
-  val lwdCal = remember { Calendar.getInstance().apply { add(Calendar.DAY_OF_YEAR, noticeDays) } }
-  var resignText by remember { mutableStateOf(SHOW.format(resignCal.time)) }
-  var lwdText by remember { mutableStateOf(SHOW.format(lwdCal.time)) }
-  var reason by remember { mutableStateOf("") }
+private fun ResignForm(ctx: com.truehr.app.domain.model.ResignationContext, vm: ResignationViewModel, submitting: Boolean) {
+  val context = LocalContext.current
+  val scope = rememberCoroutineScope()
+  val errors by vm.fieldErrors.collectAsState()
+  val today = ctx.today ?: com.truehr.app.core.Dates.todayIso()
+  val np = ctx.employee?.noticePeriodDays ?: 30
+  // E51: resignation date defaults to today; LWD to today + notice period.
+  var resignDate by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(today) }
+  var lwd by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf(ctx.suggestedLastWorkingDate ?: com.truehr.app.core.Dates.addDays(today, np)) }
+  var reason by androidx.compose.runtime.saveable.rememberSaveable { mutableStateOf("") }
+  var letter by remember { mutableStateOf<com.truehr.app.core.PickedFile?>(null) }
+  var letterInfo by remember { mutableStateOf<String?>(null) }
   var confirmOpen by remember { mutableStateOf(false) }
+
+  val picker = androidx.activity.compose.rememberLauncherForActivityResult(androidx.activity.result.contract.ActivityResultContracts.GetContent()) { uri ->
+    if (uri != null) scope.launch {
+      com.truehr.app.core.readPickedFile(context, uri).onSuccess { letter = it; letterInfo = "${it.name} (${it.sizeKb} KB)" }.onFailure { letterInfo = it.message }
+    }
+  }
 
   if (confirmOpen) {
     AlertDialog(
       onDismissRequest = { confirmOpen = false },
-      title = { Text("Before you submit") },
+      title = { Text("Submit your resignation?") },
       text = {
         Text(
-          "The moment you submit your resignation, your account will be BLOCKED from the " +
-            "entire system (app and web). Only HR can restore access.\n\n" +
-            "Please make sure you have already downloaded everything you need — salary slips, " +
-            "offer letter and your personal documents — before continuing.",
+          "Your resignation will go to your approvers. You keep full access to the app during your notice period, " +
+            "and you can withdraw it until it is finally approved. Access ends automatically after your approved last working day.",
         )
       },
       confirmButton = {
-        TextButton(onClick = {
-          confirmOpen = false
-          onSubmit(ISO.format(resignCal.time), ISO.format(lwdCal.time), reason)
-        }) { Text("I understand — Submit", color = Rose) }
+        TextButton(onClick = { confirmOpen = false; vm.apply(resignDate, lwd, reason, letter) }) { Text("Submit", color = Rose) }
       },
       dismissButton = { TextButton(onClick = { confirmOpen = false }) { Text("Cancel") } },
     )
   }
 
-  fun pick(cal: Calendar, onSet: () -> Unit) {
-    DatePickerDialog(context, { _, y, m, d -> cal.set(y, m, d); onSet() },
-      cal.get(Calendar.YEAR), cal.get(Calendar.MONTH), cal.get(Calendar.DAY_OF_MONTH)).show()
+  fun pick(current: String, min: String?, max: String?, onSet: (String) -> Unit) {
+    val p = current.split("-").map { it.toInt() }
+    DatePickerDialog(context, { _, y, m, d -> onSet(com.truehr.app.core.Dates.iso(y, m + 1, d)) }, p[0], p[1] - 1, p[2]).apply {
+      min?.let { com.truehr.app.core.Dates.toPickerMillis(it) }?.let { datePicker.minDate = it }
+      max?.let { com.truehr.app.core.Dates.toPickerMillis(it) }?.let { datePicker.maxDate = it }
+    }.show()
   }
 
   Section("Submit Resignation") {
-    DateField("Resignation Date", resignText) { pick(resignCal) { resignText = SHOW.format(resignCal.time) } }
+    DateField("Resignation Date", com.truehr.app.core.Dates.dmy(resignDate), errors["resignationDate"] != null) {
+      pick(resignDate, ctx.minResignationDate, ctx.maxResignationDate) { resignDate = it; vm.clearFieldError("resignationDate") }
+    }
+    com.truehr.app.presentation.components.FieldError(errors["resignationDate"])
     Spacer(Modifier.height(12.dp))
-    DateField("Last Working Date", lwdText) { pick(lwdCal) { lwdText = SHOW.format(lwdCal.time) } }
+    DateField("Last Working Date", com.truehr.app.core.Dates.dmy(lwd), errors["lastWorkingDate"] != null) {
+      pick(lwd, resignDate, null) { lwd = it; vm.clearFieldError("lastWorkingDate") }
+    }
+    com.truehr.app.presentation.components.FieldError(errors["lastWorkingDate"])
+    Text("Notice period: $np days", color = InkFaint, style = MaterialTheme.typography.bodySmall)
     Spacer(Modifier.height(12.dp))
     Text("Reason *", color = InkSoft, style = MaterialTheme.typography.labelMedium)
     Spacer(Modifier.height(4.dp))
     OutlinedTextField(
-      value = reason, onValueChange = { reason = it }, minLines = 3,
+      value = reason, onValueChange = { reason = it.take(1000); vm.clearFieldError("reason") }, minLines = 3, isError = errors["reason"] != null,
       placeholder = { Text("Reason for leaving…") }, shape = RoundedCornerShape(12.dp),
       colors = OutlinedTextFieldDefaults.colors(focusedBorderColor = Green, focusedLabelColor = Green, cursorColor = Green),
       modifier = Modifier.fillMaxWidth(),
     )
-    Spacer(Modifier.height(16.dp))
-    Text(
-      "Note: submitting blocks your account from the whole system immediately — download your salary slips, offer letter and documents first.",
-      color = InkFaint, style = MaterialTheme.typography.bodySmall,
-    )
+    com.truehr.app.presentation.components.FieldError(errors["reason"])
+    Spacer(Modifier.height(10.dp))
+    Row(verticalAlignment = Alignment.CenterVertically) {
+      Text(letterInfo ?: "Resignation letter (optional, PDF/image, max 5MB)", color = if (letter != null) Green else InkSoft,
+        style = MaterialTheme.typography.bodySmall, modifier = Modifier.weight(1f))
+      TextButton(onClick = { picker.launchSafely(context, "*/*", "No file picker is available on this phone.") }) { Text(if (letter == null) "Attach" else "Replace", color = Green) }
+    }
+    com.truehr.app.presentation.components.FieldError(errors["letter"])
     Spacer(Modifier.height(10.dp))
     Button(
-      onClick = { if (reason.isNotBlank()) confirmOpen = true },
-      enabled = !submitting && reason.isNotBlank(),
+      onClick = { if (vm.validate(resignDate, lwd, reason)) confirmOpen = true },
+      enabled = !submitting,
       shape = RoundedCornerShape(12.dp),
       colors = ButtonDefaults.buttonColors(containerColor = Pink, contentColor = Surface),
       modifier = Modifier.fillMaxWidth().height(50.dp),
@@ -218,11 +236,15 @@ private fun ResignForm(noticeDays: Int, submitting: Boolean, context: android.co
 @Composable
 private fun CurrentStatus(r: Resignation, submitting: Boolean, onWithdraw: () -> Unit) {
   val color = when (r.status) { "APPROVED" -> Green; "REJECTED" -> Rose; else -> Amber }
+  var confirmWithdraw by remember { mutableStateOf(false) }
+  if (confirmWithdraw) com.truehr.app.presentation.components.ConfirmDialog(
+    "Withdraw your resignation?", "Your resignation will be cancelled and your approvers informed.", "Withdraw",
+    onConfirm = { confirmWithdraw = false; onWithdraw() }, onDismiss = { confirmWithdraw = false }, dismissLabel = "Keep it")
   Section("Your Resignation") {
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
       Text("Status", color = InkFaint, modifier = Modifier.weight(1f))
       Surface(color = color.copy(alpha = 0.14f), shape = RoundedCornerShape(20.dp)) {
-        Text(r.status?.lowercase()?.replaceFirstChar { it.uppercase() } ?: "—", color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
+        Text(com.truehr.app.core.Labels.of(r.status), color = color, fontWeight = FontWeight.SemiBold, style = MaterialTheme.typography.labelMedium, modifier = Modifier.padding(horizontal = 12.dp, vertical = 5.dp))
       }
     }
     Spacer(Modifier.height(8.dp))
@@ -232,7 +254,7 @@ private fun CurrentStatus(r: Resignation, submitting: Boolean, onWithdraw: () ->
     if (!r.reviewNote.isNullOrBlank()) KV("Reviewer remark", r.reviewNote)
     if (r.status == "PENDING") {
       Spacer(Modifier.height(12.dp))
-      OutlinedButton(onClick = onWithdraw, enabled = !submitting, modifier = Modifier.fillMaxWidth(),
+      OutlinedButton(onClick = { confirmWithdraw = true }, enabled = !submitting, modifier = Modifier.fillMaxWidth(),
         shape = RoundedCornerShape(12.dp), colors = ButtonDefaults.outlinedButtonColors(contentColor = Rose)) {
         Text("Withdraw resignation", fontWeight = FontWeight.SemiBold)
       }
@@ -253,11 +275,11 @@ private fun Section(title: String, content: @Composable ColumnScope.() -> Unit) 
 }
 
 @Composable
-private fun DateField(label: String, value: String, onClick: () -> Unit) {
+private fun DateField(label: String, value: String, isError: Boolean = false, onClick: () -> Unit) {
   Text("$label *", color = InkSoft, style = MaterialTheme.typography.labelMedium)
   Spacer(Modifier.height(4.dp))
   Surface(color = Surface, shape = RoundedCornerShape(12.dp),
-    border = androidx.compose.foundation.BorderStroke(1.dp, Line),
+    border = androidx.compose.foundation.BorderStroke(1.dp, if (isError) Rose else Line),
     modifier = Modifier.fillMaxWidth().clickable(onClick = onClick)) {
     Row(Modifier.padding(14.dp), verticalAlignment = Alignment.CenterVertically) {
       Icon(Icons.Filled.CalendarMonth, null, tint = Teal, modifier = Modifier.size(18.dp))
@@ -275,7 +297,4 @@ private fun KV(k: String, v: String?) {
   }
 }
 
-private fun dmy(iso: String): String {
-  val p = iso.take(10).split("-")
-  return if (p.size == 3) "${p[2]}/${p[1]}/${p[0]}" else iso
-}
+private fun dmy(iso: String): String = com.truehr.app.core.Dates.dmy(iso)

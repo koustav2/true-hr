@@ -77,7 +77,8 @@ export async function run(pool) {
   // Organisation of every existing ticket, from its employee.
   await pool.query(`
     UPDATE support_tickets s SET organisation_id = e.organisation_id
-      FROM employees e WHERE e.id = s.employee_id AND s.organisation_id IS NULL`);
+      FROM employees e WHERE e.id = s.employee_id AND s.organisation_id IS NULL
+       AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = e.organisation_id)`);
 
   // Per-organisation numbers for tickets that have none, after any already given.
   await pool.query(`

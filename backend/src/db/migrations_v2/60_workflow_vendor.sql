@@ -7,9 +7,11 @@
 ALTER TABLE vendor_registrations ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
 ALTER TABLE agreements           ADD COLUMN IF NOT EXISTS organisation_id BIGINT REFERENCES organisations(id) ON DELETE CASCADE;
 UPDATE vendor_registrations v SET organisation_id = e.organisation_id
-  FROM employees e WHERE v.organisation_id IS NULL AND e.id = v.registered_by AND e.organisation_id IS NOT NULL;
+  FROM employees e WHERE v.organisation_id IS NULL AND e.id = v.registered_by AND e.organisation_id IS NOT NULL
+   AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = e.organisation_id);
 UPDATE agreements a SET organisation_id = e.organisation_id
-  FROM employees e WHERE a.organisation_id IS NULL AND e.id = a.uploaded_by AND e.organisation_id IS NOT NULL;
+  FROM employees e WHERE a.organisation_id IS NULL AND e.id = a.uploaded_by AND e.organisation_id IS NOT NULL
+   AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = e.organisation_id);
 CREATE INDEX IF NOT EXISTS idx_vendor_reg_org ON vendor_registrations (organisation_id, status);
 CREATE INDEX IF NOT EXISTS idx_agreements_org ON agreements (organisation_id, status, end_date);
 

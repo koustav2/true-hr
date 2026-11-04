@@ -59,6 +59,7 @@ export async function run(pool) {
     INSERT INTO nfa_code_format (organisation_id, prefix)
     SELECT e.organisation_id, '' FROM nfas n JOIN employees e ON e.id = n.employee_id
      WHERE e.organisation_id IS NOT NULL
+       AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = e.organisation_id)
        AND NOT EXISTS (SELECT 1 FROM nfa_code_format WHERE prefix = '')
      GROUP BY e.organisation_id ORDER BY count(*) DESC, e.organisation_id LIMIT 1
     ON CONFLICT (organisation_id) DO NOTHING`);

@@ -80,6 +80,7 @@ INSERT INTO policy_slots (organisation_id, title, kind)
 SELECT DISTINCT ON (p.organisation_id, lower(trim(p.title))) p.organisation_id, trim(p.title), 'POLICY'
   FROM policies p
  WHERE p.organisation_id IS NOT NULL AND p.slot_id IS NULL
+   AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = p.organisation_id)
 ON CONFLICT DO NOTHING;
 UPDATE policies p SET slot_id = s.id
   FROM policy_slots s

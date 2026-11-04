@@ -48,6 +48,8 @@ export async function run(pool) {
                    ELSE ua.organisation_id END
          FROM audit_log a JOIN user_accounts ua ON ua.id = a.actor_user_id
         WHERE a.action = 'HOLIDAY_CREATE' AND a.entity = 'holiday' AND a.entity_id = h.id
+          AND EXISTS (SELECT 1 FROM organisations o WHERE o.id = CASE WHEN ua.is_platform_admin
+                THEN COALESCE(ua.active_organisation_id, ua.organisation_id) ELSE ua.organisation_id END)
         ORDER BY a.id LIMIT 1),
       (SELECT id FROM organisations ORDER BY id LIMIT 1))
     WHERE h.organisation_id IS NULL

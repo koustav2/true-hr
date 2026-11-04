@@ -60,6 +60,7 @@ INSERT INTO employee_statutory (employee_id, uan, pf_number, esi_number)
 SELECT sp.employee_id, sp.uan, sp.pf_number, sp.esic_number
   FROM statutory_profiles sp
  WHERE NOT EXISTS (SELECT 1 FROM employee_statutory es WHERE es.employee_id = sp.employee_id)
+   AND EXISTS (SELECT 1 FROM employees e WHERE e.id = sp.employee_id)
    AND (sp.uan IS NOT NULL OR sp.pf_number IS NOT NULL OR sp.esic_number IS NOT NULL);
 UPDATE employee_statutory es SET
   uan        = COALESCE(NULLIF(es.uan, ''), sp.uan),

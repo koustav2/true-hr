@@ -62,15 +62,22 @@ export async function run(pool) {
   // ── M7: Wishes and Scheduler become modules of their own ───────────────────
   // Every role that could open them before (Wishes rode on EMPLOYEES, the
   // Scheduler on BANNERS) keeps them, once.
+  // Rows are copied only for roles/organisations that still exist: older
+  // databases can hold orphaned grants (e.g. for a deleted role), and copying
+  // those violates the foreign key and stops the deploy.
   await once('modules_wishes_scheduler', async () => {
     for (const [mod, from] of [['WISHES', 'EMPLOYEES'], ['SCHEDULER', 'BANNERS']]) {
       await pool.query(
         `INSERT INTO org_role_modules (role_id, module_key, can_view, can_manage)
-         SELECT role_id, $1, can_view, can_manage FROM org_role_modules WHERE module_key = $2
+         SELECT m.role_id, $1, m.can_view, m.can_manage FROM org_role_modules m
+           JOIN org_roles r ON r.id = m.role_id
+          WHERE m.module_key = $2
          ON CONFLICT (role_id, module_key) DO NOTHING`, [mod, from]);
       await pool.query(
         `INSERT INTO organisation_modules (organisation_id, module_key, enabled)
-         SELECT organisation_id, $1, enabled FROM organisation_modules WHERE module_key = $2
+         SELECT m.organisation_id, $1, m.enabled FROM organisation_modules m
+           JOIN organisations o ON o.id = m.organisation_id
+          WHERE m.module_key = $2
          ON CONFLICT (organisation_id, module_key) DO NOTHING`, [mod, from]);
     }
   });

@@ -1,7 +1,8 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api, downloadFile } from '@/lib/api.js';
-import { Card, Button, Input, Select, Field, Textarea, Spinner, Empty, Badge, PageHeader, ConfirmClick } from '@/components/ui.jsx';
+import { validator } from '@/lib/validate.js';
+import { Card, Button, Input, Select, Field, Textarea, Spinner, Badge, PageHeader, ConfirmClick, ErrorSummary, useConfirm } from '@/components/ui.jsx';
 
 const TABS = [
   ['identity', 'Identity & letterhead'],
@@ -30,6 +31,46 @@ const TEXT_FIELDS = [
   ['signatoryDesignation', 'Signatory designation', ''],
 ];
 const MAX_KB = 512;
+const PLACEHOLDERS = ['employeeName', 'designation', 'department', 'joiningDate', 'location', 'companyName', 'ctc'];
+const PH_RE = /\{\{\s*([^{}]*?)\s*\}\}/g;
+
+// Which tab shows a field, so an error can take the user to it.
+const tabOf = (k) => (k.startsWith('offer.') ? 'offer'
+  : ['logo', 'signatureImage', 'stampImage'].includes(k) ? 'marks'
+    : ['accentColor', 'headBg', 'headText', 'paperSize', 'footerNote', 'watermarkText'].includes(k) ? 'look' : 'identity');
+
+// Same rules as the server (docProfileController.validateV2).
+function validate(form, options, allowed) {
+  const v = validator();
+  const has = (k) => form[k] != null && String(form[k]).trim() !== '';
+  if (has('legalName')) v.text('legalName', form.legalName, 'Legal name', { min: 2, max: 160 });
+  if (has('brandName')) v.text('brandName', form.brandName, 'Brand name', { min: 2, max: 160 });
+  v.pattern('pincode', form.pincode, 'pin', 'PIN code');
+  v.check('phone', form.phone, (s) => /^\+?[\d\s-]+$/.test(s) && s.replace(/\D/g, '').length >= 10 && s.replace(/\D/g, '').length <= 13,
+    'Phone is not valid (10-13 digits, like +91 98765 43210 or 0674-2301234)');
+  v.email('email', form.email, 'Email');
+  v.pattern('website', form.website, 'url', 'Website');
+  v.pattern('gstin', form.gstin, 'gstin', 'GSTIN');
+  v.pattern('cin', form.cin, 'cin', 'CIN');
+  v.pattern('pan', form.pan, 'pan', 'PAN');
+  if (has('signatoryName')) {
+    v.name('signatoryName', form.signatoryName, 'Signatory name');
+    if (!v.fields.signatoryName && String(form.signatoryName).replace(/[^A-Za-z]/g, '').length < 2) {
+      v.add('signatoryName', 'Signatory name must have at least 2 letters');
+    }
+  }
+  for (const [k, l] of [['accentColor', 'Accent colour'], ['headBg', 'Header band colour'], ['headText', 'Header text colour']]) v.pattern(k, form[k], 'hex', l);
+  const off = options.offer || {};
+  const tpl = (key, text) => {
+    if (typeof text !== 'string') return;
+    const bad = [...text.matchAll(PH_RE)].map((m) => m[1]).filter((k) => !allowed.includes(k));
+    if (bad.length) v.add(`offer.${key}`, `Unknown placeholder ${bad.map((k) => `{{${k}}}`).join(', ')} — use only ${allowed.map((k) => `{{${k}}}`).join(', ')}`);
+    else if (/\{\{|\}\}/.test(text.replace(PH_RE, ''))) v.add(`offer.${key}`, 'A placeholder is not closed properly — write it like {{employeeName}}');
+  };
+  for (const k of ['salutation', 'intro', 'closing']) tpl(k, off[k]);
+  (off.terms || []).forEach((t) => tpl('terms', t));
+  return v.fields;
+}
 
 // Read a picked file as a data URL, so it travels inside the profile row.
 const asDataUrl = (file) => new Promise((ok, no) => {
@@ -48,9 +89,11 @@ export default function BrandingPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [errors, setErrors] = useState({});
+  const [confirm, confirmUi] = useConfirm();
 
   const load = (id) => {
-    setData(null); setErr(''); setMsg('');
+    setData(null); setErr(''); setMsg(''); setErrors({});
     api.get(`/admin/branding${id ? `?companyId=${id}` : ''}`)
       .then((d) => { setData(d); setForm({ ...d.profile }); setOptions(d.profile.options || {}); })
       .catch((e) => { setErr(e.message); setData(false); });
@@ -58,14 +101,63 @@ export default function BrandingPage() {
   useEffect(() => { load(scopeId); /* eslint-disable-next-line */ }, [scopeId]);
 
   const key = (f, o) => JSON.stringify([TEXT_FIELDS.map(([k]) => f[k] ?? null),
-    f.logo || null, f.signatureImage || null, f.accentColor, f.headBg, f.headText, f.paperSize,
+    f.logo || null, f.signatureImage || null, f.stampImage || null, f.accentColor, f.headBg, f.headText, f.paperSize,
     f.footerNote ?? null, f.watermarkText ?? null, o]);
   const dirty = useMemo(
     () => (data ? key(data.profile, data.profile.options || {}) !== key(form, options) : false),
     [data, form, options]);
 
-  const set = (k) => (e) => setForm((s) => ({ ...s, [k]: e.target.value }));
-  const setOpt = (group, k, v) => setOptions((s) => ({ ...s, [group]: { ...(s[group] || {}), [k]: v } }));
+  // Editing a field clears its error at once (QA C29: a corrected colour kept its error).
+  const clearErr = (k) => setErrors((s) => { if (!s[k]) return s; const n = { ...s }; delete n[k]; return n; });
+  const set = (k) => (e) => { clearErr(k); setForm((s) => ({ ...s, [k]: e.target.value })); };
+  const setOpt = (group, k, v) => {
+    if (group === 'offer') clearErr(`offer.${k}`);
+    setOptions((s) => ({ ...s, [group]: { ...(s[group] || {}), [k]: v } }));
+  };
+  const allowed = data?.offerPlaceholders || PLACEHOLDERS;
+
+  // Unsaved changes (QA H101): ask before switching scope or tab, and before
+  // leaving the page by refresh, close or a sidebar link.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  useEffect(() => {
+    const onUnload = (e) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; } };
+    const onClick = (e) => {
+      if (!dirtyRef.current) return;
+      const a = e.target.closest?.('a[href]');
+      if (!a || a.target === '_blank' || a.getAttribute('href')?.startsWith('#')) return;
+      // eslint-disable-next-line no-alert
+      if (!window.confirm('You have unsaved branding changes. Leave this page and discard them?')) {
+        e.preventDefault(); e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    document.addEventListener('click', onClick, true);
+    return () => { window.removeEventListener('beforeunload', onUnload); document.removeEventListener('click', onClick, true); };
+  }, []);
+
+  async function switchTab(k) {
+    if (k === tab) return;
+    if (dirty) {
+      const yes = await confirm({
+        title: 'Save your changes?',
+        body: 'You have unsaved changes. Save them now, or keep editing — your edits stay in the form until you save or leave the page.',
+        confirmLabel: 'Save now', cancelLabel: 'Not yet',
+      });
+      if (yes) { const ok = await save(); if (!ok) return; }
+    }
+    setTab(k);
+  }
+
+  async function switchScope(id) {
+    if (id === scopeId) return;
+    if (dirty && !(await confirm({
+      title: 'Discard unsaved changes?',
+      body: 'Switching to another company reloads the form, and the changes you have not saved will be lost.',
+      confirmLabel: 'Discard changes', cancelLabel: 'Stay here', tone: 'danger',
+    }))) return;
+    setScopeId(id);
+  }
 
   async function pick(field, file) {
     if (!file) return;
@@ -79,10 +171,14 @@ export default function BrandingPage() {
   }
 
   async function save() {
-    setBusy(true); setErr(''); setMsg('');
+    setErr(''); setMsg('');
+    const found = validate(form, options, allowed);
+    if (Object.keys(found).length) { setErrors(found); setTab(tabOf(Object.keys(found)[0])); return false; }
+    setErrors({});
+    setBusy(true);
     const body = { options };
     for (const [k] of TEXT_FIELDS) body[k] = form[k] ?? '';
-    for (const k of ['logo', 'signatureImage', 'footerNote', 'watermarkText']) body[k] = form[k] ?? '';
+    for (const k of ['logo', 'signatureImage', 'stampImage', 'footerNote', 'watermarkText']) body[k] = form[k] ?? '';
     for (const k of ['accentColor', 'headBg', 'headText', 'paperSize']) body[k] = form[k];
     try {
       const d = await api.put(`/admin/branding${scopeId ? `?companyId=${scopeId}` : ''}`, body);
@@ -90,7 +186,12 @@ export default function BrandingPage() {
       setMsg(scopeId
         ? 'Saved for this company. Documents it issues use these; everything left blank still follows the organisation.'
         : 'Saved for the organisation. Every company follows this unless it has its own override.');
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+      return true;
+    } catch (e) {
+      if (e.fields) { setErrors(e.fields); setTab(tabOf(Object.keys(e.fields)[0] || 'identity')); }
+      setErr(e.fields ? '' : e.message);
+      return false;
+    } finally { setBusy(false); }
   }
 
   async function dropOverride() {
@@ -120,7 +221,7 @@ export default function BrandingPage() {
         action={
           <div className="flex items-end gap-2.5">
             <Field label="Editing">
-              <Select value={scopeId} onChange={(e) => setScopeId(e.target.value)}>
+              <Select value={scopeId} onChange={(e) => switchScope(e.target.value)}>
                 <option value="">Organisation default</option>
                 {(data?.companies || []).map((c) => (
                   <option key={c.id} value={c.id}>{c.name}{c.configured ? ' — overridden' : ''}</option>
@@ -132,7 +233,9 @@ export default function BrandingPage() {
         }
       />
 
+      {confirmUi}
       {err && <p className="text-sm text-neg">{err}</p>}
+      <ErrorSummary errors={errors} />
       {msg && <p className="text-sm text-pos">{msg}</p>}
 
       {data === null ? <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card>
@@ -203,7 +306,7 @@ export default function BrandingPage() {
 
           <div className="flex flex-wrap gap-1.5">
             {TABS.map(([k, label]) => (
-              <button key={k} onClick={() => setTab(k)}
+              <button key={k} onClick={() => switchTab(k)}
                 className={`rounded border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
                   tab === k ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-line bg-white text-ink-soft hover:border-slate-400'}`}>
                 {label}
@@ -216,7 +319,7 @@ export default function BrandingPage() {
             <Card className="p-4">
               <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-3">
                 {TEXT_FIELDS.map(([k, label, hint]) => (
-                  <Field key={k} label={label} hint={hint || undefined}>
+                  <Field key={k} label={label} hint={hint || undefined} error={errors[k]}>
                     <Input value={form[k] ?? ''} onChange={set(k)} placeholder={eff?.[k] || ''} />
                   </Field>
                 ))}
@@ -230,11 +333,13 @@ export default function BrandingPage() {
           {tab === 'marks' && (
             <Card className="p-4 space-y-5">
               {[['logo', 'Logo', 'Printed at the top-left of every document. PNG or JPEG, roughly 400×120 works well.'],
-                ['signatureImage', 'Signature', 'Drawn above the signature line on letters and offers.']].map(([k, label, hint]) => (
+                ['signatureImage', 'Signature', 'A cropped scan of the signatory\u2019s signature (PNG with a transparent or white background, wider than it is tall). Leave empty for a plain signature line — no image is ever added for you.'],
+                ['stampImage', 'Company stamp (optional)', 'Your company seal, printed beside the signature on letters. PNG with a transparent background works best. Leave empty for no stamp.']].map(([k, label, hint]) => (
                 <div key={k} className="flex flex-wrap items-start gap-4">
                   <div className="w-48">
                     <div className="text-[12.5px] font-semibold text-ink">{label}</div>
                     <div className="text-[11.5px] text-ink-faint mt-0.5">{hint}</div>
+                    {errors[k] && <div role="alert" className="text-[11.5px] text-neg mt-1">{errors[k]}</div>}
                   </div>
                   <div className="rounded border border-line bg-white p-3 grid place-items-center min-w-[180px] min-h-[64px]">
                     {form[k]
@@ -246,7 +351,7 @@ export default function BrandingPage() {
                   <div className="flex flex-col gap-2">
                     <label className="inline-flex">
                       <input type="file" accept="image/png,image/jpeg" className="hidden"
-                        onChange={(e) => pick(k, e.target.files?.[0])} />
+                        onChange={(e) => { clearErr(k); pick(k, e.target.files?.[0]); }} />
                       <span className="inline-flex items-center rounded border border-line bg-white px-3 py-1.5 text-xs font-semibold text-ink-soft cursor-pointer hover:border-brand-600 hover:text-brand-600">
                         Choose image
                       </span>
@@ -269,7 +374,7 @@ export default function BrandingPage() {
             <Card className="p-4">
               <div className="grid gap-3.5 sm:grid-cols-2 lg:grid-cols-4">
                 {[['accentColor', 'Accent / rule'], ['headBg', 'Header band'], ['headText', 'Header text']].map(([k, label]) => (
-                  <Field key={k} label={label}>
+                  <Field key={k} label={label} error={errors[k]}>
                     <div className="flex items-center gap-2">
                       <input type="color" value={form[k] || '#16a34a'} onChange={set(k)}
                         className="h-9 w-12 rounded border border-line bg-white p-0.5 cursor-pointer" />
@@ -300,23 +405,23 @@ export default function BrandingPage() {
           {tab === 'offer' && (
             <Card className="p-4 space-y-3.5">
               <p className="text-[12.5px] text-ink-soft">
-                Placeholders you can use: <span className="font-mono text-[11.5px]">{'{{employeeName}} {{designation}} {{department}} {{joiningDate}} {{location}} {{companyName}} {{ctc}}'}</span>
+                Placeholders you can use: <span className="font-mono text-[11.5px]">{allowed.map((k) => `{{${k}}}`).join(' ')}</span>. Anything else is refused on save.
               </p>
               <div className="grid gap-3.5">
-                <Field label="Salutation">
+                <Field label="Salutation" error={errors['offer.salutation']}>
                   <Input value={off.salutation ?? ''} onChange={(e) => setOpt('offer', 'salutation', e.target.value)}
                     placeholder={data.defaults.offer.salutation} />
                 </Field>
-                <Field label="Opening paragraph">
+                <Field label="Opening paragraph" error={errors['offer.intro']}>
                   <Textarea rows={3} value={off.intro ?? ''} onChange={(e) => setOpt('offer', 'intro', e.target.value)}
                     placeholder={data.defaults.offer.intro} />
                 </Field>
-                <Field label="Terms" hint="One paragraph per line. Leave empty for the standard wording.">
+                <Field label="Terms" hint="One paragraph per line. Leave empty for the standard wording." error={errors['offer.terms']}>
                   <Textarea rows={5} value={(off.terms || []).join('\n')}
                     onChange={(e) => setOpt('offer', 'terms', e.target.value.split('\n').map((x) => x.trim()).filter(Boolean))}
                     placeholder={data.defaults.offer.terms.join('\n')} />
                 </Field>
-                <Field label="Closing paragraph">
+                <Field label="Closing paragraph" error={errors['offer.closing']}>
                   <Textarea rows={2} value={off.closing ?? ''} onChange={(e) => setOpt('offer', 'closing', e.target.value)}
                     placeholder={data.defaults.offer.closing} />
                 </Field>

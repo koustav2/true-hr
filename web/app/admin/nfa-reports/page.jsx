@@ -2,6 +2,7 @@
 import { useEffect, useState } from 'react';
 import { api, downloadFile } from '@/lib/api.js';
 import { Card, Button, Input, Spinner, Empty } from '@/components/ui.jsx';
+import { label, fmtDate } from '@/lib/labels.js';
 
 const TABS = ['Dashboard', 'Company-wise', 'Project-wise Expense', 'Client Billing', 'Settlements', 'Pending Settlement'];
 const fmtMoney = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
@@ -72,7 +73,7 @@ function DashboardTab() {
           <div className="font-semibold text-sm mb-2">Pending approvals by stage</div>
           {d.pendingByStage.map((s) => (
             <div key={s.roleKey} className="flex justify-between text-sm border-b border-line/60 py-1 last:border-0">
-              <span className="text-ink-soft">{s.roleKey.replace(/_/g, ' ')}</span><span className="font-medium">{s.count}</span>
+              <span className="text-ink-soft">{s.roleLabel || label(s.roleKey)}</span><span className="font-medium">{s.count}</span>
             </div>
           ))}
         </Card>
@@ -130,7 +131,7 @@ function ProjectExpenseTab() {
         { key: 'company', label: 'Cost To Company' }, { key: 'project', label: 'Project' },
         { key: 'category', label: 'Category' }, { key: 'header', label: 'Header' }, { key: 'subheader', label: 'Sub Header' },
         { key: 'location', label: 'Location' }, { key: 'nfas', label: "NFA's", right: true },
-        { key: 'amount', label: 'Amount', right: true, fmt: fmtMoney }, { key: 'last_date', label: 'Date' },
+        { key: 'amount', label: 'Amount', right: true, fmt: fmtMoney }, { key: 'last_date', label: 'Date', fmt: fmtDate },
       ]} />
     </div>
   );
@@ -148,8 +149,8 @@ function ClientBillingTab() {
         <ExportButtons path={`/admin/reports/client-billing${qs ? `?${qs}` : ''}`} name="client-billing" />
       </div>
       <ReportTable rows={rows} cols={[
-        { key: 'client', label: 'Client' }, { key: 'billable_type', label: 'Billable Type' },
-        { key: 'billed_state', label: 'Billed / To be billed' }, { key: 'nfas', label: "NFA's", right: true },
+        { key: 'client', label: 'Client' }, { key: 'billable_type', label: 'Billable type', fmt: label },
+        { key: 'billed_state', label: 'Billed / to be billed', fmt: label }, { key: 'nfas', label: "NFA's", right: true },
         { key: 'amount', label: 'Amount', right: true, fmt: fmtMoney },
         { key: 'invoiced_amount', label: 'Invoiced', right: true, fmt: fmtMoney },
       ]} />
@@ -168,18 +169,26 @@ function SettlementsTab() {
         {['', 'IN_PROGRESS', 'CLOSED', 'REJECTED', 'AUTO_REJECTED'].map((s) => (
           <button key={s} onClick={() => setStatus(s)}
             className={`px-3 py-1.5 text-xs rounded-full border ${status === s ? 'bg-brand-50 border-brand-200 text-brand-700 font-semibold' : 'border-line text-ink-soft'}`}>
-            {s === '' ? 'All' : s.replace('_', ' ')}
+            {s === '' ? 'All' : label(s)}
           </button>
         ))}
       </div>
-      <ReportTable rows={rows && rows.map((r) => ({
-        nfaCode: r.nfaCode, employee: r.employee?.name, project: r.project?.name,
-        amount: r.amount, status: r.status, raisedAt: r.raisedAt?.slice(0, 10),
-        stage: r.approval ? `${r.approval.currentStageSeq}/${r.approval.chain.length}` : '—',
-      }))} cols={[
-        { key: 'nfaCode', label: 'NFA Code' }, { key: 'employee', label: 'Employee' }, { key: 'project', label: 'Project' },
-        { key: 'amount', label: 'Amount', right: true, fmt: fmtMoney }, { key: 'status', label: 'Status' },
-        { key: 'stage', label: 'Chain stage' }, { key: 'raisedAt', label: 'Raised' },
+      <p className="text-xs text-ink-faint">Advance = the NFA amount paid out; Settled = the amount claimed in this settlement; Balance = advance − settled.</p>
+      <ReportTable rows={rows && rows.map((r) => {
+        const cur = r.approval?.chain.find((x) => x.seq === r.approval.currentStageSeq);
+        return {
+          nfaCode: r.nfaCode, employee: r.employee?.name, project: r.project?.name,
+          nfaRaisedAt: r.nfaRaisedAt, advance: r.advanceAmount ?? r.nfaGrandTotal, settled: r.settledAmount ?? r.amount,
+          balance: r.balance, status: label(r.status), settledOn: r.raisedAt,
+          stage: r.status === 'IN_PROGRESS' && cur ? `${cur.roleLabel || label(cur.roleKey)} (${cur.seq}/${r.approval.chain.length})` : '—',
+        };
+      })} cols={[
+        { key: 'nfaCode', label: 'NFA No.' }, { key: 'employee', label: 'Employee' }, { key: 'project', label: 'Project' },
+        { key: 'nfaRaisedAt', label: 'NFA raised', fmt: fmtDate },
+        { key: 'advance', label: 'Advance', right: true, fmt: fmtMoney }, { key: 'settled', label: 'Settled', right: true, fmt: fmtMoney },
+        { key: 'balance', label: 'Balance', right: true, fmt: fmtMoney },
+        { key: 'settledOn', label: 'Settlement submitted', fmt: fmtDate }, { key: 'status', label: 'Status' },
+        { key: 'stage', label: 'Waiting on' },
       ]} />
     </div>
   );
@@ -189,22 +198,25 @@ function SettlementsTab() {
 function PendingSettlementTab() {
   const [rows, setRows] = useState(null);
   useEffect(() => { api.get('/admin/reports/pending-settlements').then(setRows).catch(() => setRows([])); }, []);
-  const total = (rows || []).reduce((a, r) => a + Number(r.amount_received || 0), 0);
+  const total = (rows || []).reduce((a, r) => a + Number(r.balance ?? r.amount_received ?? 0), 0);
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
-        <div className="text-sm text-ink-soft">Total pending: <b className="text-rose-600">₹{total.toLocaleString('en-IN')}</b></div>
+        <div className="text-sm text-ink-soft">Total balance to settle: <b className="text-rose-600">{fmtMoney(total)}</b></div>
         <ExportButtons path="/admin/reports/pending-settlements" name="pending-settlements" />
       </div>
       <Card className="overflow-x-auto">
         {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
           !rows.length ? <Empty title="Nothing pending settlement" /> : (
-          <table className="w-full text-sm min-w-[760px]">
+          <table className="w-full text-sm min-w-[980px]">
             <thead className="bg-slate-50/60 text-ink-faint border-b border-line"><tr>
               <th className="text-left px-4 py-2.5 font-medium">NFA</th>
               <th className="text-left px-2 py-2.5 font-medium">Employee</th>
               <th className="text-left px-2 py-2.5 font-medium">Company · Project</th>
-              <th className="text-right px-2 py-2.5 font-medium">Pending (₹)</th>
+              <th className="text-left px-2 py-2.5 font-medium">NFA raised</th>
+              <th className="text-right px-2 py-2.5 font-medium">Advance</th>
+              <th className="text-right px-2 py-2.5 font-medium">Settled</th>
+              <th className="text-right px-2 py-2.5 font-medium">Balance</th>
               <th className="text-left px-2 py-2.5 font-medium">Status</th>
               <th className="text-left px-4 py-2.5 font-medium">Due / Overdue</th>
             </tr></thead>
@@ -214,9 +226,12 @@ function PendingSettlementTab() {
                   <td className="px-4 py-2.5 font-medium text-ink">{r.nfa_code}</td>
                   <td className="px-2 py-2.5 text-ink-soft">{r.employee} <span className="text-ink-faint text-xs">{r.employee_code}</span></td>
                   <td className="px-2 py-2.5 text-ink-soft">{r.company} · {r.project}</td>
-                  <td className="px-2 py-2.5 text-right font-semibold">₹{Number(r.amount_received).toLocaleString('en-IN')}</td>
-                  <td className="px-2 py-2.5 text-xs">{r.settlement_status}</td>
-                  <td className="px-4 py-2.5 text-xs">{(r.settlement_due_date || '').slice(0, 10)}{r.days_overdue > 0 && <span className="text-rose-600 font-semibold"> · {r.days_overdue}d overdue</span>}</td>
+                  <td className="px-2 py-2.5 text-xs">{fmtDate(r.raised_on)}</td>
+                  <td className="px-2 py-2.5 text-right">{fmtMoney(r.amount_received)}</td>
+                  <td className="px-2 py-2.5 text-right">{fmtMoney(r.settled_amount)}</td>
+                  <td className="px-2 py-2.5 text-right font-semibold">{fmtMoney(r.balance ?? r.amount_received)}</td>
+                  <td className="px-2 py-2.5 text-xs">{label(r.settlement_status)}</td>
+                  <td className="px-4 py-2.5 text-xs">{fmtDate(r.settlement_due_date)}{r.days_overdue > 0 && <span className="text-rose-600 font-semibold"> · {r.days_overdue}d overdue</span>}</td>
                 </tr>
               ))}
             </tbody>

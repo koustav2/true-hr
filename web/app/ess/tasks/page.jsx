@@ -2,24 +2,35 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { Card, Button, Input, Select, Textarea, Spinner, Empty, Field } from '@/components/ui.jsx';
+import { label, fmtDate, todayIso } from '@/lib/labels.js';
+import { validator } from '@/lib/validate.js';
+import { useHasTeam } from '@/lib/perms.jsx';
 
 const TONE = { PENDING: 'text-amber-700', ONGOING: 'text-sky-700', CLOSED: 'text-emerald-700' };
 
 export default function TasksPage() {
   const [tab, setTab] = useState(0);
+  // E32: Assign Task / Team Tasks only for someone who has a team.
+  const [team, setTeam] = useState(null);
+  useEffect(() => { api.get('/tasks/team-members').then(setTeam).catch(() => setTeam({ canAssign: false, members: [] })); }, []);
+  // Both signals must agree: the shared team check (null = loading → hidden)
+  // and the task endpoint's active team members.
+  const hasTeam = useHasTeam() === true;
+  const canAssign = hasTeam && !!team?.canAssign;
+  const tabs = canAssign ? ['My Tasks', 'Assign Task', 'Team Tasks'] : ['My Tasks'];
   return (
     <div className="space-y-4">
       <h1 className="page-title text-ink">Tasks</h1>
       <div className="flex gap-1.5 border-b border-line">
-        {['My Tasks', 'Assign Task', 'Team Tasks'].map((t, i) => (
+        {tabs.map((t, i) => (
           <button key={t} onClick={() => setTab(i)}
             className={`px-4 py-2.5 text-sm font-medium -mb-px border-b-2 transition-colors ${
               tab === i ? 'border-brand-600 text-brand-700' : 'border-transparent text-ink-soft hover:text-ink'}`}>{t}</button>
         ))}
       </div>
       {tab === 0 && <MyTasks />}
-      {tab === 1 && <AssignTask />}
-      {tab === 2 && <TeamTasks />}
+      {tab === 1 && canAssign && <AssignTask team={team.members} />}
+      {tab === 2 && canAssign && <TeamTasks />}
     </div>
   );
 }
@@ -53,11 +64,11 @@ function MyTasks() {
               <div>
                 <div className="font-medium">{t.title}</div>
                 <div className="text-xs text-ink-faint">
-                  {t.description || '—'} · from {t.assignedByName || '—'} · due {t.dueDate?.slice(0, 10) || '—'}{t.aroundTime ? ` ${t.aroundTime}` : ''}
+                  {t.description || '—'} · from {t.assignedByName || '—'} · due {fmtDate(t.dueDate)}{t.aroundTime ? ` ${t.aroundTime}` : ''}
                 </div>
               </div>
               <div className="flex items-center gap-2">
-                <span className={`text-xs font-semibold ${TONE[t.status] || ''}`}>{t.status}</span>
+                <span className={`text-xs font-semibold ${TONE[t.status] || ''}`}>{label(t.status)}</span>
                 {t.status !== 'CLOSED' && <>
                   {t.status === 'PENDING' && <Button size="sm" variant="outline" onClick={() => setStatus(t.id, 'ONGOING')}>Start</Button>}
                   <Button size="sm" onClick={() => setStatus(t.id, 'CLOSED')}>Close</Button>
@@ -70,35 +81,44 @@ function MyTasks() {
   );
 }
 
-function AssignTask() {
-  const [team, setTeam] = useState([]);
-  const [f, setF] = useState({ assignedTo: '', title: '', description: '', dueDate: '', aroundTime: '' });
+function AssignTask({ team }) {
+  const blankForm = { assignedTo: '', title: '', description: '', dueDate: '', aroundTime: '' };
+  const [f, setF] = useState(blankForm);
+  const [errors, setErrors] = useState({});
   const [msg, setMsg] = useState('');
   const [busy, setBusy] = useState(false);
-  useEffect(() => { api.get('/me/team').then(setTeam).catch(() => {}); }, []);
+  const set = (k) => (e) => setF({ ...f, [k]: e.target.value });
   async function assign() {
-    setBusy(true); setMsg('');
+    setMsg('');
+    const v = validator();
+    v.require('assignedTo', f.assignedTo, 'Assign to');
+    v.text('title', f.title, 'Title', { required: true, min: 3, max: 150 });
+    v.text('description', f.description, 'Description', { max: 2000 });
+    v.date('dueDate', f.dueDate, 'Due date', { required: true, min: todayIso(), minMsg: 'Due date cannot be in the past' });
+    setErrors(v.fields);
+    if (!v.ok) return;
+    setBusy(true);
     try {
-      await api.post('/tasks', { ...f, assignedTo: Number(f.assignedTo) });
-      setMsg('Task assigned.'); setF({ assignedTo: '', title: '', description: '', dueDate: '', aroundTime: '' });
-    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+      await api.post('/tasks', { ...f, title: f.title.trim(), assignedTo: Number(f.assignedTo), aroundTime: f.aroundTime || undefined });
+      setMsg('Task assigned.'); setF(blankForm); setErrors({});
+    } catch (e) { setErrors(e.fields || {}); setMsg(e.message); } finally { setBusy(false); }
   }
   return (
     <Card className="p-4 space-y-2.5 max-w-lg">
-      <Field label="Assign to" required>
-        <Select value={f.assignedTo} onChange={(e) => setF({ ...f, assignedTo: e.target.value })}>
+      <Field label="Assign to" required error={errors.assignedTo}>
+        <Select value={f.assignedTo} onChange={set('assignedTo')}>
           <option value="">Select team member</option>
-          {team.map((m) => <option key={m.id} value={m.id}>{`${m.firstName || m.first_name || ''} ${m.lastName || m.last_name || ''}`.trim() || m.name || m.employeeCode}</option>)}
+          {team.map((m) => <option key={m.id} value={m.id}>{m.name}{m.employeeCode ? ` · ${m.employeeCode}` : ''}</option>)}
         </Select>
       </Field>
-      <Field label="Title" required><Input value={f.title} onChange={(e) => setF({ ...f, title: e.target.value })} /></Field>
-      <Field label="Description"><Textarea rows={2} value={f.description} onChange={(e) => setF({ ...f, description: e.target.value })} /></Field>
+      <Field label="Title" required error={errors.title}><Input value={f.title} maxLength={150} onChange={set('title')} /></Field>
+      <Field label="Description" error={errors.description}><Textarea rows={2} value={f.description} onChange={set('description')} /></Field>
       <div className="grid grid-cols-2 gap-2">
-        <Field label="Due date"><Input type="date" value={f.dueDate} onChange={(e) => setF({ ...f, dueDate: e.target.value })} /></Field>
-        <Field label="Around time"><Input type="time" value={f.aroundTime} onChange={(e) => setF({ ...f, aroundTime: e.target.value })} /></Field>
+        <Field label="Due date" required error={errors.dueDate}><Input type="date" min={todayIso()} value={f.dueDate} onChange={set('dueDate')} /></Field>
+        <Field label="Due time" hint="Optional" error={errors.aroundTime}><Input type="time" value={f.aroundTime} onChange={set('aroundTime')} /></Field>
       </div>
       {msg && <p className={`text-sm ${msg === 'Task assigned.' ? 'text-emerald-700' : 'text-red-600'}`}>{msg}</p>}
-      <Button onClick={assign} disabled={busy || !f.assignedTo || !f.title}>{busy ? 'Assigning…' : 'Assign Task'}</Button>
+      <Button onClick={assign} disabled={busy}>{busy ? 'Assigning…' : 'Assign Task'}</Button>
     </Card>
   );
 }
@@ -112,9 +132,9 @@ function TeamTasks() {
         <Card key={t.id} className="p-3 text-sm flex flex-wrap justify-between items-center gap-2">
           <div>
             <div className="font-medium">{t.title} <span className="text-xs text-ink-faint">→ {t.assignedToName}</span></div>
-            <div className="text-xs text-ink-faint">{t.description || '—'} · due {t.dueDate?.slice(0, 10) || '—'}{t.remark ? ` · “${t.remark}”` : ''}</div>
+            <div className="text-xs text-ink-faint">{t.description || '—'} · due {fmtDate(t.dueDate)}{t.aroundTime ? ` ${t.aroundTime}` : ''}{t.remark ? ` · “${t.remark}”` : ''}</div>
           </div>
-          <span className={`text-xs font-semibold ${TONE[t.status] || ''}`}>{t.status}</span>
+          <span className={`text-xs font-semibold ${TONE[t.status] || ''}`}>{label(t.status)}</span>
         </Card>
       ))}
     </div>

@@ -3,7 +3,8 @@ import { useEffect, useMemo, useState } from 'react';
 import Link from 'next/link';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, ConfirmClick } from '@/components/ui.jsx';
+import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, useConfirm } from '@/components/ui.jsx';
+import { validator } from '@/lib/validate.js';
 import { downloadCsv } from '@/lib/csv.js';
 
 const blank = { name: '', code: '', parentRef: '', note: '', sortOrder: '' };
@@ -17,6 +18,12 @@ export default function OrgMastersPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [errors, setErrors] = useState({});
+  const [confirm, confirmUi] = useConfirm();
+  const setF = (k, v) => {
+    setForm((s) => ({ ...s, [k]: v }));
+    setErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+  };
 
   const load = () => {
     setErr('');
@@ -31,13 +38,34 @@ export default function OrgMastersPage() {
   const rows = (d?.lists?.[kind]) || [];
   const parentOptions = spec?.parent ? (d?.parents?.[spec.parent] || []) : null;
 
-  const reset = () => { setForm(blank); setEditing(null); };
+  const reset = () => { setForm(blank); setEditing(null); setErrors({}); };
+
+  // Same rules as the server (orgMasterController.validateV2).
+  function check() {
+    const v = validator();
+    const name = form.name.trim();
+    v.text('name', name, 'Name', { required: true, max: 120 });
+    if (name && /[<>]/.test(name)) v.add('name', 'Name cannot contain < or >');
+    if (name && !/[A-Za-z]/.test(name)) v.add('name', 'Name must contain letters');
+    if (name && !v.fields.name && rows.some((r) => r.id !== editing && r.name.trim().toLowerCase() === name.toLowerCase()
+      && (!spec?.parent || String(r.parentRef ?? '') === String(form.parentRef)))) {
+      v.add('name', `"${name}" is already on this list`);
+    }
+    if (spec?.parent && !form.parentRef) v.add('parentRef', spec.parent === 'company' ? 'Choose the company it belongs to' : 'Choose the department it belongs to');
+    if (form.code) v.text('code', form.code, spec?.code || 'Code', { max: 40 });
+    if (form.note) v.text('note', form.note, 'Note', { max: 500 });
+    if (form.sortOrder !== '') v.number('sortOrder', form.sortOrder, 'Order', { integer: true, min: 0, max: 100000 });
+    return v.fields;
+  }
 
   async function save(e) {
     e?.preventDefault?.();
+    const errs = check();
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
     setBusy(true); setErr(''); setMsg('');
     const body = {
-      name: form.name, code: form.code || null, note: form.note || null,
+      name: form.name.trim(), code: form.code.trim() || null, note: form.note.trim() || null,
       parentRef: spec?.parent ? form.parentRef : null,
       sortOrder: form.sortOrder === '' ? null : Number(form.sortOrder),
     };
@@ -49,10 +77,20 @@ export default function OrgMastersPage() {
         kinds: s.kinds.map((k) => (k.key === kind ? { ...k, count: r.rows.length } : k)) }));
       reset();
       setMsg(editing ? 'Updated.' : 'Added.');
-    } catch (e2) { setErr(e2.message); } finally { setBusy(false); }
+    } catch (e2) {
+      if (e2.fields) setErrors(e2.fields); else setErr(e2.message);
+    } finally { setBusy(false); }
   }
 
   async function drop(row) {
+    const ok = await confirm({
+      title: row.inUse > 0 ? `Deactivate “${row.name}”?` : `Delete “${row.name}”?`,
+      body: row.inUse > 0
+        ? `${row.inUse} record(s) use it, so it will be deactivated: still readable on those records, but no longer offered in pickers.`
+        : 'It is not used anywhere and will be removed from the list.',
+      confirmLabel: row.inUse > 0 ? 'Deactivate' : 'Delete', tone: 'danger',
+    });
+    if (!ok) return;
     setBusy(true); setErr(''); setMsg('');
     try {
       const r = await api.del(`/admin/org-masters/${kind}/${row.id}`);
@@ -69,6 +107,7 @@ export default function OrgMastersPage() {
         subtitle="The organisation's reference lists, in one place. Everything here is read by a form or a report — a bank on this list is what HR picks on an employee's bank details, so a bank advice file spells one bank one way."
       />
 
+      {confirmUi}
       {err && <p className="text-sm text-neg">{err}</p>}
       {msg && <p className="text-sm text-pos">{msg}</p>}
 
@@ -110,15 +149,15 @@ export default function OrgMastersPage() {
 
               <form onSubmit={save} className="p-3.5 border-b border-line grid gap-2.5 sm:grid-cols-12 items-end">
                 <div className={spec.parent ? 'sm:col-span-3' : 'sm:col-span-4'}>
-                  <Field label="Name" required>
-                    <Input value={form.name} onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+                  <Field label="Name" required error={errors.name}>
+                    <Input value={form.name} maxLength={120} onChange={(e) => setF('name', e.target.value)}
                       placeholder={kind === 'BANK' ? 'e.g. HDFC Bank' : kind === 'GRADE' ? 'e.g. M2' : 'Name'} />
                   </Field>
                 </div>
                 {spec.parent && (
                   <div className="sm:col-span-3">
-                    <Field label={spec.parent === 'company' ? 'Company' : 'Department'} required>
-                      <Select value={form.parentRef} onChange={(e) => setForm((s) => ({ ...s, parentRef: e.target.value }))}>
+                    <Field label={spec.parent === 'company' ? 'Company' : 'Department'} required error={errors.parentRef}>
+                      <Select value={form.parentRef} onChange={(e) => setF('parentRef', e.target.value)}>
                         <option value="">— choose —</option>
                         {(parentOptions || []).map((o) => (
                           <option key={o.id} value={o.id}>{o.company ? `${o.company} · ${o.name}` : o.name}</option>
@@ -129,24 +168,24 @@ export default function OrgMastersPage() {
                 )}
                 {spec.code && (
                   <div className="sm:col-span-2">
-                    <Field label={spec.code}>
-                      <Input value={form.code} onChange={(e) => setForm((s) => ({ ...s, code: e.target.value }))} />
+                    <Field label={spec.code} error={errors.code}>
+                      <Input value={form.code} maxLength={40} onChange={(e) => setF('code', e.target.value)} />
                     </Field>
                   </div>
                 )}
                 <div className={spec.code ? 'sm:col-span-3' : 'sm:col-span-5'}>
-                  <Field label="Note">
-                    <Input value={form.note} onChange={(e) => setForm((s) => ({ ...s, note: e.target.value }))} />
+                  <Field label="Note" error={errors.note}>
+                    <Input value={form.note} maxLength={500} onChange={(e) => setF('note', e.target.value)} />
                   </Field>
                 </div>
                 <div className="sm:col-span-1">
-                  <Field label="Order">
-                    <Input type="number" value={form.sortOrder}
-                      onChange={(e) => setForm((s) => ({ ...s, sortOrder: e.target.value }))} placeholder="100" />
+                  <Field label="Order" error={errors.sortOrder}>
+                    <Input type="number" min="0" value={form.sortOrder}
+                      onChange={(e) => setF('sortOrder', e.target.value)} placeholder="100" />
                   </Field>
                 </div>
                 <div className="sm:col-span-12 flex items-center gap-2.5">
-                  <Button type="submit" size="sm" disabled={busy || !form.name.trim()}>
+                  <Button type="submit" size="sm" disabled={busy}>
                     {busy ? <Spinner /> : editing ? 'Save changes' : 'Add'}
                   </Button>
                   {editing && <Button type="button" variant="ghost" size="sm" onClick={reset}>Cancel</Button>}
@@ -173,7 +212,7 @@ export default function OrgMastersPage() {
                         <tr key={r.id} className={r.active ? '' : 'opacity-55'}>
                           <td className="px-4 text-ink font-medium">
                             {r.name}
-                            {!r.active && <span className="ml-2"><Badge tone="neutral">inactive</Badge></span>}
+                            {!r.active && <span className="ml-2"><Badge tone="neutral">Inactive</Badge></span>}
                           </td>
                           {spec.code && <td className="px-4 font-mono text-[12.5px] text-ink-soft">{r.code || '—'}</td>}
                           {spec.parent && <td className="px-4 text-[12.5px] text-ink-soft">{r.parentName || '—'}</td>}
@@ -181,11 +220,12 @@ export default function OrgMastersPage() {
                           <td className="num px-4 tabular-nums text-ink-soft">{r.inUse}</td>
                           <td className="px-4 text-right whitespace-nowrap">
                             <button
-                              onClick={() => { setEditing(r.id); setForm({ name: r.name, code: r.code || '', parentRef: r.parentRef ?? '', note: r.note || '', sortOrder: r.sortOrder ?? '' }); }}
+                              onClick={() => { setErrors({}); setEditing(r.id); setForm({ name: r.name, code: r.code || '', parentRef: r.parentRef ?? '', note: r.note || '', sortOrder: r.sortOrder ?? '' }); }}
                               className="text-brand-600 text-[12px] font-semibold hover:underline mr-3">Edit</button>
-                            <ConfirmClick onConfirm={() => drop(r)} className="text-neg text-[12px] font-semibold">
+                            <button type="button" onClick={() => drop(r)} disabled={busy}
+                              className="text-neg text-[12px] font-semibold hover:underline">
                               {r.inUse > 0 ? 'Deactivate' : 'Delete'}
-                            </ConfirmClick>
+                            </button>
                           </td>
                         </tr>
                       ))}

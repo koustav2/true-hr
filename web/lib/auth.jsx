@@ -1,6 +1,7 @@
 'use client';
 import { createContext, useContext, useEffect, useState } from 'react';
 import { api, setToken, getStoredAuth, storeAuth } from './api.js';
+import { resetTeamCache } from './perms.jsx';
 
 const AuthCtx = createContext(null);
 
@@ -17,23 +18,31 @@ export function AuthProvider({ children }) {
   }, []);
 
   function establish(data) {
+    resetTeamCache();
     setToken(data.token);
     const a = { token: data.token, user: data.user };
     storeAuth(a);
     setAuth(a);
     return data.user;
   }
-  async function login(email, password) {
-    const data = await api.post('/auth/login', { email, password });
+  // otpTo: 'personal' | 'official' — ask for the sign-in code at the other
+  // address (v2). The server decides the default (D4).
+  async function login(email, password, otpTo) {
+    const data = await api.post('/auth/login', { email, password, ...(otpTo ? { otpTo } : {}) });
     // Two-step login: server emailed a code instead of a session.
-    if (data.otpRequired) return { otpRequired: true, maskedEmail: data.email };
+    if (data.otpRequired) {
+      return { otpRequired: true, maskedEmail: data.email, sentTo: data.sentTo || null, alternate: data.alternate || null };
+    }
     return establish(data);
   }
   async function verifyLoginOtp(email, otp) {
     const data = await api.post('/auth/login/verify-otp', { email, otp });
     return establish(data);
   }
-  function logout() { setToken(null); storeAuth(null); setAuth(null); }
+  function logout() {
+    setToken(null); storeAuth(null); setAuth(null); resetTeamCache();
+    try { window.sessionStorage.removeItem('truehr.masterWorkspace'); } catch { /* ignore */ }
+  }
   function patchUser(patch) {
     setAuth((prev) => {
       const next = { ...prev, user: { ...prev.user, ...patch } };

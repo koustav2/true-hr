@@ -2,8 +2,11 @@
 import { Suspense, useEffect, useState } from 'react';
 import { useSearchParams, useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
-import { Logo } from '@/components/Brand.jsx';
-import { Card, Button, Input, Select, Field, Spinner } from '@/components/ui.jsx';
+import { Card, Button, Input, Select, Field, Spinner, ErrorSummary } from '@/components/ui.jsx';
+import { validator, INDIAN_STATES } from '@/lib/validate.js';
+import { todayIso } from '@/lib/labels.js';
+import OrgBrand from '../OrgBrand.jsx';
+import { bankForIfsc } from '../ifsc.js';
 import SignaturePad from '@/components/SignaturePad.jsx';
 import DocUpload from '@/components/DocUpload.jsx';
 
@@ -19,7 +22,7 @@ const EXPERIENCE = ['Fresher', '0–1 years', '1–3 years', '3–5 years', '5�
 const DOC_GROUPS = [
   { title: 'Photograph & signature', items: [
     { type: 'PHOTO', label: 'Passport-size photograph', accept: 'image', required: true, hint: 'Within 3 months' },
-    { type: 'SIGNATURE_IMAGE', label: 'Signature image', accept: 'image', required: false, hint: 'White bg, blue ink' },
+    { type: 'SIGNATURE_IMAGE', label: 'Signature image', accept: 'image', required: true, hint: 'White bg, blue ink' },
   ]},
   { title: 'Education certificates (PDF)', items: [
     { type: 'CERT_10', label: '10th marksheet', accept: 'pdf', required: true },
@@ -41,6 +44,25 @@ const DOC_GROUPS = [
   ]},
 ];
 const REQUIRED_DOCS = DOC_GROUPS.flatMap((g) => g.items).filter((i) => i.required).map((i) => i.type);
+const DOC_NAME = Object.fromEntries(DOC_GROUPS.flatMap((g) => g.items).map((i) => [i.type, i.label]));
+// lib/validate mobile() strips a leading "91"; prefix +91 to a bare 10-digit number.
+const m10 = (x) => (/^\d{10}$/.test(String(x ?? '').trim()) ? `+91${String(x).trim()}` : x);
+const placeOk = (x) => /^[A-Za-z][A-Za-z .,'()-]*$/.test(String(x || '').trim());
+// Which step owns a server field key, so a server error opens the right step.
+const STEP_OF = (k) => (k.startsWith('profile.experience') ? 6 : k.startsWith('profile.family') ? 5 : k.startsWith('profile.nominee') ? 7
+  : k.startsWith('profile') ? 0 : k.startsWith('present') || k.startsWith('permanent') ? 1 : k.startsWith('bank') ? 2
+  : k.startsWith('statutory') ? 3 : k === 'documents' ? 8 : 9);
+
+function checkAddr(v, prefix, a, lbl) {
+  v.text(`${prefix}line1`, a.line1, `${lbl} line 1`, { required: true, min: 3, max: 200 });
+  if (!a.state) v.add(`${prefix}state`, `${lbl}: state is required`);
+  else if (!INDIAN_STATES.includes(a.state)) v.add(`${prefix}state`, `${lbl}: choose a state from the list`);
+  if (!String(a.district || '').trim()) v.add(`${prefix}district`, `${lbl}: district is required`);
+  else if (!placeOk(a.district)) v.add(`${prefix}district`, `${lbl}: district should contain letters only`);
+  if (!String(a.city || '').trim()) v.add(`${prefix}city`, `${lbl}: city is required`);
+  else if (!placeOk(a.city)) v.add(`${prefix}city`, `${lbl}: city should contain letters only`);
+  v.pattern(`${prefix}pincode`, a.pincode, 'pin', `${lbl} PIN code`, { required: true });
+}
 
 function Center({ children }) { return <div className="min-h-screen grid place-items-center p-6">{children}</div>; }
 const grid2 = 'grid sm:grid-cols-2 gap-4';
@@ -55,6 +77,7 @@ function FormInner() {
   const [signature, setSignature] = useState(null);
   const [busy, setBusy] = useState(false);
   const [err, setErr] = useState('');
+  const [errors, setErrors] = useState({});
 
   // slices
   const [bank, setBank] = useState({ accountHolder: '', accountNumber: '', ifsc: '', bankName: '', branch: '' });
@@ -97,8 +120,9 @@ function FormInner() {
         }
         const ad = d.addresses || [];
         const cur = ad.find((a) => a.type === 'CURRENT'); const per = ad.find((a) => a.type === 'PERMANENT');
-        if (cur) setPresent({ line1: cur.line1 || '', line2: cur.line2 || '', city: cur.city || '', state: cur.state || '', district: cur.district || '', pincode: cur.pincode || '' });
-        if (per) setPermanent({ line1: per.line1 || '', line2: per.line2 || '', city: per.city || '', state: per.state || '', district: per.district || '', pincode: per.pincode || '' });
+        const st = (x) => INDIAN_STATES.find((n) => n.toLowerCase() === String(x || '').trim().toLowerCase()) || '';
+        if (cur) setPresent({ line1: cur.line1 || '', line2: cur.line2 || '', city: cur.city || '', state: st(cur.state), district: cur.district || '', pincode: cur.pincode || '' });
+        if (per) setPermanent({ line1: per.line1 || '', line2: per.line2 || '', city: per.city || '', state: st(per.state), district: per.district || '', pincode: per.pincode || '' });
       })
       .catch((e) => setBoot({ error: e.message }));
   }, [token]);
@@ -106,35 +130,62 @@ function FormInner() {
   const sb = (set) => (k) => (e) => set((p) => ({ ...p, [k]: e.target.value }));
   const setBankF = sb(setBank), setStatF = sb(setStat), setInfoF = sb(setInfo), setIdsF = sb(setIds), setDecF = sb(setDec), setNomF = sb(setNominee), setPresF = sb(setPresent), setPermF = sb(setPermanent);
   const onDoc = (type, ok) => setDocs((p) => ({ ...p, [type]: ok }));
-  const missingDocs = REQUIRED_DOCS.filter((t) => !docs[t]);
+  const needDocs = experienceYears && experienceYears !== 'Fresher' ? [...REQUIRED_DOCS, 'RELIEVING_LAST'] : REQUIRED_DOCS;
+  const missingDocs = needDocs.filter((t) => !docs[t]);
 
   const upd = (arr, set, i, k, val) => { const next = arr.slice(); next[i] = { ...next[i], [k]: val }; set(next); };
 
+  // Every error of the step at once (C7, H31-H34).
+  function stepErrors(st) {
+    const v = validator();
+    if (st === 0) {
+      if (info.middleName) v.name('profile.middleName', info.middleName, 'Middle name');
+      if (!String(info.placeOfBirth).trim()) v.add('profile.placeOfBirth', 'Place of birth is required');
+      else if (!placeOk(info.placeOfBirth)) v.add('profile.placeOfBirth', 'Place of birth should contain letters only');
+      v.require('profile.bloodGroup', info.bloodGroup, 'Blood group');
+      v.require('profile.maritalStatus', info.maritalStatus, 'Marital status');
+      v.name('profile.emergencyContact.name', info.emName, 'Emergency contact name', { required: true });
+      v.mobile('profile.emergencyContact.phone', m10(info.emPhone), 'Emergency contact phone', { required: true });
+    }
+    if (st === 1) {
+      checkAddr(v, 'present.', present, 'Present address');
+      if (!sameAddr) checkAddr(v, 'permanent.', permanent, 'Permanent address');
+    }
+    if (st === 2) {
+      v.name('bank.accountHolder', bank.accountHolder, 'Account holder name', { required: true });
+      v.check('bank.accountNumber', bank.accountNumber, /^\d{9,18}$/, 'Account number must be 9–18 digits', { required: true, label: 'Account number' });
+      v.pattern('bank.ifsc', bank.ifsc, 'ifsc', 'IFSC', { required: true });
+      const known = bankForIfsc(bank.ifsc);
+      if (!bank.bankName && !known) v.add('bank.bankName', 'Bank name is required');
+      if (bank.branch && !placeOk(bank.branch)) v.add('bank.branch', 'Branch should contain letters only');
+    }
+    if (st === 3) {
+      v.pattern('statutory.pan', stat.pan, 'pan', 'PAN', { required: true });
+      v.pattern('statutory.aadhaar', stat.aadhaar, 'aadhaar', 'Aadhaar', { required: true });
+      if (stat.uan) v.pattern('statutory.uan', stat.uan, 'uan', 'UAN');
+    }
+    if (st === 5) {
+      family.forEach((f, i) => { if (f.name) v.name(`profile.family.${i}.name`, f.name, `${f.relation} name`); });
+    }
+    if (st === 6 && !experienceYears) v.add('profile.experienceYears', 'Please select your total years of experience');
+    if (st === 7 && nominee.name) v.name('profile.nominee.name', nominee.name, 'Nominee name');
+    if (st === 8 && missingDocs.length) v.add('documents', `Please upload: ${missingDocs.map((t) => DOC_NAME[t] || t).join(', ')}`);
+    return v.fields;
+  }
   function next() {
-    if (step === 0 && info.emPhone && !/^\d{10}$/.test(info.emPhone)) { setErr('Emergency contact phone must be exactly 10 digits.'); return; }
-    if (step === 1) {
-      if (!/^\d{6}$/.test(present.pincode)) { setErr('PIN code must be exactly 6 digits.'); return; }
-      if (!sameAddr && permanent.pincode && !/^\d{6}$/.test(permanent.pincode)) { setErr('Permanent PIN code must be exactly 6 digits.'); return; }
-    }
-    if (step === 2) {
-      if (!/^[A-Za-z .'-]+$/.test(bank.accountHolder || '')) { setErr('Account holder name can contain letters only.'); return; }
-      if (!/^\d{9,18}$/.test(bank.accountNumber || '')) { setErr('Account number must be 9\u201318 digits (numbers only).'); return; }
-      if (!/^[A-Z]{4}0[A-Z0-9]{6}$/.test((bank.ifsc || '').toUpperCase())) { setErr('IFSC looks invalid \u2014 e.g. SBIN0001234.'); return; }
-    }
-    if (step === 3) {
-      if (!/^[A-Z]{5}\d{4}[A-Z]$/.test((stat.pan || '').toUpperCase())) { setErr('PAN looks invalid \u2014 format ABCDE1234F.'); return; }
-      if (!/^\d{12}$/.test(stat.aadhaar || '')) { setErr('Aadhaar must be exactly 12 digits.'); return; }
-    }
-    if (step === 6 && !experienceYears) { setErr('Please select your total years of experience.'); return; }
-    if (step === 8 && missingDocs.length) { setErr('Please upload all required documents (marked *).'); return; }
+    const f = stepErrors(step);
+    setErrors(f);
+    if (Object.keys(f).length) { setErr(''); return; }
     setErr(''); setStep((s) => Math.min(s + 1, STEPS.length - 1));
   }
-  function prev() { setErr(''); setStep((s) => Math.max(s - 1, 0)); }
+  function prev() { setErr(''); setErrors({}); setStep((s) => Math.max(s - 1, 0)); }
 
   async function finish() {
-    if (!experienceYears) { setErr('Please select your total years of experience (Experience step).'); return; }
-    if (missingDocs.length) { setErr('Some required documents are missing (Documents step).'); return; }
-    if (!signature) { setErr('Please add your e-signature to submit.'); return; }
+    for (let st = 0; st < STEPS.length - 1; st += 1) {
+      const f = stepErrors(st);
+      if (Object.keys(f).length) { setErrors(f); setStep(st); setErr('Please fix the highlighted fields on this step.'); return; }
+    }
+    if (!signature) { setErrors({ signature: 'Please add your e-signature to submit' }); return; }
     setErr(''); setBusy(true);
     const profile = {
       middleName: info.middleName, placeOfBirth: info.placeOfBirth, maritalStatus: info.maritalStatus, weddingDate: info.weddingDate,
@@ -148,10 +199,18 @@ function FormInner() {
     };
     const addresses = [{ type: 'CURRENT', ...present, country: 'India' }, { type: 'PERMANENT', ...(sameAddr ? present : permanent), country: 'India' }];
     try {
-      await api.post('/onboarding/details', { token, bank, statutory: stat, addresses, profile });
+      await api.post('/onboarding/details', { token, bank: { ...bank, ifsc: bank.ifsc.toUpperCase(), bankName: bank.bankName || bankForIfsc(bank.ifsc) || '' }, statutory: { ...stat, pan: stat.pan.toUpperCase() }, addresses, profile });
       await api.post('/onboarding/esign', { token, signature });
       router.push('/onboarding/done');
-    } catch (e) { setErr(e.message); setBusy(false); }
+    } catch (e) {
+      // Server field errors open the step they belong to, everything typed kept.
+      if (e.fields && Object.keys(e.fields).length) {
+        setErrors(e.fields);
+        setStep(Math.min(...Object.keys(e.fields).map(STEP_OF)));
+        setErr('');
+      } else setErr(e.message);
+      setBusy(false);
+    }
   }
 
   if (boot.loading) return <Center><Spinner className="text-brand-600 h-6 w-6" /></Center>;
@@ -165,7 +224,7 @@ function FormInner() {
   return (
     <div className="min-h-screen bg-canvas">
       <div className="max-w-3xl mx-auto px-4 py-10">
-        <div className="flex justify-center mb-6"><Logo size={40} /></div>
+        <div className="flex justify-center mb-6"><OrgBrand brand={boot.data.brand} size={40} /></div>
 
         {/* progress */}
         <div className="mb-5">
@@ -186,12 +245,12 @@ function FormInner() {
           {step === 0 && (
             <div className="space-y-4">
               <div className={grid3}>
-                <Field label="Middle name"><Input value={info.middleName} onChange={setInfoF('middleName')} /></Field>
-                <Field label="Place of birth"><Input value={info.placeOfBirth} onChange={setInfoF('placeOfBirth')} /></Field>
-                <Field label="Blood group"><Select value={info.bloodGroup} onChange={setInfoF('bloodGroup')}><option value="">Select…</option>{BLOOD.map((o) => <option key={o}>{o}</option>)}</Select></Field>
-                <Field label="Marital status"><Select value={info.maritalStatus} onChange={setInfoF('maritalStatus')}><option value="">Select…</option><option>Single</option><option>Married</option><option>Other</option></Select></Field>
+                <Field label="Middle name" error={errors['profile.middleName']}><Input value={info.middleName} onChange={setInfoF('middleName')} /></Field>
+                <Field label="Place of birth" required error={errors['profile.placeOfBirth']}><Input value={info.placeOfBirth} onChange={setInfoF('placeOfBirth')} /></Field>
+                <Field label="Blood group" required error={errors['profile.bloodGroup']}><Select value={info.bloodGroup} onChange={setInfoF('bloodGroup')}><option value="">Select…</option>{BLOOD.map((o) => <option key={o}>{o}</option>)}</Select></Field>
+                <Field label="Marital status" required error={errors['profile.maritalStatus']}><Select value={info.maritalStatus} onChange={setInfoF('maritalStatus')}><option value="">Select…</option><option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option><option>Other</option></Select></Field>
                 {info.maritalStatus === 'Married' && (<>
-                <Field label="Date of wedding"><Input type="date" value={info.weddingDate} onChange={setInfoF('weddingDate')} /></Field>
+                <Field label="Date of wedding"><Input type="date" value={info.weddingDate} onChange={setInfoF('weddingDate')} max={todayIso()} /></Field>
                 <Field label="No. of children"><Input type="number" min="0" value={info.children} onChange={setInfoF('children')} /></Field>
                 </>)}
                 <Field label="Religion"><Select value={info.religion} onChange={setInfoF('religion')}><option value="">Select…</option>{RELIGIONS.map((o) => <option key={o}>{o}</option>)}</Select></Field>
@@ -200,8 +259,8 @@ function FormInner() {
               </div>
               <div className="text-[13px] font-semibold uppercase tracking-wider text-ink-faint pt-1">Emergency contact</div>
               <div className={grid2}>
-                <Field label="Contact name"><Input value={info.emName} onChange={setInfoF('emName')} /></Field>
-                <Field label="Contact phone" hint="10-digit mobile number"><Input value={info.emPhone} onChange={setInfoF('emPhone')} maxLength={10} inputMode="numeric" /></Field>
+                <Field label="Contact name" required error={errors['profile.emergencyContact.name']}><Input value={info.emName} onChange={setInfoF('emName')} /></Field>
+                <Field label="Contact phone" required error={errors['profile.emergencyContact.phone']} hint="10-digit mobile number"><Input value={info.emPhone} onChange={(e) => setInfo((x) => ({ ...x, emPhone: e.target.value.replace(/\D/g, '').slice(0, 10) }))} maxLength={10} inputMode="numeric" /></Field>
               </div>
             </div>
           )}
@@ -211,28 +270,28 @@ function FormInner() {
               <div>
                 <div className="text-[13px] font-semibold uppercase tracking-wider text-ink-faint mb-2.5">Present address</div>
                 <div className={grid2}>
-                  <div className="sm:col-span-2"><Field label="Address line 1" required><Input value={present.line1} onChange={setPresF('line1')} /></Field></div>
+                  <div className="sm:col-span-2"><Field label="Address line 1" required error={errors['present.line1']}><Input value={present.line1} onChange={setPresF('line1')} /></Field></div>
                   <div className="sm:col-span-2"><Field label="Address line 2"><Input value={present.line2} onChange={setPresF('line2')} /></Field></div>
-                  <Field label="State" required><Input value={present.state} onChange={setPresF('state')} /></Field>
-                  <Field label="District" required><Input value={present.district} onChange={setPresF('district')} /></Field>
-                  <Field label="City" required><Input value={present.city} onChange={setPresF('city')} /></Field>
-                  <Field label="PIN code" required><Input value={present.pincode} onChange={setPresF('pincode')} maxLength={6} inputMode="numeric" /></Field>
+                  <Field label="State" required error={errors['present.state']}><Select value={present.state} onChange={setPresF('state')}><option value="">Select…</option>{INDIAN_STATES.map((x) => <option key={x}>{x}</option>)}</Select></Field>
+                  <Field label="District" required error={errors['present.district']}><Input value={present.district} onChange={setPresF('district')} /></Field>
+                  <Field label="City" required error={errors['present.city']}><Input value={present.city} onChange={setPresF('city')} /></Field>
+                  <Field label="PIN code" required error={errors['present.pincode']}><Input value={present.pincode} onChange={(e) => setPresent((x) => ({ ...x, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} maxLength={6} inputMode="numeric" /></Field>
                 </div>
               </div>
               <label className="flex items-center gap-2 text-sm text-ink-soft">
                 <input type="checkbox" checked={sameAddr} onChange={(e) => setSameAddr(e.target.checked)} className="h-4 w-4 accent-brand-600" />
-                Permanent address is the same as present
+                Permanent address is the same as present (otherwise it is required)
               </label>
               {!sameAddr && (
                 <div>
                   <div className="text-[13px] font-semibold uppercase tracking-wider text-ink-faint mb-2.5">Permanent address</div>
                   <div className={grid2}>
-                    <div className="sm:col-span-2"><Field label="Address line 1"><Input value={permanent.line1} onChange={setPermF('line1')} /></Field></div>
-                    <div className="sm:col-span-2"><Field label="Address line 2"><Input value={permanent.line2} onChange={setPermF('line2')} /></Field></div>
-                    <Field label="State"><Input value={permanent.state} onChange={setPermF('state')} /></Field>
-                    <Field label="District"><Input value={permanent.district} onChange={setPermF('district')} /></Field>
-                    <Field label="City"><Input value={permanent.city} onChange={setPermF('city')} /></Field>
-                    <Field label="PIN code"><Input value={permanent.pincode} onChange={setPermF('pincode')} maxLength={6} inputMode="numeric" /></Field>
+                    <div className="sm:col-span-2"><Field label="Address line 1" required error={errors['permanent.line1']}><Input value={permanent.line1} onChange={setPermF('line1')} /></Field></div>
+                  <div className="sm:col-span-2"><Field label="Address line 2"><Input value={permanent.line2} onChange={setPermF('line2')} /></Field></div>
+                  <Field label="State" required error={errors['permanent.state']}><Select value={permanent.state} onChange={setPermF('state')}><option value="">Select…</option>{INDIAN_STATES.map((x) => <option key={x}>{x}</option>)}</Select></Field>
+                  <Field label="District" required error={errors['permanent.district']}><Input value={permanent.district} onChange={setPermF('district')} /></Field>
+                  <Field label="City" required error={errors['permanent.city']}><Input value={permanent.city} onChange={setPermF('city')} /></Field>
+                  <Field label="PIN code" required error={errors['permanent.pincode']}><Input value={permanent.pincode} onChange={(e) => setPermanent((x) => ({ ...x, pincode: e.target.value.replace(/\D/g, '').slice(0, 6) }))} maxLength={6} inputMode="numeric" /></Field>
                   </div>
                 </div>
               )}
@@ -241,20 +300,28 @@ function FormInner() {
 
           {step === 2 && (
             <div className={grid2}>
-              <Field label="Account holder name" required><Input value={bank.accountHolder} onChange={setBankF('accountHolder')} /></Field>
-              <Field label="Account number" required><Input value={bank.accountNumber} onChange={setBankF('accountNumber')} inputMode="numeric" /></Field>
-              <Field label="IFSC" required><Input value={bank.ifsc} onChange={setBankF('ifsc')} className="uppercase" /></Field>
-              <Field label="Bank name"><Input value={bank.bankName} onChange={setBankF('bankName')} /></Field>
-              <Field label="Branch"><Input value={bank.branch} onChange={setBankF('branch')} /></Field>
+              <Field label="Account holder name" required error={errors['bank.accountHolder']}><Input value={bank.accountHolder} onChange={setBankF('accountHolder')} /></Field>
+              <Field label="Account number" required error={errors['bank.accountNumber']}><Input value={bank.accountNumber} onChange={(e) => setBank((x) => ({ ...x, accountNumber: e.target.value.replace(/\D/g, '').slice(0, 18) }))} inputMode="numeric" /></Field>
+              <Field label="IFSC" required error={errors['bank.ifsc']} hint={bankForIfsc(bank.ifsc) ? `Bank: ${bankForIfsc(bank.ifsc)}` : 'e.g. SBIN0001234'}>
+                <Input value={bank.ifsc} maxLength={11} className="uppercase" onChange={(e) => {
+                  const ifsc = e.target.value.toUpperCase();
+                  // H34: the bank comes from the IFSC.
+                  setBank((x) => ({ ...x, ifsc, bankName: bankForIfsc(ifsc) || (bankForIfsc(x.ifsc) === x.bankName ? '' : x.bankName) }));
+                }} />
+              </Field>
+              <Field label="Bank name" required error={errors['bank.bankName']} hint={bankForIfsc(bank.ifsc) ? 'Filled from the IFSC' : undefined}>
+                <Input value={bank.bankName} onChange={setBankF('bankName')} readOnly={!!bankForIfsc(bank.ifsc)} />
+              </Field>
+              <Field label="Branch" error={errors['bank.branch']}><Input value={bank.branch} onChange={setBankF('branch')} /></Field>
             </div>
           )}
 
           {step === 3 && (
             <div className="space-y-5">
               <div className={grid3}>
-                <Field label="PAN" required><Input value={stat.pan} onChange={setStatF('pan')} className="uppercase" maxLength={10} /></Field>
-                <Field label="Aadhaar number" required hint="Encrypted"><Input value={stat.aadhaar} onChange={setStatF('aadhaar')} inputMode="numeric" maxLength={12} /></Field>
-                <Field label="UAN (if any)"><Input value={stat.uan} onChange={setStatF('uan')} /></Field>
+                <Field label="PAN" required error={errors['statutory.pan']}><Input value={stat.pan} onChange={setStatF('pan')} className="uppercase" maxLength={10} /></Field>
+                <Field label="Aadhaar number" required hint="Encrypted" error={errors['statutory.aadhaar']}><Input value={stat.aadhaar} onChange={(e) => setStat((x) => ({ ...x, aadhaar: e.target.value.replace(/\D/g, '').slice(0, 12) }))} inputMode="numeric" maxLength={12} /></Field>
+                <Field label="UAN (if any)" error={errors['statutory.uan']}><Input value={stat.uan} onChange={setStatF('uan')} /></Field>
                 <Field label="PF number (if any)"><Input value={stat.pfNumber} onChange={setStatF('pfNumber')} /></Field>
                 <Field label="ESI number (if any)"><Input value={stat.esiNumber} onChange={setStatF('esiNumber')} /></Field>
               </div>
@@ -336,7 +403,7 @@ function FormInner() {
 
           {step === 6 && (
             <div className="space-y-5">
-              <Field label="Total years of experience" required>
+              <Field label="Total years of experience" required error={errors['profile.experienceYears']}>
                 <Select value={experienceYears} onChange={(e) => setExperienceYears(e.target.value)} className="max-w-[240px]">
                   <option value="">Select…</option>
                   {EXPERIENCE.map((o) => <option key={o}>{o}</option>)}
@@ -373,7 +440,7 @@ function FormInner() {
               <div>
                 <div className="text-[13px] font-semibold uppercase tracking-wider text-ink-faint mb-2.5">Nomination</div>
                 <div className={grid3}>
-                  <Field label="Nominee name"><Input value={nominee.name} onChange={setNomF('name')} /></Field>
+                  <Field label="Nominee name" error={errors['profile.nominee.name']}><Input value={nominee.name} onChange={setNomF('name')} /></Field>
                   <Field label="Relationship"><Input value={nominee.relationship} onChange={setNomF('relationship')} /></Field>
                   <Field label="Address"><Input value={nominee.address} onChange={setNomF('address')} /></Field>
                   <Field label="Bank name"><Input value={nominee.bankName} onChange={setNomF('bankName')} /></Field>
@@ -416,11 +483,13 @@ function FormInner() {
               <div>
                 <div className="text-sm font-medium text-ink-soft mb-2">Declaration & e-signature <span className="text-brand-600">*</span></div>
                 <p className="text-xs text-ink-faint mb-3">I confirm the information and documents provided are true and correct to the best of my knowledge.</p>
-                <SignaturePad onChange={setSignature} />
+                <SignaturePad onChange={(x) => { setSignature(x); setErrors((e) => ({ ...e, signature: undefined })); }} />
+                {errors.signature && <p className="text-[11.5px] text-neg mt-1.5">{errors.signature}</p>}
               </div>
             </div>
           )}
 
+          <div className="mt-4"><ErrorSummary errors={errors} /></div>
           {err && <div className="text-sm text-rose-600 bg-rose-50 border border-rose-100 rounded-lg px-3 py-2 mt-4">{err}</div>}
 
           <div className="flex items-center justify-between mt-6">

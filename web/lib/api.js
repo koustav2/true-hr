@@ -1,4 +1,7 @@
-const BASE = '/api';
+// The portal speaks API v2 (QA fix pass). v1 (/api) stays as it was for clients
+// already in the field — the Android app above all.
+export const API_BASE = '/api/v2';
+const BASE = API_BASE;
 let token = null;
 
 export function setToken(t) { token = t; }
@@ -24,7 +27,10 @@ async function req(method, path, body) {
     method, headers, body: body ? JSON.stringify(body) : undefined,
   });
   // Session expired/invalid → clear auth and send the user back to login (skip the login call itself).
-  if (res.status === 401 && path !== '/auth/login' && typeof window !== 'undefined') {
+  // Calls that legitimately answer 401 for a bad credential or handoff token
+  // must show their own message, not "session expired".
+  const credentialCall = /^\/auth\/(login|web-sso|forgot-password|reset-password)/.test(path);
+  if (res.status === 401 && !credentialCall && typeof window !== 'undefined') {
     storeAuth(null); setToken(null);
     const base = process.env.NEXT_PUBLIC_BASE_PATH || '';
     if (!window.location.pathname.startsWith(`${base}/login`)) {
@@ -39,7 +45,10 @@ async function req(method, path, body) {
   }
   if (!res.ok) {
     const msg = (data && data.error) || `Request failed (${res.status})`;
-    throw new Error(res.status >= 500 && !data?.error ? `Server error (${res.status}). Is the backend running?` : msg);
+    const err = new Error(res.status >= 500 && !data?.error ? `Server error (${res.status}). Is the backend running?` : msg);
+    err.status = res.status;
+    err.fields = data?.fields || null;   // v2: { fieldKey: message } for every invalid field
+    throw err;
   }
   return data;
 }
@@ -58,12 +67,50 @@ export async function downloadFile(path, filename) {
   const headers = {};
   const bearer = token || (typeof window !== 'undefined' ? getStoredAuth()?.token : null);
   if (bearer) headers.Authorization = `Bearer ${bearer}`;
-  const res = await fetch(BASE + path, { headers });
-  if (!res.ok) throw new Error(`Download failed (${res.status})`);
-  const blob = await res.blob();
+  const blob = await fetchBlob(path);
   const url = URL.createObjectURL(blob);
   const a = document.createElement('a');
   a.href = url; a.download = filename;
   document.body.appendChild(a); a.click(); a.remove();
   URL.revokeObjectURL(url);
 }
+
+function authHeaders() {
+  const bearer = token || (typeof window !== 'undefined' ? getStoredAuth()?.token : null);
+  return bearer ? { Authorization: `Bearer ${bearer}` } : {};
+}
+
+// Authenticated GET of a file. Throws an Error carrying the server's message
+// (never fails silently), and treats 401 like every other call.
+export async function fetchBlob(path) {
+  const res = await fetch(BASE + path, { headers: authHeaders() });
+  if (res.status === 401 && typeof window !== 'undefined') {
+    storeAuth(null); setToken(null);
+    window.location.assign(`${process.env.NEXT_PUBLIC_BASE_PATH || ''}/login?expired=1`);
+  }
+  if (!res.ok) {
+    let msg = `Could not open the file (${res.status})`;
+    try { const j = await res.json(); if (j?.error) msg = j.error; } catch { /* not JSON */ }
+    throw new Error(msg);
+  }
+  return res.blob();
+}
+
+// Open an authenticated file in a new tab. The tab is opened synchronously,
+// inside the click, so Safari/Firefox popup blockers allow it; the blob is
+// loaded into it afterwards. Returns a promise that rejects with the reason.
+export async function openFile(path) {
+  const win = typeof window !== 'undefined' ? window.open('', '_blank') : null;
+  try {
+    const blob = await fetchBlob(path);
+    const url = URL.createObjectURL(blob);
+    if (win) win.location.href = url; else window.open(url, '_blank');
+    setTimeout(() => URL.revokeObjectURL(url), 60_000);
+  } catch (e) {
+    if (win) win.close();
+    throw e;
+  }
+}
+
+// Absolute URL for an <a href>/<img src> to an unauthenticated API path.
+export const apiUrl = (path) => BASE + path;

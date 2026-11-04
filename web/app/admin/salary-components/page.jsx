@@ -1,7 +1,7 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
 import { api } from '@/lib/api.js';
-import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, SearchPicker } from '@/components/ui.jsx';
+import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, PageHeader, SearchPicker, useConfirm } from '@/components/ui.jsx';
 
 const CALCS = [
   { key: 'PCT_CTC', label: '% of monthly CTC', unit: '%' },
@@ -49,66 +49,11 @@ const blank = (kind) => ({
   statutory: null, perEmployee: true, active: true,
 });
 
-export default function SalaryComponentsPage() {
-  const [companies, setCompanies] = useState(null);
-  const [companyId, setCompanyId] = useState('');
-  const [saved, setSaved] = useState(null);
-  const [rows, setRows] = useState([]);
-  const [ctc, setCtc] = useState(50000);
-  const [busy, setBusy] = useState(false);
-  const [msg, setMsg] = useState('');
-  const [err, setErr] = useState('');
-  const [tab, setTab] = useState('company');
-
-  // /meta/companies, not /admin/companies: the latter needs the COMPANIES
-  // module, which HR deliberately does not have — asking for it left this page
-  // spinning forever with no company id to load. /meta/companies is the
-  // organisation-scoped lookup every staff role can read.
-  useEffect(() => {
-    api.get('/meta/companies').then((r) => {
-      const list = Array.isArray(r) ? r : [];
-      setCompanies(list);
-      if (list[0]) setCompanyId(String(list[0].id));
-      else setErr('No company is set up for this organisation yet — add one before defining components.');
-    }).catch((e) => { setCompanies([]); setErr(e.message); });
-  }, []);
-
-  const load = (id) => {
-    setSaved(null); setErr(''); setMsg('');
-    api.get(`/admin/companies/${id}/salary-components`)
-      .then((d) => { setSaved(d); setRows(d.components.map((c) => ({ ...c }))); })
-      .catch((e) => { setErr(e.message); setSaved({ components: [] }); });
-  };
-  useEffect(() => { if (companyId) load(companyId); /* eslint-disable-next-line */ }, [companyId]);
-
-  const key = (list) => JSON.stringify(list.map((c) => [c.id ?? null, c.code, c.label, c.kind, c.calc, c.basisCode || '', Number(c.value), c.prorate, c.taxable, c.statutory || '', c.perEmployee, c.active]));
-  const dirty = useMemo(() => (saved ? key(saved.components) !== key(rows) : false), [saved, rows]);
-  const earningCodes = useMemo(() => rows.filter((c) => c.kind === 'EARNING' && c.calc !== 'PCT_OF' && c.calc !== 'BALANCE').map((c) => c.code).filter(Boolean), [rows]);
-  const pv = useMemo(() => preview(rows, Number(ctc) || 0), [rows, ctc]);
-
-  const setRow = (i, patch) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
-  const move = (i, d) => setRows((r) => {
-    const n = [...r]; const j = i + d;
-    if (j < 0 || j >= n.length || n[j].kind !== n[i].kind) return r;
-    [n[i], n[j]] = [n[j], n[i]];
-    return n;
-  });
-
-  async function save() {
-    setBusy(true); setErr(''); setMsg('');
-    try {
-      const d = await api.put(`/admin/companies/${companyId}/salary-components`, {
-        components: rows.map((c, i) => ({ ...c, sortOrder: (i + 1) * 10 })),
-      });
-      setSaved(d); setRows(d.components.map((c) => ({ ...c })));
-      setMsg('Components saved. Payslips generated from now on use them; already-generated slips keep their own lines.');
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
-  }
-
-  const group = (kind) => rows.map((c, i) => ({ c, i })).filter((x) => x.c.kind === kind);
-
-  const Table = ({ kind, title, note }) => {
-    const list = group(kind);
+// H79: this used to be declared inside the page's render, so every keystroke
+// made a NEW component type, React remounted the rows and the input lost focus
+// after one character. At module level it is one stable component.
+function ComponentTable({ kind, title, note, rows, setRows, setRow, move, earningCodes, onRemove }) {
+    const list = rows.map((c, i) => ({ c, i })).filter((x) => x.c.kind === kind);
     return (
       <Card className="overflow-hidden">
         <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-line bg-canvas">
@@ -189,7 +134,7 @@ export default function SalaryComponentsPage() {
                     <td className="px-4 text-right whitespace-nowrap align-top pt-3">
                       <button onClick={() => move(i, -1)} className="text-brand-600 text-[12px] font-semibold hover:underline mr-2">Up</button>
                       <button onClick={() => move(i, 1)} className="text-brand-600 text-[12px] font-semibold hover:underline mr-2">Down</button>
-                      <button onClick={() => setRows((r) => r.filter((_, j) => j !== i))}
+                      <button onClick={() => onRemove(i)}
                         className="text-neg text-[12px] font-semibold hover:underline">Remove</button>
                     </td>
                   </tr>
@@ -200,10 +145,108 @@ export default function SalaryComponentsPage() {
         )}
       </Card>
     );
+  }
+
+export default function SalaryComponentsPage() {
+  const [confirm, confirmUi] = useConfirm();
+  const [companies, setCompanies] = useState(null);
+  const [companyId, setCompanyId] = useState('');
+  const [saved, setSaved] = useState(null);
+  const [rows, setRows] = useState([]);
+  const [ctc, setCtc] = useState(50000);
+  const [busy, setBusy] = useState(false);
+  const [msg, setMsg] = useState('');
+  const [err, setErr] = useState('');
+  const [tab, setTab] = useState('company');
+
+  // /meta/companies, not /admin/companies: the latter needs the COMPANIES
+  // module, which HR deliberately does not have — asking for it left this page
+  // spinning forever with no company id to load. /meta/companies is the
+  // organisation-scoped lookup every staff role can read.
+  useEffect(() => {
+    api.get('/meta/companies').then((r) => {
+      const list = Array.isArray(r) ? r : [];
+      setCompanies(list);
+      if (list[0]) setCompanyId(String(list[0].id));
+      else setErr('No company is set up for this organisation yet — add one before defining components.');
+    }).catch((e) => { setCompanies([]); setErr(e.message); });
+  }, []);
+
+  const load = (id) => {
+    setSaved(null); setErr(''); setMsg('');
+    api.get(`/admin/companies/${id}/salary-components`)
+      .then((d) => { setSaved(d); setRows(d.components.map((c) => ({ ...c }))); })
+      .catch((e) => { setErr(e.message); setSaved({ components: [] }); });
   };
+  useEffect(() => { if (companyId) load(companyId); /* eslint-disable-next-line */ }, [companyId]);
+
+  const key = (list) => JSON.stringify(list.map((c) => [c.id ?? null, c.code, c.label, c.kind, c.calc, c.basisCode || '', Number(c.value), c.prorate, c.taxable, c.statutory || '', c.perEmployee, c.active]));
+  const dirty = useMemo(() => (saved ? key(saved.components) !== key(rows) : false), [saved, rows]);
+  // Unsaved changes (H101): ask before switching company or tab, and before
+  // leaving by refresh, close or a sidebar link — as Document Branding does.
+  const dirtyRef = useRef(false);
+  dirtyRef.current = dirty;
+  useEffect(() => {
+    const onUnload = (e) => { if (dirtyRef.current) { e.preventDefault(); e.returnValue = ''; } };
+    const onClick = (e) => {
+      if (!dirtyRef.current) return;
+      const a = e.target.closest?.('a[href]');
+      if (!a || a.target === '_blank' || a.getAttribute('href')?.startsWith('#')) return;
+      // eslint-disable-next-line no-alert
+      if (!window.confirm('You have unsaved payslip component changes. Leave this page and discard them?')) {
+        e.preventDefault(); e.stopPropagation();
+      }
+    };
+    window.addEventListener('beforeunload', onUnload);
+    document.addEventListener('click', onClick, true);
+    return () => { window.removeEventListener('beforeunload', onUnload); document.removeEventListener('click', onClick, true); };
+  }, []);
+  async function switchCompany(id) {
+    if (String(id) === String(companyId)) return;
+    if (dirty && !(await confirm({ title: 'Discard unsaved changes?', body: 'Switching to another company reloads the components, and the changes you have not saved will be lost.', confirmLabel: 'Discard changes', cancelLabel: 'Stay here', tone: 'danger' }))) return;
+    setCompanyId(id);
+  }
+  async function switchTab(k) {
+    if (k === tab) return;
+    if (dirty && !(await confirm({ title: 'Discard unsaved changes?', body: 'The per-employee screen does not carry your unsaved company changes. Save them first, or discard them.', confirmLabel: 'Discard changes', cancelLabel: 'Stay here', tone: 'danger' }))) return;
+    if (dirty && saved) setRows(saved.components.map((c) => ({ ...c })));
+    setTab(k);
+  }
+  const earningCodes = useMemo(() => rows.filter((c) => c.kind === 'EARNING' && c.calc !== 'PCT_OF' && c.calc !== 'BALANCE').map((c) => c.code).filter(Boolean), [rows]);
+  const pv = useMemo(() => preview(rows, Number(ctc) || 0), [rows, ctc]);
+
+  const setRow = (i, patch) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const move = (i, d) => setRows((r) => {
+    const n = [...r]; const j = i + d;
+    if (j < 0 || j >= n.length || n[j].kind !== n[i].kind) return r;
+    [n[i], n[j]] = [n[j], n[i]];
+    return n;
+  });
+
+  async function save() {
+    if (pv.net < 0) { setErr(`Net pay would be ${inr(pv.net)} at a CTC of ${inr(Number(ctc))} — deductions are more than gross pay. Lower the deduction before saving.`); return; }
+    if (!(await confirm({ title: 'Save payslip components?', body: 'Payslips generated from now on use these lines. Already-generated payslips keep their own.', confirmLabel: 'Save' }))) return;
+    setBusy(true); setErr(''); setMsg('');
+    try {
+      const d = await api.put(`/admin/companies/${companyId}/salary-components`, {
+        components: rows.map((c, i) => ({ ...c, sortOrder: (i + 1) * 10 })),
+        previewCtc: Number(ctc) || null,
+      });
+      setSaved(d); setRows(d.components.map((c) => ({ ...c })));
+      setMsg('Components saved. Payslips generated from now on use them; already-generated slips keep their own lines.');
+    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+  }
+
+  async function removeRow(i) {
+    const c = rows[i];
+    if (c.id && !(await confirm({ title: `Remove ${c.label || c.code}?`, body: 'It disappears from payslips generated after you save, and any per-employee overrides of it are dropped. Payslips already generated keep their lines.', confirmLabel: 'Remove', tone: 'danger' }))) return;
+    setRows((r) => r.filter((_, j) => j !== i));
+  }
+  const tableProps = { rows, setRows, setRow, move, earningCodes, onRemove: removeRow };
 
   return (
     <div className="space-y-5">
+      {confirmUi}
       <PageHeader
         title="Payslip components"
         subtitle="What each company's payslip is made of. One client can run Basic / HRA / Conveyance / Food coupons and another Basic / HRA / Special with no LTA — same engine, different rows."
@@ -211,7 +254,7 @@ export default function SalaryComponentsPage() {
           <div className="flex items-end gap-2.5">
             {companies && companies.length > 1 && (
               <Field label="Company">
-                <Select value={companyId} onChange={(e) => setCompanyId(e.target.value)}>
+                <Select value={companyId} onChange={(e) => switchCompany(e.target.value)}>
                   {companies.map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}
                 </Select>
               </Field>
@@ -223,7 +266,7 @@ export default function SalaryComponentsPage() {
 
       <div className="flex flex-wrap gap-1.5">
         {[['company', 'Company set'], ['employee', 'Per-employee overrides']].map(([k, label]) => (
-          <button key={k} onClick={() => setTab(k)}
+          <button key={k} onClick={() => switchTab(k)}
             className={`rounded border px-3 py-1.5 text-[12.5px] font-semibold transition-colors ${
               tab === k ? 'border-brand-600 bg-brand-50 text-brand-700' : 'border-line bg-white text-ink-soft hover:border-slate-400'}`}>
             {label}
@@ -241,9 +284,9 @@ export default function SalaryComponentsPage() {
       ) : saved === null ? <Card><div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div></Card>
         : tab === 'company' ? (
         <>
-          <Table kind="EARNING" title="Earnings"
+          <ComponentTable {...tableProps} kind="EARNING" title="Earnings"
             note="One line must be “Balance of CTC” so gross always reconciles to the CTC." />
-          <Table kind="DEDUCTION" title="Deductions"
+          <ComponentTable {...tableProps} kind="DEDUCTION" title="Deductions"
             note="A deduction that is a % of a component reads the amount actually paid — PF on prorated Basic." />
 
           <section>
@@ -281,6 +324,11 @@ export default function SalaryComponentsPage() {
                   </div>
                 </div>
               </div>
+              {pv.net < 0 && (
+                <p className="text-[12.5px] text-neg mt-3 font-semibold">
+                  Deductions ({inr(pv.total)}) are more than gross pay ({inr(pv.gross)}) — net pay is negative. This set cannot be saved until a deduction is lowered.
+                </p>
+              )}
               {Math.abs(pv.gross - Number(ctc)) > 2 && (
                 <p className="text-[12.5px] text-crit mt-3">
                   Gross is {inr(pv.gross)} against a CTC of {inr(Number(ctc))}. Unless that is deliberate, add or fix a
@@ -310,7 +358,8 @@ function EmployeeOverrides({ companyId }) {
   const [err, setErr] = useState('');
 
   useEffect(() => {
-    api.get('/employees').then((r) => setEmployees(Array.isArray(r) ? r : [])).catch(() => setEmployees([]));
+    api.get('/employees').then((r) => setEmployees((Array.isArray(r) ? r : [])
+      .filter((e) => (e.is_employee ?? (e.onboarding_status === 'ACTIVE' && e.employee_code))))).catch(() => setEmployees([]));
   }, []);
 
   const options = useMemo(() => employees.map((e) => ({
@@ -325,6 +374,8 @@ function EmployeeOverrides({ companyId }) {
   useEffect(() => { if (employeeId) load(employeeId); /* eslint-disable-next-line */ }, [employeeId, companyId]);
 
   async function save() {
+    const bad = Object.entries(edits).find(([, v]) => v !== null && (Number.isNaN(Number(v)) || Number(v) < 0));
+    if (bad) { setErr(`${bad[0]}: value must be zero or more.`); return; }
     setBusy(true); setErr(''); setMsg('');
     try {
       const d = await api.put(`/admin/employees/${employeeId}/salary-components`, { values: edits });

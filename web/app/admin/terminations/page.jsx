@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Empty, SearchPicker, ConfirmClick } from '@/components/ui.jsx';
+import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Empty, SearchPicker } from '@/components/ui.jsx';
+import { fmtDate, todayIso } from '@/lib/labels.js';
 import { IconExit, IconPlus, IconCheck } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -15,7 +16,7 @@ import { IconExit, IconPlus, IconCheck } from '@/components/icons.jsx';
 // can be reversed.
 // ============================================================================
 
-const today = () => new Date().toISOString().slice(0, 10);
+const today = () => todayIso();
 
 function StatusPill({ status }) {
   const map = {
@@ -59,12 +60,17 @@ export default function TerminationsPage() {
   }
   useEffect(() => { load(); /* eslint-disable-next-line */ }, [filter]);
 
-  useEffect(() => {
-    // Only active people can be terminated, so the picker excludes the rest.
-    api.get('/employees')
-      .then((all) => setEmployees((all || []).filter((e) => !['INACTIVE', 'REJECTED', 'EXPIRED'].includes(e.onboarding_status))))
-      .catch(() => setEmployees([]));
-  }, []);
+  // Only active employees can be terminated (never candidates still in
+  // onboarding, nor anyone already under a live termination). Re-read after
+  // every record / reverse so the picker is never stale.
+  const loadEmployees = () => api.get('/admin/terminations/eligible')
+    .then((all) => setEmployees(all || []))
+    .catch(() => setEmployees([]));
+  useEffect(() => { loadEmployees(); }, []);
+
+  const [revoking, setRevoking] = useState(null);
+  const [revokeReason, setRevokeReason] = useState('');
+  const [revokeErr, setRevokeErr] = useState('');
 
   const selected = useMemo(
     () => employees.find((e) => String(e.id) === String(form.employeeId)) || null,
@@ -89,23 +95,25 @@ export default function TerminationsPage() {
         noticeWaived: form.noticeWaived,
         rehireEligible: form.rehireEligible,
       });
-      setNotice(`${selected ? `${selected.first_name} ${selected.last_name}` : 'The employee'} has been recorded as leaving on ${form.lastWorkingDate}. Their access is now blocked.`);
+      setNotice(`${selected ? `${selected.first_name} ${selected.last_name}` : 'The employee'} has been recorded as leaving on ${fmtDate(form.lastWorkingDate)}. Their access is now blocked.`);
       setOpen(false); reset(); await load();
-      api.get('/employees').then((all) => setEmployees((all || []).filter((e) => !['INACTIVE', 'REJECTED', 'EXPIRED'].includes(e.onboarding_status)))).catch(() => {});
+      loadEmployees();
     } catch (e) { setError(e.message); setConfirmStage(false); }
     finally { setSaving(false); }
   }
 
-  async function revoke(row) {
-    const reason = window.prompt(`Why is this being reversed? (kept on the record)\n\n${row.name}`);
-    if (reason == null) return;
-    if (reason.trim().length < 5) { setError('Please give a reason of at least 5 characters.'); return; }
-    setError('');
+  function revoke(row) { setRevoking(row); setRevokeReason(''); setRevokeErr(''); }
+  async function doRevoke() {
+    const reason = revokeReason.trim();
+    if (reason.length < 5) { setRevokeErr('Please give a reason of at least 5 characters.'); return; }
+    setSaving(true);
     try {
-      await api.post(`/admin/terminations/${row.id}/revoke`, { reason: reason.trim() });
-      setNotice(`Reversed. ${row.name} is active again and can sign in.`);
-      await load();
-    } catch (e) { setError(e.message); }
+      await api.post(`/admin/terminations/${revoking.id}/revoke`, { reason });
+      setNotice(`Reversed. ${revoking.name} is active again and can sign in.`);
+      setRevoking(null);
+      await Promise.all([load(), loadEmployees()]);
+    } catch (e) { setRevokeErr(e.message); }
+    finally { setSaving(false); }
   }
 
   const ready = form.employeeId && form.reason.trim().length >= 5 && form.lastWorkingDate;
@@ -169,7 +177,7 @@ export default function TerminationsPage() {
                     </div>
                   </td>
                   <td className="px-5 py-3">{r.typeLabel}</td>
-                  <td className="px-5 py-3 tabular-nums whitespace-nowrap">{r.lastWorkingDate}</td>
+                  <td className="px-5 py-3 tabular-nums whitespace-nowrap">{fmtDate(r.lastWorkingDate)}</td>
                   <td className="px-5 py-3 max-w-sm">
                     <div className="text-ink-soft">{r.reason}</div>
                     {r.status === 'REVOKED' && r.revokeReason && (
@@ -221,7 +229,8 @@ export default function TerminationsPage() {
       >
         {!confirmStage ? (
           <div className="space-y-4">
-            <Field label="Employee" required hint="Search by name or Employee ID">
+            {error && <div role="alert" className="rounded-lg bg-rose-50 text-rose-700 ring-1 ring-inset ring-rose-200 px-3 py-2 text-sm">{error}</div>}
+            <Field label="Employee" required hint={employees.length ? 'Search by name or Employee ID — active employees only' : 'No active employees available to terminate'}>
               <SearchPicker
                 value={form.employeeId}
                 onChange={(v) => setForm({ ...form, employeeId: v })}
@@ -278,7 +287,7 @@ export default function TerminationsPage() {
               <ul className="mt-2 space-y-1 text-rose-700 text-[13px] list-disc pl-5">
                 <li>Their login is blocked as soon as you confirm — including the mobile app.</li>
                 <li>They are removed from directories, team lists and future payroll runs.</li>
-                <li>Payroll pays them up to <b>{form.lastWorkingDate}</b> and no further.</li>
+                <li>Payroll pays them up to <b>{fmtDate(form.lastWorkingDate)}</b> and no further.</li>
                 <li>The reason below is kept permanently and appears in the audit log.</li>
               </ul>
             </div>
@@ -289,7 +298,7 @@ export default function TerminationsPage() {
                 {(types.find((t) => t.key === form.type) || {}).label || form.type}
               </dd>
               <dt className="text-ink-faint">Last working day</dt>
-              <dd className="col-span-2 text-ink font-medium tabular-nums">{form.lastWorkingDate}</dd>
+              <dd className="col-span-2 text-ink font-medium tabular-nums">{fmtDate(form.lastWorkingDate)}</dd>
               <dt className="text-ink-faint">Reason</dt>
               <dd className="col-span-2 text-ink">{form.reason}</dd>
               <dt className="text-ink-faint">Rehire</dt>
@@ -302,6 +311,17 @@ export default function TerminationsPage() {
             </p>
           </div>
         )}
+      </Modal>
+
+      <Modal open={!!revoking} onClose={() => setRevoking(null)} title={`Reverse termination — ${revoking?.name || ''}`}
+        actions={<>
+          <Button variant="ghost" onClick={() => setRevoking(null)}>Cancel</Button>
+          <Button onClick={doRevoke} disabled={saving}>{saving ? <Spinner className="h-4 w-4" /> : 'Reverse termination'}</Button>
+        </>}>
+        <p className="text-sm text-ink-soft mb-3">The employee becomes active again and can sign in. The reason is kept on the record.</p>
+        <Field label="Reason" required error={revokeErr}>
+          <Textarea rows={3} value={revokeReason} onChange={(e) => setRevokeReason(e.target.value)} />
+        </Field>
       </Modal>
     </div>
   );

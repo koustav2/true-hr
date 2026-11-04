@@ -1,7 +1,25 @@
 'use client';
 import { useEffect, useRef, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, downloadFile } from '@/lib/api.js';
+import { validator } from '@/lib/validate.js';
 import { Card, Button, Field, Input, Textarea, Spinner, Empty, Badge, PageHeader } from '@/components/ui.jsx';
+
+// Same rule as the server: at least 8 digits, an optional leading +.
+const PHONE_RE = /^[+]?[\d][\d\s-]{7,19}$/;
+
+// Every problem at once, each against the field it belongs to (QA E62: an
+// invalid email used to be reported as "leave an email or a phone").
+export function validateContact(form) {
+  const v = validator();
+  v.require('subject', form.subject, 'Subject');
+  v.require('description', form.description, 'Description');
+  const email = form.contactEmail.trim();
+  const phone = form.contactPhone.trim();
+  if (!email && !phone) v.add('contactEmail', 'Leave an email or a phone number so we can reach you');
+  v.email('contactEmail', email, 'Email');
+  if (phone && !PHONE_RE.test(phone)) v.add('contactPhone', 'Phone is not a valid phone number (at least 8 digits, e.g. +91 98765 43210)');
+  return v.fields;
+}
 
 // Raise a ticket with the people who build TrueHR. Deliberately separate from
 // the in-house Support Desk: this one goes past your own HR/IT to us, for when
@@ -31,6 +49,7 @@ export default function MasterTicket() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [ok, setOk] = useState('');
+  const [errors, setErrors] = useState({});
   const fileRef = useRef(null);
 
   const load = () => api.get('/platform-tickets').then((r) => setRows(Array.isArray(r) ? r : [])).catch(() => setRows([]));
@@ -44,7 +63,15 @@ export default function MasterTicket() {
     }).catch(() => {});
   }, []);
 
-  const set = (k) => (e) => setForm((f) => ({ ...f, [k]: e.target.value }));
+  // Editing a field clears its own error, so a corrected value stops complaining.
+  const set = (k) => (e) => {
+    setForm((f) => ({ ...f, [k]: e.target.value }));
+    setErrors((er) => {
+      const next = { ...er, [k]: undefined };
+      if (k === 'contactPhone' && /^Leave an email/.test(er.contactEmail || '')) next.contactEmail = undefined;
+      return next;
+    });
+  };
 
   async function pickFile(e) {
     const file = e.target.files?.[0];
@@ -81,11 +108,9 @@ export default function MasterTicket() {
   async function submit(e) {
     e.preventDefault();
     setMsg(''); setOk('');
-    if (!form.subject.trim()) return setMsg('Give the issue a short subject.');
-    if (!form.description.trim()) return setMsg('Describe what went wrong.');
-    if (!form.contactEmail.trim() && !form.contactPhone.trim()) {
-      return setMsg('Leave an email or a phone number so we can reach you.');
-    }
+    const errs = validateContact(form);
+    setErrors(errs);
+    if (Object.keys(errs).length) return;
     setBusy(true);
     try {
       const created = await api.post('/platform-tickets', {
@@ -99,27 +124,16 @@ export default function MasterTicket() {
       clearFile();
       load();
     } catch (e2) {
-      setMsg(e2.message);
+      if (e2.fields) setErrors(e2.fields);
+      else setMsg(e2.message);
     } finally {
       setBusy(false);
     }
   }
 
   async function openShot(id) {
-    try {
-      const auth = JSON.parse(localStorage.getItem('truehr_auth') || 'null');
-      const res = await fetch(`/api/platform-tickets/${id}/screenshot`, {
-        headers: { Authorization: `Bearer ${auth?.token}` },
-      });
-      if (!res.ok) throw new Error('Could not fetch the file');
-      const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement('a');
-      a.href = url;
-      a.download = 'screenshot';
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { setMsg(e.message); }
+    try { await downloadFile(`/platform-tickets/${id}/screenshot`, 'screenshot'); }
+    catch (e) { setMsg(e.message); }
   }
 
   return (
@@ -131,15 +145,15 @@ export default function MasterTicket() {
 
       <div className="grid gap-5 lg:grid-cols-[minmax(0,1.15fr)_minmax(0,1fr)] items-start">
         <Card className="p-5">
-          <form onSubmit={submit} className="space-y-4">
-            <Field label="Subject" required>
+          <form onSubmit={submit} noValidate className="space-y-4">
+            <Field label="Subject" required error={errors.subject}>
               <Input
                 value={form.subject} onChange={set('subject')} maxLength={160}
                 placeholder="Payslip PDF opens blank for one employee"
               />
             </Field>
 
-            <Field label="What happened" hint="What you did, what you expected, and what happened instead." required>
+            <Field label="What happened" hint="What you did, what you expected, and what happened instead." required error={errors.description}>
               <Textarea
                 value={form.description} onChange={set('description')} rows={7} maxLength={5000}
                 placeholder="Steps to reproduce, the employee code or screen involved, and anything you already tried."
@@ -171,11 +185,11 @@ export default function MasterTicket() {
               <div className="text-[12px] font-semibold text-ink mb-0.5">How should we reach you?</div>
               <p className="text-[12px] text-ink-faint mb-3">Give at least one. We reply here, not through your HR.</p>
               <div className="grid gap-3 sm:grid-cols-2">
-                <Field label="Email">
+                <Field label="Email" error={errors.contactEmail}>
                   <Input type="email" value={form.contactEmail} onChange={set('contactEmail')}
                     maxLength={160} placeholder="you@company.com" />
                 </Field>
-                <Field label="Phone">
+                <Field label="Phone" error={errors.contactPhone}>
                   <Input type="tel" value={form.contactPhone} onChange={set('contactPhone')}
                     maxLength={24} placeholder="+91 98765 43210" />
                 </Field>

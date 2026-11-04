@@ -2,7 +2,8 @@
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Empty, ConfirmClick } from '@/components/ui.jsx';
+import { Button, Card, Field, Input, Modal, Select, Spinner, Textarea, Empty, ErrorSummary, useConfirm } from '@/components/ui.jsx';
+import { label as codeLabel } from '@/lib/labels.js';
 import { IconShield, IconPlus, IconCheck, IconSparkle } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -16,11 +17,12 @@ import { IconShield, IconPlus, IconCheck, IconSparkle } from '@/components/icons
 //   · you cannot grant a permission you do not hold yourself (checkbox disabled)
 // ============================================================================
 
+// Only the built-in Super Admin role may behave as Super Admin (C40), so it
+// is not offered for a new role.
 const BASE_ROLES = [
+  ['HR_ADMIN', 'HR Admin — people & payroll screens'],
+  ['IT_ADMIN', 'IT Admin — accounts & audit'],
   ['EMPLOYEE', 'Employee — self-service only'],
-  ['HR_ADMIN', 'Staff — people & payroll screens'],
-  ['IT_ADMIN', 'IT — accounts & audit'],
-  ['SUPER_ADMIN', 'Super Admin — everything'],
 ];
 
 function RankBadge({ rank }) {
@@ -43,6 +45,9 @@ export default function RolesPage() {
   const [saving, setSaving] = useState(false);
   const [creating, setCreating] = useState(false);
   const [form, setForm] = useState({ key: '', label: '', description: '', baseRole: 'HR_ADMIN', rank: 50 });
+  const [formErr, setFormErr] = useState({});
+  const [editErr, setEditErr] = useState({});
+  const [confirm, confirmUi] = useConfirm();
 
   async function load() {
     try {
@@ -78,6 +83,13 @@ export default function RolesPage() {
   }
 
   async function save() {
+    const name = String(editing.label || '').trim();
+    const dup = (roles || []).find((r) => r.id !== editing.id && r.label.trim().toLowerCase() === name.toLowerCase());
+    const f = {};
+    if (!name) f.label = 'Role name is required';
+    else if (dup) f.label = `A role named "${name}" already exists`;
+    setEditErr(f);
+    if (Object.keys(f).length) return;
     setSaving(true); setError('');
     try {
       await api.put(`/admin/roles/${editing.id}`, {
@@ -88,26 +100,45 @@ export default function RolesPage() {
           .map((m) => ({ key: m.key, canView: m.canView, canManage: m.canManage })),
       });
       setNotice(`Saved “${editing.label}”. Anyone holding this role sees the change on their next page load.`);
-      setEditing(null); await load();
-    } catch (e) { setError(e.message); }
+      setEditing(null); setEditErr({}); await load();
+    } catch (e) { setEditErr(e.fields || {}); if (!e.fields) setError(e.message); }
     finally { setSaving(false); }
   }
 
   async function create(preset) {
+    if (!preset) {
+      // Same checks as the server, all at once.
+      const f = {};
+      const name = form.label.trim();
+      if (!name) f.label = 'Role name is required';
+      else if ((roles || []).some((r) => r.label.trim().toLowerCase() === name.toLowerCase())) f.label = `A role named "${name}" already exists`;
+      if (!/^[A-Z][A-Z0-9_]{1,29}$/.test(form.key)) f.key = 'Role code must start with a letter and use only capitals, digits and underscores (2-30)';
+      else if ((roles || []).some((r) => r.key === form.key)) f.key = 'A role with that code already exists';
+      const rank = Number(form.rank);
+      if (!Number.isInteger(rank) || rank < 1 || rank > 100) f.rank = 'Level must be a whole number from 1 to 100';
+      setFormErr(f);
+      if (Object.keys(f).length) return;
+    }
     setSaving(true); setError('');
     try {
       const body = preset ? { preset: preset.key } : { ...form, rank: Number(form.rank) || 50 };
       const created = await api.post('/admin/roles', body);
       setCreating(false);
+      setFormErr({});
       setForm({ key: '', label: '', description: '', baseRole: 'HR_ADMIN', rank: 50 });
       await load();
       setNotice(`Created “${created.label || body.label}”. Review its permissions before assigning it.`);
       if (created?.id) open(created.id);
-    } catch (e) { setError(e.message); }
+    } catch (e) {
+      // The dialog stays open with what was typed; field errors show inline.
+      if (e.fields && !preset) setFormErr(e.fields); else setError(e.message);
+    }
     finally { setSaving(false); }
   }
 
   async function remove(role) {
+    if (!(await confirm({ title: `Delete “${role.label}”?`, tone: 'danger', confirmLabel: 'Delete role',
+      body: 'This role will be removed permanently. Nobody may still hold it.' }))) return;
     setError('');
     try { await api.del(`/admin/roles/${role.id}`); setNotice(`Deleted “${role.label}”.`); await load(); }
     catch (e) { setError(e.message); }
@@ -180,7 +211,7 @@ export default function RolesPage() {
               <tr>
                 <th className="text-left px-5 py-3 font-medium">Role</th>
                 <th className="text-left px-5 py-3 font-medium">Level</th>
-                <th className="text-right px-5 py-3 font-medium">People</th>
+                <th className="text-right px-5 py-3 font-medium" title="Logins holding this role">People</th>
                 <th className="text-right px-5 py-3 font-medium">Modules</th>
                 <th className="text-right px-5 py-3 font-medium">Actions</th>
               </tr>
@@ -193,7 +224,10 @@ export default function RolesPage() {
                       {r.label}
                       {r.isSystem && <span className="rounded-full bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200 px-2 py-0.5 text-[10px] font-semibold">Built-in</span>}
                     </div>
-                    <div className="text-[11px] text-ink-faint mt-0.5">{r.key} · behaves as {r.baseRole?.replace('_', ' ').toLowerCase()}</div>
+                    <div className="text-[11px] text-ink-faint mt-0.5">
+                      {r.key === 'SUPER_ADMIN' ? 'Full access to this organisation' : `Based on ${r.baseRoleLabel || codeLabel(r.baseRole)}`}
+                      <span className="ml-1.5 font-mono text-ink-faint/80" title="Role code">{r.key}</span>
+                    </div>
                     {r.description && <div className="text-[11px] text-ink-soft mt-1 max-w-md">{r.description}</div>}
                   </td>
                   <td className="px-5 py-3"><RankBadge rank={r.rank} /></td>
@@ -206,9 +240,7 @@ export default function RolesPage() {
                       {mayManage && r.key !== 'SUPER_ADMIN' ? 'Edit' : 'View'}
                     </Button>
                     {mayManage && !r.isSystem && (
-                      <ConfirmClick onConfirm={() => remove(r)} confirmLabel="Delete role?" className="ml-2 text-sm">
-                        Delete
-                      </ConfirmClick>
+                      <Button variant="ghost" size="sm" className="ml-1 text-neg" onClick={() => remove(r)}>Delete</Button>
                     )}
                   </td>
                 </tr>
@@ -226,7 +258,7 @@ export default function RolesPage() {
       {/* ── Permission matrix ─────────────────────────────────────────────── */}
       <Modal
         open={!!editing}
-        onClose={() => setEditing(null)}
+        onClose={() => { setEditing(null); setEditErr({}); }}
         size="lg"
         title={editing ? `${editing.label} — permissions` : ''}
         actions={editing && mayManage && !editing.locked ? (
@@ -246,7 +278,7 @@ export default function RolesPage() {
 
             {mayManage && !editing.locked && (
               <div className="grid sm:grid-cols-2 gap-4">
-                <Field label="Role name">
+                <Field label="Role name" required error={editErr.label}>
                   <Input value={editing.label} onChange={(e) => setEditing({ ...editing, label: e.target.value })} />
                 </Field>
                 <Field label="Description" hint="Shown on the roles list">
@@ -305,19 +337,20 @@ export default function RolesPage() {
       {/* ── Create a role from scratch ────────────────────────────────────── */}
       <Modal
         open={creating}
-        onClose={() => setCreating(false)}
+        onClose={() => { setCreating(false); setFormErr({}); }}
         title="New role"
         actions={(
           <>
             <Button variant="ghost" onClick={() => setCreating(false)}>Cancel</Button>
-            <Button onClick={() => create(null)} disabled={saving || !form.key || !form.label}>
+            <Button onClick={() => create(null)} disabled={saving}>
               {saving ? <Spinner className="h-4 w-4" /> : 'Create role'}
             </Button>
           </>
         )}
       >
         <div className="space-y-4">
-          <Field label="Role name" required hint="What people will see, e.g. “Regional HR Manager”">
+          <ErrorSummary errors={formErr} />
+          <Field label="Role name" required error={formErr.label} hint="What people will see, e.g. “Regional HR Manager”">
             <Input value={form.label} placeholder="Regional HR Manager"
               onChange={(e) => {
                 const label = e.target.value;
@@ -326,16 +359,16 @@ export default function RolesPage() {
                 setForm((f) => ({ ...f, label, key: f.keyTouched ? f.key : auto }));
               }} />
           </Field>
-          <Field label="Role code" required hint="Capitals, digits and underscores only. Cannot be changed later.">
+          <Field label="Role code" required error={formErr.key} hint="Capitals, digits and underscores only. Cannot be changed later.">
             <Input value={form.key} placeholder="REGIONAL_HR_MANAGER"
               onChange={(e) => setForm({ ...form, key: e.target.value.toUpperCase(), keyTouched: true })} />
           </Field>
-          <Field label="Behaves as" hint="Which built-in role this is based on, for screens that are shared">
+          <Field label="Based on" error={formErr.baseRole} hint="Which built-in role this behaves like on shared screens. Only the built-in Super Admin role has full access.">
             <Select value={form.baseRole} onChange={(e) => setForm({ ...form, baseRole: e.target.value })}>
               {BASE_ROLES.map(([v, l]) => <option key={v} value={v}>{l}</option>)}
             </Select>
           </Field>
-          <Field label="Level" hint="Lower is more senior. A role can never manage a role at or above its own level.">
+          <Field label="Level" error={formErr.rank} hint="1-100; lower is more senior. A role can never manage a role at or above its own level.">
             <Input type="number" min={1} max={100} value={form.rank}
               onChange={(e) => setForm({ ...form, rank: e.target.value })} />
           </Field>
@@ -348,6 +381,7 @@ export default function RolesPage() {
           </p>
         </div>
       </Modal>
+      {confirmUi}
     </div>
   );
 }

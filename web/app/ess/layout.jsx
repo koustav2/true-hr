@@ -3,9 +3,10 @@ import { useEffect, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
-import { Spinner } from '@/components/ui.jsx';
+import { Spinner, useConfirm } from '@/components/ui.jsx';
 import { FEATURES } from '@/lib/flags.js';
 import { api } from '@/lib/api.js';
+import { initialsFor } from '@/lib/perms.jsx';
 
 // Employee self-service portal (GreenHR-style: everything usable from the web,
 // desktop or phone browser). Brand banner + sticky glass pill-nav shell.
@@ -36,17 +37,29 @@ export default function EssLayout({ children }) {
   const pathname = usePathname();
   const router = useRouter();
   const [orgName, setOrgName] = useState('');
+  const [name, setName] = useState('');
+  const [confirm, confirmUi] = useConfirm();
 
   useEffect(() => { if (ready && !auth?.token) router.replace('/login'); }, [ready, auth, router]);
 
-  // Whose system this is. Failing quietly is right — a missing footer name is
-  // not worth an error banner on every ESS page.
+  // Whose system this is, and who is signed in. Failing quietly is right — a
+  // missing name is not worth an error banner on every ESS page.
   useEffect(() => {
     if (!ready || !auth?.token) return;
     api.get('/me/permissions')
       .then((p) => setOrgName(p?.organisationName || ''))
       .catch(() => {});
+    api.get('/me')
+      .then((m) => setName(m?.name || ''))
+      .catch(() => {});
   }, [ready, auth]);
+
+  // E64: confirm before signing out.
+  async function signOut() {
+    if (!(await confirm({ title: 'Sign out?', body: 'Are you sure you want to sign out?', confirmLabel: 'Sign out' }))) return;
+    logout();
+    router.replace('/login');
+  }
 
   if (!ready || !auth?.token) {
     return <div className="min-h-screen grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
@@ -66,7 +79,8 @@ export default function EssLayout({ children }) {
 
   const isActive = (href) => (href === '/ess' ? pathname === '/ess' : pathname.startsWith(href));
   const email = user?.email || '';
-  const initials = email.slice(0, 2).toUpperCase() || 'ME';
+  // E63: the person's name and initials (from the name, not the email).
+  const initials = initialsFor(name, email);
 
   return (
     <div className="min-h-screen flex flex-col bg-canvas">
@@ -77,11 +91,14 @@ export default function EssLayout({ children }) {
           <span className="hidden sm:block font-semibold text-[14px] tracking-tight">True HR</span>
         </Link>
         <span className="hidden md:block h-5 w-px bg-white/20 shrink-0" />
-        <span className="hidden md:block text-[12.5px] text-white/70 truncate">Employee Self-Service</span>
+        {/* C52/E66: the employee's own organisation, not the vendor's name. */}
+        <span className="hidden md:block text-[12.5px] text-white/70 truncate">
+          {orgName ? `${orgName} · ` : ''}Employee Self-Service
+        </span>
         <div className="ml-auto flex items-center gap-2 min-w-0">
-          <span className="hidden sm:block text-[11.5px] text-white/70 truncate max-w-[190px] font-mono">{email}</span>
-          <span className="grid place-items-center h-7 w-7 rounded-full bg-white/[.18] text-[10.5px] font-bold shrink-0">{initials}</span>
-          <button onClick={logout}
+          <span className="hidden sm:block text-[12px] text-white/85 font-semibold truncate max-w-[200px]" title={email}>{name || email}</span>
+          <span className="grid place-items-center h-7 w-7 rounded-full bg-white/[.18] text-[10.5px] font-bold shrink-0" title={name || email}>{initials}</span>
+          <button onClick={signOut}
             className="text-[11.5px] font-semibold text-white/85 hover:text-white rounded-sm bg-white/10 hover:bg-white/[.18] px-2.5 py-1.5 transition-colors">
             Sign out
           </button>
@@ -90,7 +107,9 @@ export default function EssLayout({ children }) {
 
       {/* ── Section tabs ──────────────────────────────────────────────── */}
       <div className="sticky top-12 z-30 border-b border-line bg-white">
-        <nav className="max-w-[1400px] mx-auto px-3 flex gap-1 overflow-x-auto scrollbar-none">
+        {/* E63: 18 sections do not fit one line — wrap on wide screens (every
+            item visible), scroll sideways on phones with a visible scrollbar. */}
+        <nav className="max-w-[1400px] mx-auto px-3 flex gap-x-1 overflow-x-auto md:overflow-visible md:flex-wrap">
           {NAV.map((n) => {
             const active = isActive(n.href);
             return (
@@ -107,6 +126,7 @@ export default function EssLayout({ children }) {
       </div>
 
       <main className="flex-1 w-full max-w-[1400px] mx-auto px-4 py-5 animate-in">{children}</main>
+      {confirmUi}
 
       <footer className="border-t border-line bg-white py-4 mt-2">
         <div className="max-w-[1400px] mx-auto px-4 flex flex-wrap items-center justify-between gap-2 text-[11.5px] text-ink-faint">

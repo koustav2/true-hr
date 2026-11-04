@@ -3,13 +3,14 @@ import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { Card, Button, Input, Select, Field, Spinner, Empty, Badge, Avatar, PageHeader, StatTile } from '@/components/ui.jsx';
 import { downloadCsv } from '@/lib/csv.js';
+import { label } from '@/lib/labels.js';
+import StatusBadge from '@/components/StatusBadge.jsx';
 
 const LINKS = [
   { key: 'managerId', label: 'Reporting manager' },
   { key: 'functionManagerId', label: 'Functional manager' },
   { key: 'operationalManagerId', label: 'Operational manager' },
 ];
-const STATUS_TONE = { ACTIVE: 'ok', PENDING: 'warn', SUBMITTED: 'warn', APPROVED: 'brand', DRAFT: 'neutral' };
 
 /**
  * Build a forest from a flat employee list.
@@ -40,7 +41,7 @@ function buildForest(people, linkKey) {
 
 const maxDepth = (nodes, d = 1) => nodes.reduce((m, x) => Math.max(m, x.children.length ? maxDepth(x.children, d + 1) : d), 0);
 
-function Node({ node, open, toggle, q }) {
+function Node({ node, open, toggle, q, parentLevel = null }) {
   const isOpen = open.has(node.id);
   const has = node.children.length > 0;
   const hit = q && `${node.name} ${node.code || ''} ${node.designation || ''}`.toLowerCase().includes(q);
@@ -68,12 +69,16 @@ function Node({ node, open, toggle, q }) {
         <div className="ml-auto flex items-center gap-2 shrink-0">
           {node.level && <span className="text-[11px] font-semibold text-ink-faint" title={`Level ${node.levelNo}: ${node.level}`}>L{node.levelNo}</span>}
           {has && <span className="text-[11px] text-ink-faint tabular-nums">{node.children.length} report{node.children.length === 1 ? '' : 's'}</span>}
-          {node.status && node.status !== 'ACTIVE' && <Badge tone={STATUS_TONE[node.status] || 'neutral'}>{node.status}</Badge>}
+          {/* H53: reports to someone on a lower level than themselves. */}
+          {parentLevel != null && node.levelNo != null && parentLevel > node.levelNo && (
+            <Badge tone="warn">Manager below level</Badge>
+          )}
+          {node.status && node.status !== 'ACTIVE' && <StatusBadge status={node.status} />}
         </div>
       </div>
       {has && isOpen && (
         <ul className="ml-[18px] border-l border-line pl-3 mt-0.5 space-y-0.5">
-          {node.children.map((c) => <Node key={c.id} node={c} open={open} toggle={toggle} q={q} />)}
+          {node.children.map((c) => <Node key={c.id} node={c} open={open} toggle={toggle} q={q} parentLevel={node.levelNo} />)}
         </ul>
       )}
     </li>
@@ -136,13 +141,13 @@ export default function OrgChartPage() {
     <div className="space-y-5">
       <PageHeader
         title="Organisation chart"
-        subtitle="Reporting lines as they are recorded on each employee. Change the line type to see the functional or operational view."
+        subtitle="Current employees only — not candidates or people who have left. Change the line type for the functional or operational view (the operational manager is set on each employee's Edit form)."
         action={
           <Button variant="outline" onClick={() => downloadCsv('org-chart.csv', scoped.map((p) => {
             const byId = new Map(scoped.map((x) => [x.id, x]));
             return {
               'Employee ID': p.code || '', Name: p.name, Designation: p.designation || '',
-              Department: p.department || '', Company: p.company || '', Status: p.status || '',
+              Department: p.department || '', Company: p.company || '', Status: label(p.status),
               Level: p.level || '', 'Level no': p.levelNo ?? '',
               'Reporting manager': byId.get(p.managerId)?.name || '',
               'Functional manager': byId.get(p.functionManagerId)?.name || '',

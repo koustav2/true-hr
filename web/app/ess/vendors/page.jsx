@@ -1,9 +1,12 @@
 'use client';
 import { useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
-import { Card, Button, Input, Select, Textarea, Spinner, Empty, Field } from '@/components/ui.jsx';
-
-const TONE = { PENDING: 'text-amber-700', APPROVED: 'text-emerald-700', REJECTED: 'text-rose-700' };
+import { api, openFile } from '@/lib/api.js';
+import { Card, Button, Spinner, Empty, Modal, useConfirm } from '@/components/ui.jsx';
+import { fmtDate, todayIso } from '@/lib/labels.js';
+import {
+  Status, VendorFields, VendorDetails, validateVendor, AgreementFields, validateAgreement,
+  agreementBody, agreementTypeLabel, ExpiryTag,
+} from '@/app/admin/vendors/vendorForms.jsx';
 
 // GreenHR "Vendor Registration" + "Upload Rent Agreement" — employee web forms.
 export default function EssVendorsPage() {
@@ -23,92 +26,77 @@ export default function EssVendorsPage() {
   );
 }
 
-
-// Attach a supporting document (PDF/image, max 5MB) as base64.
-function DocPicker({ value, onPick, onClear }) {
-  return (
-    <div className="text-sm">
-      <span className="block text-[13px] font-medium text-ink-soft mb-1.5">Supporting document (PDF/image, optional)</span>
-      {value ? (
-        <div className="flex items-center justify-between gap-2 border border-line rounded-lg px-3 py-2">
-          <span className="truncate text-ink-soft text-xs">{value.documentName}</span>
-          <button onClick={onClear} className="text-xs text-rose-600 shrink-0">remove</button>
-        </div>
-      ) : (
-        <input type="file" accept="application/pdf,image/*" className="block w-full text-xs text-ink-soft file:mr-3 file:rounded-lg file:border-0 file:bg-brand-50 file:text-brand-700 file:px-3 file:py-2 file:text-xs file:font-semibold"
-          onChange={async (e) => {
-            const file = e.target.files?.[0];
-            if (!file) return;
-            if (file.size > 5 * 1024 * 1024) { alert('File larger than 5MB'); e.target.value = ''; return; }
-            const b64 = await new Promise((res, rej) => {
-              const r = new FileReader();
-              r.onload = () => res(String(r.result).split(',')[1]);
-              r.onerror = rej; r.readAsDataURL(file);
-            });
-            onPick({ document: b64, documentMime: file.type, documentName: file.name });
-          }} />
-      )}
-    </div>
-  );
-}
+const strip = ({ id, status, registeredBy, reviewedBy, reviewedAt, reviewNote, createdAt, updatedAt, hasDocument, associationWith, ...body }) => body;
 
 function VendorTab() {
   const [rows, setRows] = useState(null);
   const [f, setF] = useState({});
+  const [editing, setEditing] = useState(null);   // vendor being edited (pending only)
+  const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [view, setView] = useState(null);
+  const [confirm, confirmUi] = useConfirm();
   const load = () => api.get('/vendors').then(setRows).catch(() => setRows([]));
   useEffect(() => { load(); }, []);
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
 
   async function submit() {
-    if (!f.companyName?.trim()) { setMsg('Company name is required.'); return; }
-    setBusy(true); setMsg('');
-    try { await api.post('/vendors', f); setF({}); load(); }
-    catch (e) { setMsg(e.message); } finally { setBusy(false); }
+    const errs = validateVendor(f);
+    setErrors(errs); setMsg('');
+    if (Object.keys(errs).length) return;
+    setBusy(true);
+    try {
+      if (editing) await api.put(`/vendors/${editing.id}`, strip(f)); else await api.post('/vendors', strip(f));
+      setF({}); setEditing(null); setErrors({}); setMsg(editing ? 'Changes saved.' : 'Vendor submitted for HR approval.'); load();
+    } catch (e) { setErrors(e.fields || {}); if (!e.fields) setMsg(e.message); } finally { setBusy(false); }
+  }
+  async function withdraw(v) {
+    if (!(await confirm({ title: `Withdraw ${v.companyName}?`, body: 'The registration will no longer go to HR for approval.', confirmLabel: 'Withdraw', tone: 'danger' }))) return;
+    try { await api.post(`/vendors/${v.id}/withdraw`); load(); } catch (e) { setMsg(e.message); }
   }
 
   return (
-    <div className="grid lg:grid-cols-[380px_1fr] gap-5 items-start">
+    <div className="grid lg:grid-cols-[440px_1fr] gap-5 items-start">
       <Card className="p-4 space-y-2.5">
-        <div className="font-semibold text-sm">Register Vendor</div>
-        <Field label="Company name" required><Input value={f.companyName || ''} onChange={set('companyName')} /></Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Nature of business"><Input value={f.natureOfBusiness || ''} onChange={set('natureOfBusiness')} /></Field>
-          <Field label="Type of company"><Input value={f.typeOfCompany || ''} onChange={set('typeOfCompany')} /></Field>
-          <Field label="PAN"><Input value={f.pan || ''} onChange={set('pan')} /></Field>
-          <Field label="GST"><Input value={f.gst || ''} onChange={set('gst')} /></Field>
-          <Field label="ESIC"><Input value={f.esic || ''} onChange={set('esic')} /></Field>
-          <Field label="PF"><Input value={f.pf || ''} onChange={set('pf')} /></Field>
-          <Field label="MSMED"><Input value={f.msmed || ''} onChange={set('msmed')} /></Field>
-          <Field label="NSIC / SSI"><Input value={f.nsicSsi || ''} onChange={set('nsicSsi')} /></Field>
-          <Field label="Contact person"><Input value={f.contactPerson || ''} onChange={set('contactPerson')} /></Field>
-          <Field label="Contact phone"><Input value={f.contactPhone || ''} onChange={set('contactPhone')} /></Field>
+        <div className="font-semibold text-sm">{editing ? `Edit ${editing.companyName}` : 'Register vendor'}</div>
+        <VendorFields f={f} setF={setF} errors={errors} />
+        {msg && <p className={`text-sm ${/saved|submitted/.test(msg) ? 'text-emerald-700' : 'text-red-600'}`}>{msg}</p>}
+        <div className="flex gap-2">
+          <Button onClick={submit} disabled={busy}>{busy ? 'Saving…' : editing ? 'Save changes' : 'Register vendor'}</Button>
+          {editing && <Button variant="ghost" onClick={() => { setEditing(null); setF({}); setErrors({}); }}>Cancel edit</Button>}
         </div>
-        <DocPicker value={f.document ? f : null}
-          onPick={(d) => setF((x) => ({ ...x, ...d }))}
-          onClear={() => setF(({ document, documentMime, documentName, ...rest }) => rest)} />
-        {msg && <p className="text-sm text-red-600">{msg}</p>}
-        <Button onClick={submit} disabled={busy}>{busy ? 'Registering…' : 'Register Vendor'}</Button>
       </Card>
-      <Card className="p-0">
+      <Card className="p-0 overflow-x-auto">
         {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
           !rows.length ? <Empty title="No registrations yet" subtitle="Your vendor registrations appear here for HR approval." /> : (
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-ink-faint border-b border-line">
-              <th className="px-4 py-2.5">Company</th><th className="px-2 py-2.5">PAN / GST</th><th className="px-4 py-2.5">Status</th></tr></thead>
+              <th className="px-4 py-2.5">Company</th><th className="px-2 py-2.5">PAN / GSTIN</th><th className="px-2 py-2.5">Status</th><th className="px-4 py-2.5" /></tr></thead>
             <tbody>
               {rows.map((v) => (
-                <tr key={v.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5">{v.companyName}<div className="text-xs text-ink-faint">{v.natureOfBusiness || ''}</div></td>
+                <tr key={v.id} className="border-b border-line last:border-0 align-top">
+                  <td className="px-4 py-2.5">{v.companyName}<div className="text-xs text-ink-faint">{fmtDate(v.createdAt)}</div></td>
                   <td className="px-2 py-2.5 text-xs text-ink-soft">{v.pan || '—'} / {v.gst || '—'}</td>
-                  <td className={`px-4 py-2.5 text-xs font-semibold ${TONE[v.status] || ''}`}>{v.status}</td>
+                  <td className="px-2 py-2.5"><Status status={v.status} />
+                    {v.status === 'REJECTED' && v.reviewNote && <div className="text-xs text-rose-700 mt-1">Reason: {v.reviewNote}</div>}</td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    <button className="text-xs text-brand-700 font-semibold mr-3" onClick={() => setView(v)}>View</button>
+                    {v.status === 'PENDING' && <>
+                      <button className="text-xs text-brand-700 font-semibold mr-3" onClick={() => { setEditing(v); setF({ ...v }); setErrors({}); setMsg(''); }}>Edit</button>
+                      <button className="text-xs text-rose-600 font-semibold" onClick={() => withdraw(v)}>Withdraw</button>
+                    </>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </Card>
+      <Modal open={!!view} onClose={() => setView(null)} title="Vendor details" size="lg"
+        actions={view?.hasDocument ? <Button variant="outline" onClick={() => openFile(`/vendors/${view.id}/document`).catch((e) => setMsg(e.message))}>Open document</Button> : null}>
+        {view && <VendorDetails v={view} />}
+      </Modal>
+      {confirmUi}
     </div>
   );
 }
@@ -116,69 +104,62 @@ function VendorTab() {
 function AgreementTab() {
   const [rows, setRows] = useState(null);
   const [m, setM] = useState(null);
-  const [f, setF] = useState({ agreementType: 'RENT' });
+  const [f, setF] = useState({ agreementType: 'RENT', startDate: todayIso() });
+  const [errors, setErrors] = useState({});
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [confirm, confirmUi] = useConfirm();
   const load = () => api.get('/agreements').then(setRows).catch(() => setRows([]));
-  useEffect(() => { load(); api.get('/meta/nfa-masters').then(setM).catch(() => {}); }, []);
-  const set = (k) => (e) => setF((x) => ({ ...x, [k]: e.target.value }));
+  useEffect(() => { load(); api.get('/meta/nfa-masters').then(setM).catch(() => setM({})); }, []);
 
   async function submit() {
-    if (!f.startDate || !f.endDate) { setMsg('Start and end dates are required.'); return; }
-    setBusy(true); setMsg('');
+    const errs = validateAgreement(f);
+    setErrors(errs); setMsg('');
+    if (Object.keys(errs).length) return;
+    setBusy(true);
     try {
-      await api.post('/agreements', {
-        ...f,
-        projectId: f.projectId ? Number(f.projectId) : undefined,
-        locationId: f.locationId ? Number(f.locationId) : undefined,
-        clientId: f.clientId ? Number(f.clientId) : undefined,
-      });
-      setF({ agreementType: 'RENT' }); load();
-    } catch (e) { setMsg(e.message); } finally { setBusy(false); }
+      await api.post('/agreements', agreementBody(f));
+      setF({ agreementType: 'RENT', startDate: todayIso() }); setMsg('Agreement submitted for approval.'); load();
+    } catch (e) { setErrors(e.fields || {}); if (!e.fields) setMsg(e.message); } finally { setBusy(false); }
+  }
+  async function withdraw(a) {
+    if (!(await confirm({ title: 'Withdraw this agreement?', confirmLabel: 'Withdraw', tone: 'danger' }))) return;
+    try { await api.post(`/agreements/${a.id}/withdraw`); load(); } catch (e) { setMsg(e.message); }
   }
 
   return (
-    <div className="grid lg:grid-cols-[380px_1fr] gap-5 items-start">
+    <div className="grid lg:grid-cols-[400px_1fr] gap-5 items-start">
       <Card className="p-4 space-y-2.5">
-        <div className="font-semibold text-sm">Upload Agreement</div>
-        <Field label="Project"><Select value={f.projectId || ''} onChange={set('projectId')}>
-          <option value="">Select</option>{(m?.projects || []).map((p) => <option key={p.id} value={p.id}>{p.name}</option>)}</Select></Field>
-        <Field label="Location"><Select value={f.locationId || ''} onChange={set('locationId')}>
-          <option value="">Select</option>{(m?.locations || []).map((l) => <option key={l.id} value={l.id}>{l.name}</option>)}</Select></Field>
-        <Field label="Client"><Select value={f.clientId || ''} onChange={set('clientId')}>
-          <option value="">Select</option>{(m?.clientsVendors || []).map((c) => <option key={c.id} value={c.id}>{c.name}</option>)}</Select></Field>
-        <Field label="Agreement type" required><Select value={f.agreementType} onChange={set('agreementType')}>
-          {['RENT', 'SERVICE', 'MOU', 'OTHER'].map((t) => <option key={t} value={t}>{t}</option>)}</Select></Field>
-        <div className="grid grid-cols-2 gap-2">
-          <Field label="Start date" required><Input type="date" value={f.startDate || ''} onChange={set('startDate')} /></Field>
-          <Field label="End date" required><Input type="date" value={f.endDate || ''} onChange={set('endDate')} /></Field>
-        </div>
-        <Field label="Details"><Textarea rows={2} value={f.details || ''} onChange={set('details')} /></Field>
-        <DocPicker value={f.document ? f : null}
-          onPick={(d) => setF((x) => ({ ...x, ...d }))}
-          onClear={() => setF(({ document, documentMime, documentName, ...rest }) => rest)} />
-        {msg && <p className="text-sm text-red-600">{msg}</p>}
-        <Button onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit Agreement'}</Button>
+        <div className="font-semibold text-sm">Upload agreement</div>
+        <AgreementFields f={f} setF={setF} errors={errors} masters={m} onDocError={setMsg} />
+        {msg && <p className={`text-sm ${/submitted/.test(msg) ? 'text-emerald-700' : 'text-red-600'}`}>{msg}</p>}
+        <Button onClick={submit} disabled={busy}>{busy ? 'Submitting…' : 'Submit agreement'}</Button>
       </Card>
-      <Card className="p-0">
+      <Card className="p-0 overflow-x-auto">
         {!rows ? <div className="p-8 flex justify-center"><Spinner /></div> :
-          !rows.length ? <Empty title="No agreements yet" subtitle="Your uploaded agreements appear here for admin approval." /> : (
+          !rows.length ? <Empty title="No agreements yet" subtitle="Your uploaded agreements appear here for approval." /> : (
           <table className="w-full text-sm">
             <thead><tr className="text-left text-xs text-ink-faint border-b border-line">
-              <th className="px-4 py-2.5">Agreement</th><th className="px-2 py-2.5">Period</th><th className="px-4 py-2.5">Status</th></tr></thead>
+              <th className="px-4 py-2.5">Agreement</th><th className="px-2 py-2.5">Period</th><th className="px-2 py-2.5">Status</th><th className="px-4 py-2.5" /></tr></thead>
             <tbody>
               {rows.map((a) => (
-                <tr key={a.id} className="border-b border-line last:border-0">
-                  <td className="px-4 py-2.5">{a.agreementType} — {a.project?.name || '—'}
-                    <div className="text-xs text-ink-faint">{[a.location?.name, a.client?.name].filter(Boolean).join(' · ')}</div></td>
-                  <td className="px-2 py-2.5 text-xs text-ink-soft">{a.startDate?.slice(0, 10)} → {a.endDate?.slice(0, 10)}</td>
-                  <td className={`px-4 py-2.5 text-xs font-semibold ${TONE[a.status] || ''}`}>{a.status}</td>
+                <tr key={a.id} className="border-b border-line last:border-0 align-top">
+                  <td className="px-4 py-2.5">{agreementTypeLabel(a.agreementType)} — {a.project?.name || '—'}
+                    <div className="text-xs text-ink-faint">{[a.client?.name, a.location?.name].filter(Boolean).join(' · ')}</div></td>
+                  <td className="px-2 py-2.5 text-xs text-ink-soft">{fmtDate(a.startDate)} to {fmtDate(a.endDate)}<div><ExpiryTag a={a} /></div></td>
+                  <td className="px-2 py-2.5"><Status status={a.status} />
+                    {a.status === 'REJECTED' && a.reviewNote && <div className="text-xs text-rose-700 mt-1">Reason: {a.reviewNote}</div>}</td>
+                  <td className="px-4 py-2.5 text-right whitespace-nowrap">
+                    {a.hasDocument && <button className="text-xs text-brand-700 font-semibold mr-3" onClick={() => openFile(`/agreements/${a.id}/document`).catch((e) => setMsg(e.message))}>Document</button>}
+                    {a.status === 'PENDING' && <button className="text-xs text-rose-600 font-semibold" onClick={() => withdraw(a)}>Withdraw</button>}
+                  </td>
                 </tr>
               ))}
             </tbody>
           </table>
         )}
       </Card>
+      {confirmUi}
     </div>
   );
 }

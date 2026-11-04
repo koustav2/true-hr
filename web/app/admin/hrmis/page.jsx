@@ -4,12 +4,12 @@ import { api, downloadFile } from '@/lib/api.js';
 import { Card, Button, Spinner, PageHeader, StatTile, Badge } from '@/components/ui.jsx';
 
 const SHEETS = [
-  ['People', 'Code, name, company, department, designation, grade, joining date, contact, all three manager lines, and the linked login with its last sign-in.'],
-  ['Compensation', 'Monthly and annual CTC, every structure component, and bank details. The account number itself is not exported.'],
-  ['Statutory', 'UAN, PF and ESIC numbers, plus whether PAN and Aadhaar are on file.'],
+  ['People', 'Code, name, company, department, designation, grade (from the designation master), joining date, contact, all three manager lines, and the linked login with its last sign-in and a note on why a login is not usable.'],
+  ['Compensation', 'Monthly CTC and annual CTC (monthly × 12), each payslip component from the company\'s set, and bank details with an IFSC format check. The account number itself is not exported.'],
+  ['Statutory', 'UAN, PF and ESIC numbers with a format check, plus whether PAN and Aadhaar are on file.'],
   ['Leave balances', 'Allocated, used and remaining days per leave type — one row per employee per type.'],
   ['Assets', 'The asset register with the current holder, assignment date and acknowledgement.'],
-  ['Exits', 'Resignations and terminations together: raised date, last working date, notice and reason.'],
+  ['Exits', 'Resignations and terminations together: raised date, last working date, notice, reason, and a data check for impossible dates.'],
   ['Headcount', 'Headcount and monthly salary cost by company, department and status.'],
 ];
 
@@ -18,6 +18,12 @@ const GAPS = [
   ['no_bank', 'No bank details', 'They cannot be paid by transfer.'],
   ['no_uan', 'No UAN recorded', 'PF returns will be short.'],
   ['no_manager', 'No reporting manager', 'Leave and NFA approvals have nowhere to go.'],
+  ['no_department', 'No department', 'They show under "(no department)" in the Headcount sheet.'],
+  ['no_designation', 'No designation', 'No grade or level, and letters cannot be issued.'],
+  ['no_doj', 'No date of joining', 'Payroll proration, leave and gratuity all need it.'],
+  ['invalid_statutory', 'UAN / PF / ESIC in the wrong format', 'Shown as "Invalid" in the Statutory sheet — PF and ESIC returns will be rejected.'],
+  ['invalid_ifsc', 'IFSC in the wrong format', 'Shown as "Invalid" in the Compensation sheet — bank transfers will bounce.'],
+  ['login_disabled', 'Login disabled while employed', 'The People sheet\'s Login Note says why.'],
 ];
 
 export default function HrmisPage() {
@@ -60,7 +66,7 @@ export default function HrmisPage() {
 
       <div className="grid gap-2.5 sm:grid-cols-3">
         <StatTile label="On record" value={val('total')} tone="neutral" />
-        <StatTile label="Active" value={val('active')} tone="ok" />
+        <StatTile label="Employees" value={val('employees')} tone="ok" caption="Active, joined, not past an approved exit" />
         <StatTile label="Not active" value={val('non_active')} tone="neutral" caption="Offer sent, in review, exited" />
       </div>
 
@@ -75,7 +81,7 @@ export default function HrmisPage() {
               </li>
             ))}
           </ul>
-          <p className="text-[12px] text-ink-faint mt-3">Counted across active employees only. The workbook exports regardless.</p>
+          <p className="text-[12px] text-ink-faint mt-3">Counted across active employees only. The workbook exports regardless. All dates in the workbook are real Excel dates (dd-mm-yyyy), so they sort and filter.</p>
         </Card>
       )}
 

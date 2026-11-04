@@ -11,7 +11,7 @@ export default function LoginPage() {
   const router = useRouter();
   const [email, setEmail] = useState('hr@truehr.example');
   const [password, setPassword] = useState('');
-  const [otpStage, setOtpStage] = useState(null); // { maskedEmail } once the code is emailed
+  const [otpStage, setOtpStage] = useState(null); // { maskedEmail, sentTo, alternate } once the code is emailed
   const [otp, setOtp] = useState('');
   const [err, setErr] = useState('');
   const [info, setInfo] = useState('');
@@ -25,8 +25,8 @@ export default function LoginPage() {
     e?.preventDefault();
     setErr(''); setInfo(''); setLoading(true);
     try {
-      const r = await login(email, password);
-      if (r.otpRequired) { setOtpStage({ maskedEmail: r.maskedEmail }); setOtp(''); }
+      const r = await login(email.trim(), password);
+      if (r.otpRequired) { setOtpStage(r); setOtp(''); }
       else go(r);
     } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }
@@ -34,15 +34,22 @@ export default function LoginPage() {
   async function submitOtp(e) {
     e.preventDefault();
     setErr(''); setInfo(''); setLoading(true);
-    try { go(await verifyLoginOtp(email, otp)); }
+    try { go(await verifyLoginOtp(email.trim(), otp)); }
     catch (e) { setErr(e.message); } finally { setLoading(false); }
   }
 
-  async function resend() {
+  // Resend to the same address, or (D4) to the other one on file.
+  async function resend(otpTo) {
     setErr(''); setInfo(''); setLoading(true);
-    try { await login(email, password); setOtp(''); setInfo('A new code has been emailed.'); }
-    catch (e) { setErr(e.message); } finally { setLoading(false); }
+    try {
+      const r = await login(email.trim(), password, otpTo || otpStage?.sentTo || undefined);
+      if (r.otpRequired) {
+        setOtpStage(r); setOtp('');
+        setInfo(`A new code has been emailed to ${r.maskedEmail}.`);
+      } else go(r);
+    } catch (e) { setErr(e.message); } finally { setLoading(false); }
   }
+  const where = (k) => (k === 'personal' ? 'personal email' : k === 'official' ? 'official email' : 'email');
 
   const FEATURES = [
     ['Automated offers', 'Offer to acceptance without the email ping-pong'],
@@ -93,7 +100,9 @@ export default function LoginPage() {
             <>
               <h2 className="text-[21px] font-semibold text-ink tracking-[-.015em]">Check your email</h2>
               <p className="text-ink-faint text-[13px] mt-1.5 mb-6 leading-relaxed">
-                We emailed a 6-digit sign-in code to <span className="font-semibold text-ink font-mono">{otpStage.maskedEmail}</span>. It expires in 10 minutes.
+                We emailed a 6-digit sign-in code to your {where(otpStage.sentTo)}{' '}
+                <span className="font-semibold text-ink font-mono">{otpStage.maskedEmail}</span>. It expires in 10 minutes.
+                Check your spam folder if it is not in your inbox.
               </p>
               <form onSubmit={submitOtp} className="space-y-4">
                 <Field label="Sign-in code">
@@ -106,14 +115,20 @@ export default function LoginPage() {
                 <Button type="submit" disabled={loading || otp.length !== 6} className="w-full" size="lg">{loading ? <Spinner /> : 'Verify & sign in'}</Button>
                 <div className="flex justify-between text-[12.5px] pt-1">
                   <button type="button" onClick={() => { setOtpStage(null); setErr(''); setInfo(''); }} className="text-ink-faint hover:text-ink font-medium">← Back</button>
-                  <button type="button" onClick={resend} disabled={loading} className="text-brand-600 font-semibold hover:underline">Resend code</button>
+                  <button type="button" onClick={() => resend()} disabled={loading} className="text-brand-600 font-semibold hover:underline">Resend code</button>
                 </div>
+                {otpStage.alternate && (
+                  <button type="button" onClick={() => resend(otpStage.alternate.kind)} disabled={loading}
+                    className="w-full text-center text-[12.5px] text-brand-600 font-semibold hover:underline">
+                    Send it to my {where(otpStage.alternate.kind)} ({otpStage.alternate.masked}) instead
+                  </button>
+                )}
               </form>
             </>
           ) : (
           <>
           <h2 className="text-[21px] font-semibold text-ink tracking-[-.015em]">Sign in</h2>
-          <p className="text-ink-faint text-[13px] mt-1.5 mb-6">Use your work email or Employee ID.</p>
+          <p className="text-ink-faint text-[13px] mt-1.5 mb-6">Use your work email, personal email or Employee ID.</p>
           {expired && (
             <div className="flex items-start gap-2.5 text-[12.5px] text-crit bg-crit-bg border border-crit/20 rounded px-3 py-2.5 mb-5">
               <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" className="mt-px shrink-0"><circle cx="12" cy="12" r="9"/><path d="M12 8v4M12 16h.01"/></svg>

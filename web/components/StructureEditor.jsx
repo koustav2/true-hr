@@ -45,7 +45,10 @@ export default function StructureEditor({
     }
     return out;
   }, [text]);
-  const deletable = rows.filter((r) => !r.employees);
+  // `holders` counts every record pointing at the row (candidates and leavers
+  // too) — that is what blocks a delete. `employees` is active employees only.
+  const heldBy = (r) => (r.holders ?? r.employees ?? 0);
+  const deletable = rows.filter((r) => !heldBy(r));
   const pickedFree = [...picked].filter((id) => deletable.some((r) => r.id === id));
 
   const toggle = (id) => setPicked((p) => {
@@ -54,8 +57,17 @@ export default function StructureEditor({
     return n;
   });
 
+  // Same rule as the server: names need letters, no symbols-only junk or HTML.
+  const NAME_CHARS = /^[A-Za-z0-9][A-Za-z0-9 &.,'()/+-]*$/;
+  const badLines = lines.filter((n) => n.length > 120 || /[<>]/.test(n) || !/[A-Za-z]/.test(n) || !NAME_CHARS.test(n));
+
   async function add() {
     if (!lines.length) return;
+    if (badLines.length) {
+      setMsg('');
+      setErr(`Not added — fix ${badLines.length === 1 ? 'this name' : 'these names'}: ${badLines.map((n) => `"${n}"`).join(', ')}. A ${label.toLowerCase()} name must contain letters and may use digits, spaces and & . , ' ( ) / + - only.`);
+      return;
+    }
     setBusy('add'); setErr(''); setMsg('');
     try {
       const body = isDep ? { names: lines } : { titles: lines };
@@ -106,7 +118,8 @@ export default function StructureEditor({
             {busy === 'add' ? <Spinner className="h-3.5 w-3.5" /> : `Add ${lines.length || ''} ${lines.length === 1 ? label.toLowerCase() : labelPlural.toLowerCase()}`.trim()}
           </Button>
           <span className="text-[11.5px] text-ink-faint">
-            Paste a whole column at once. Names you already have are skipped, not duplicated.
+            Paste a whole column at once. Names you already have are skipped, not duplicated. These lists are
+            shared by every company in the organisation.
           </span>
         </div>
       </div>
@@ -121,11 +134,12 @@ export default function StructureEditor({
           {rows.map((r) => (
             <label
               key={r.id}
-              className={`flex items-center gap-3 px-4 py-2 ${r.employees ? 'opacity-70' : 'cursor-pointer hover:bg-canvas'}`}
+              className={`flex items-center gap-3 px-4 py-2 ${heldBy(r) ? 'opacity-70' : 'cursor-pointer hover:bg-canvas'}`}
+              title={heldBy(r) && !r.employees ? 'Held by candidates or former employees — cannot be deleted' : undefined}
             >
               <input
                 type="checkbox"
-                disabled={!!r.employees}
+                disabled={!!heldBy(r)}
                 checked={picked.has(r.id)}
                 onChange={() => toggle(r.id)}
                 className="h-3.5 w-3.5 accent-brand-600 disabled:cursor-not-allowed"
@@ -133,8 +147,10 @@ export default function StructureEditor({
               <span className="flex-1 text-[13px] text-ink font-medium">{nameOf(r)}</span>
               {!isDep && r.grade && <span className="text-[11.5px] text-ink-faint">{r.grade}</span>}
               {r.employees
-                ? <Badge tone="warn">{r.employees} {r.employees === 1 ? 'person' : 'people'}</Badge>
-                : <Badge tone="neutral">unused</Badge>}
+                ? <Badge tone="warn">{r.employees} {r.employees === 1 ? 'employee' : 'employees'}</Badge>
+                : heldBy(r)
+                  ? <Badge tone="neutral">in use ({heldBy(r)} record{heldBy(r) === 1 ? '' : 's'})</Badge>
+                  : <Badge tone="neutral">unused</Badge>}
             </label>
           ))}
         </div>

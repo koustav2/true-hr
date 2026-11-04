@@ -28,6 +28,29 @@ function gradesBySeniority(designations) {
   }).map((g) => ({ grade: g, titles: seen.get(g) }));
 }
 
+// Same rules as the server (levelController.levelNameErrors): a level names a
+// rung, so it must read like one — not "Mr Gudu" (H56).
+const HONORIFIC = /^(mr|mrs|ms|miss|dr|shri|smt|sri|kumari|mx|prof)\b\.?/i;
+function levelErrors(rows) {
+  const out = {};
+  const seen = new Map();
+  rows.forEach((l, i) => {
+    const n = String(l.name || '').trim();
+    const key = `levels.${i}`;
+    if (!n) { out[key] = `Level ${i + 1} needs a name`; return; }
+    if (n.length > 60) out[key] = `Level ${i + 1}: name must be at most 60 characters`;
+    else if (/[<>]/.test(n) || !/[A-Za-z]/.test(n) || !/^[A-Za-z0-9][A-Za-z0-9 &.,'()/+-]*$/.test(n)) {
+      out[key] = `Level ${i + 1}: "${n}" is not a valid level name — use letters and digits, like "L1 Board" or "Management"`;
+    } else if (HONORIFIC.test(n)) {
+      out[key] = `Level ${i + 1}: "${n}" looks like a person's name. A level names a rung (e.g. "L1 Board", "Management"), not a person`;
+    }
+    const k = n.toLowerCase();
+    if (!out[key] && seen.has(k)) out[key] = `Level ${i + 1}: "${n}" is already used by level ${seen.get(k)}`;
+    if (!seen.has(k)) seen.set(k, i + 1);
+  });
+  return out;
+}
+
 const PRESETS = [
   { label: 'Four rungs', names: ['Board', 'Leadership', 'Management', 'Executive'] },
   { label: 'Five rungs', names: ['Board', 'Leadership', 'Senior Management', 'Management', 'Executive'] },
@@ -41,6 +64,7 @@ export default function HierarchyPage() {
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
   const [err, setErr] = useState('');
+  const [levelErrs, setLevelErrs] = useState({});
 
   // One ladder, one department list, one designation list for the whole
   // organisation — there is nothing to pick between any more.
@@ -65,7 +89,10 @@ export default function HierarchyPage() {
     return a !== b;
   }, [data, rows]);
 
-  const setRow = (i, patch) => setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+  const setRow = (i, patch) => {
+    setRows((r) => r.map((x, j) => (j === i ? { ...x, ...patch } : x)));
+    setLevelErrs((e) => { const k = `levels.${i}`; if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+  };
   const move = (i, d) => setRows((r) => {
     const n = [...r]; const j = i + d;
     if (j < 0 || j >= n.length) return r;
@@ -84,7 +111,10 @@ export default function HierarchyPage() {
   }
 
   async function save() {
-    setBusy(true); setErr(''); setMsg('');
+    const errs = levelErrors(rows);
+    setLevelErrs(errs); setMsg('');
+    if (Object.keys(errs).length) { setErr(''); return; }
+    setBusy(true); setErr('');
     try {
       const d = await api.put('/admin/hierarchy', {
         levels: rows.map((l) => ({ id: l.id, name: l.name, description: l.description || null })),
@@ -93,13 +123,25 @@ export default function HierarchyPage() {
       setMsg(d.unhooked
         ? `Saved. ${d.unhooked} designation${d.unhooked === 1 ? '' : 's'} lost its level because that rung was removed — reassign below.`
         : 'Hierarchy saved.');
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e) {
+      if (e.fields) setLevelErrs(e.fields); else setErr(e.message);
+    } finally { setBusy(false); }
   }
 
   async function assign(designationId, levelId) {
     setErr('');
     try {
       await api.put(`/admin/designations/${designationId}/level`, { levelId: levelId || null });
+      refresh();
+    } catch (e) { setErr(e.message); }
+  }
+
+  // H12/H127: the department a designation belongs to (blank = any department).
+  // The hire form and bulk upload refuse a designation from another department.
+  async function setDept(designationId, departmentId) {
+    setErr('');
+    try {
+      await api.put(`/admin/designations/${designationId}/department`, { departmentId: departmentId || null });
       refresh();
     } catch (e) { setErr(e.message); }
   }
@@ -141,7 +183,7 @@ export default function HierarchyPage() {
     <div className="space-y-5">
       <PageHeader
         title="Organisation hierarchy"
-        subtitle={`One ladder for ${data?.organisation || 'the organisation'} — every company in the group shares it. A title sits on a rung, so everybody holding that title inherits the level. Grade is the code on the title itself; level is where it sits here.`}
+        subtitle={`One ladder, one department list and one designation list for ${data?.organisation || 'the organisation'} — every company in the group shares them (the Companies screen edits the same lists). A title sits on a rung, so everybody holding that title inherits the level. Grade is the code on the title itself; level is where it sits here.`}
       />
 
       {err && <p className="text-sm text-neg">{err}</p>}
@@ -157,7 +199,8 @@ export default function HierarchyPage() {
             <StatTile label="Departments" value={(data.departments || []).length} tone="neutral" />
             <StatTile label="Without a level" value={unassigned} tone={unassigned ? 'warn' : 'ok'}
               caption={unassigned ? 'They will not appear by level in reports' : 'Every title is placed'} />
-            <StatTile label="People placed" value={data.levels.reduce((a, l) => a + l.employees, 0)} tone="ok" />
+            <StatTile label="Employees placed on a level" value={data.levels.reduce((a, l) => a + l.employees, 0)} tone="ok"
+              caption={data.totalEmployees != null ? `of ${data.totalEmployees} active employees (same count as the org chart and reports)` : undefined} />
           </div>
 
           <Card className="p-3.5">
@@ -197,6 +240,9 @@ export default function HierarchyPage() {
             </Card>
           )}
 
+          <datalist id="standard-level-names">
+            {(data.standardLevelNames || []).map((n) => <option key={n} value={n} />)}
+          </datalist>
           <Card className="overflow-hidden">
             <div className="flex items-center justify-between gap-3 px-4 py-2.5 border-b border-line bg-canvas">
               <span className="text-[12.5px] font-semibold text-ink-soft">The ladder — level 1 is the top of the house</span>
@@ -209,7 +255,7 @@ export default function HierarchyPage() {
             </div>
             {rows.length === 0 ? (
               <Empty title="No levels yet"
-                subtitle="Say how many rungs this company has and generate the rows, or pick a preset above." />
+                subtitle="Say how many rungs this organisation has and generate the rows, or pick a preset above." />
             ) : (
               <div className="overflow-x-auto">
                 <table className="w-full">
@@ -228,7 +274,11 @@ export default function HierarchyPage() {
                         <td className="px-4 font-mono text-[12.5px] text-ink-soft">L{i + 1}</td>
                         <td className="px-4">
                           <Input value={l.name || ''} onChange={(e) => setRow(i, { name: e.target.value })}
-                            placeholder="e.g. Senior Management" />
+                            list="standard-level-names" maxLength={60}
+                            placeholder="e.g. Senior Management" aria-invalid={!!levelErrs[`levels.${i}`]} />
+                          {levelErrs[`levels.${i}`] && (
+                            <span role="alert" className="block text-[11.5px] text-neg mt-1">{levelErrs[`levels.${i}`]}</span>
+                          )}
                         </td>
                         <td className="px-4">
                           <Input value={l.description || ''} onChange={(e) => setRow(i, { description: e.target.value })}
@@ -255,7 +305,7 @@ export default function HierarchyPage() {
                     Add a level
                   </Button>
                   <span className="text-[11.5px] text-ink-faint">
-                    Removing a rung unhooks its designations rather than blocking you — they show as unplaced below.
+                    Name a rung, not a person — e.g. L1 Board, Leadership, Management. Removing a rung unhooks its designations rather than blocking you — they show as unplaced below.
                   </span>
                 </div>
               </div>
@@ -292,6 +342,7 @@ export default function HierarchyPage() {
                       <tr>
                         <th className="text-left">Designation</th>
                         <th className="text-left w-24">Grade</th>
+                        <th className="text-left w-60">Belongs to department</th>
                         <th className="text-left w-72">Level</th>
                       </tr>
                     </thead>
@@ -300,6 +351,13 @@ export default function HierarchyPage() {
                         <tr key={d.id}>
                           <td className="px-4 text-ink font-medium">{d.title}</td>
                           <td className="px-4 text-ink-faint text-[12.5px]">{d.grade || '—'}</td>
+                          <td className="px-4">
+                            <Select aria-label={`Department for ${d.title}`} value={d.departmentId ?? ''}
+                              onChange={(e) => setDept(d.id, e.target.value)}>
+                              <option value="">Any department</option>
+                              {(data.departments || []).map((dep) => <option key={dep.id} value={dep.id}>{dep.name}</option>)}
+                            </Select>
+                          </td>
                           <td className="px-4">
                             {data.levels.length === 0 ? (
                               <span className="text-[12.5px] text-ink-faint">
@@ -325,7 +383,8 @@ export default function HierarchyPage() {
             <h2 className="mb-2.5">Structure</h2>
             <p className="mb-2.5 text-[12.5px] text-ink-faint">
               Departments and designations belong to the organisation, so every company in the group draws on the
-              same two lists. Anything somebody currently holds cannot be deleted — move those people first.
+              same two lists (the Companies screen shows these same lists). Names must contain letters — symbols-only
+              or number-only names are refused. Anything somebody currently holds cannot be deleted — move those people first.
             </p>
             <div className="grid gap-3.5 lg:grid-cols-2">
               <StructureEditor kind="departments" rows={data.departments || []} onChanged={refresh} />

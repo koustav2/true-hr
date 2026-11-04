@@ -1,7 +1,8 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { api, downloadFile } from '@/lib/api.js';
-import { Card, Button, Spinner, Empty, Badge, PageHeader, StatTile } from '@/components/ui.jsx';
+import { Card, Button, Spinner, Empty, Badge, PageHeader, StatTile, useConfirm } from '@/components/ui.jsx';
+import { label } from '@/lib/labels.js';
 import { downloadCsv } from '@/lib/csv.js';
 
 // Fallback list if /admin/bulk/kinds is unreachable — the screen still works.
@@ -11,17 +12,21 @@ const FALLBACK = [
   { key: 'managers', label: 'Reporting lines' },
   { key: 'transfer', label: 'Department & designation transfer' },
   { key: 'leave-balance', label: 'Leave balances' },
+  { key: 'employees', label: 'New employees (candidates)' },
 ];
 const BLURB = {
   salary: 'Sets the monthly CTC on each salary structure and refreshes the annual CTC used by the offer annexure.',
   info: 'Phone, personal email, location and employment type.',
   managers: 'Reporting, functional and operational managers, matched by the manager’s own employee code. Type NONE to clear a line.',
   transfer: 'Moves people between departments and designations. Both must already exist in that company.',
-  'leave-balance': 'Allocated days per leave type. Used days are never touched.',
+  'leave-balance': 'Allocated days per leave type, within each type\'s annual quota and gender rule. Used days are shown for reference and never touched.',
+  employees: 'Adds new joiners in bulk as candidates (status "Offer sent", no employee ID yet). Every row is checked first; the offer email goes out only if you tick "Send offer emails".',
 };
-const TONE = { updated: 'ok', 'would change': 'brand', skipped: 'neutral', error: 'danger' };
+const TONE = { updated: 'ok', 'would change': 'brand', 'would add': 'brand', added: 'ok', skipped: 'neutral', error: 'danger' };
 
 export default function BulkPage() {
+  const [confirm, confirmUi] = useConfirm();
+  const [sendOffer, setSendOffer] = useState(false);
   const [kinds, setKinds] = useState(FALLBACK);
   const [kind, setKind] = useState('salary');
   const [busy, setBusy] = useState('');
@@ -39,6 +44,13 @@ export default function BulkPage() {
   async function run(dryRun) {
     if (!file) { setErr('Choose the filled-in file first.'); return; }
     if (file.size > 10 * 1024 * 1024) { setErr('That file is over 10MB — split it.'); return; }
+    if (!dryRun && !(await confirm({
+      title: kind === 'employees' ? 'Add these candidates?' : `Apply ${current?.label || 'these'} changes?`,
+      body: kind === 'employees'
+        ? `Every valid row is added as a candidate. ${sendOffer ? 'Each one is emailed their offer.' : 'No email is sent.'} Rows with errors are skipped.`
+        : 'Every valid row is written now. Rows with errors are skipped. Run "Preview only" first if you have not.',
+      confirmLabel: kind === 'employees' ? 'Add candidates' : 'Apply changes', tone: 'danger',
+    }))) return;
     setBusy(dryRun ? 'preview' : 'apply'); setErr(''); setMsg(''); setRes(null);
     try {
       const b64 = await new Promise((ok, no) => {
@@ -47,7 +59,7 @@ export default function BulkPage() {
         r.onerror = no;
         r.readAsDataURL(file);
       });
-      const out = await api.post(`/admin/bulk/${kind}`, { file: b64, dryRun });
+      const out = await api.post(`/admin/bulk/${kind}`, { file: b64, dryRun, ...(kind === 'employees' ? { sendOffer } : {}) });
       setRes(out);
       setMsg(dryRun
         ? `Preview only — nothing written. ${out.changed} row${out.changed === 1 ? '' : 's'} would change, ${out.skipped} skipped, ${out.failed} with errors.`
@@ -57,6 +69,7 @@ export default function BulkPage() {
 
   return (
     <div className="space-y-5">
+      {confirmUi}
       <PageHeader
         title="Bulk utilities"
         subtitle="Download a sheet already filled in with what the system holds, edit only the “New …” columns, upload it back. Preview first — it reports every change without writing anything."
@@ -82,7 +95,7 @@ export default function BulkPage() {
               onClick={() => downloadFile(`/admin/bulk/${kind}/template`, `bulk-${kind}-template.xlsx`).catch((e) => setErr(e.message))}>
               Template (.xlsx)
             </Button>
-            <p className="text-ink-faint mt-2">Active employees only, current values pre-filled.</p>
+            <p className="text-ink-faint mt-2">{kind === 'employees' ? 'One row per new joiner; dropdowns for department, designation, type and manager.' : 'Active employees only, current values pre-filled. Read-only columns are locked; coded values have dropdowns.'}</p>
           </li>
           <li className="rounded border border-line bg-canvas p-3">
             <div className="font-semibold text-ink mb-1.5">2 · Choose the filled file</div>
@@ -105,7 +118,9 @@ export default function BulkPage() {
                 {busy === 'apply' ? <Spinner /> : 'Apply changes'}
               </Button>
             </div>
-            <p className="text-ink-faint mt-2">A blank cell leaves that value unchanged.</p>
+            {kind === 'employees'
+              ? <label className="mt-2 flex items-center gap-1.5 text-ink-soft"><input type="checkbox" checked={sendOffer} onChange={(e) => setSendOffer(e.target.checked)} /> Send offer emails</label>
+              : <p className="text-ink-faint mt-2">A blank cell leaves that value unchanged.</p>}
           </li>
         </ol>
 
@@ -116,7 +131,7 @@ export default function BulkPage() {
       {res && (
         <>
           <div className="grid gap-2.5 sm:grid-cols-2 lg:grid-cols-4">
-            <StatTile label={res.dryRun ? 'Would change' : 'Updated'} value={res.changed} tone={res.dryRun ? 'brand' : 'ok'} />
+            <StatTile label={kind === 'employees' ? (res.dryRun ? 'Would add' : 'Added') : (res.dryRun ? 'Would change' : 'Updated')} value={res.changed} tone={res.dryRun ? 'brand' : 'ok'} />
             <StatTile label="Skipped" value={res.skipped} tone="neutral" caption="Nothing filled in" />
             <StatTile label="Errors" value={res.failed} tone={res.failed ? 'danger' : 'neutral'} />
             <StatTile label="Rows read" value={res.total} tone="neutral" />
@@ -128,7 +143,7 @@ export default function BulkPage() {
                 {res.dryRun ? 'Preview — nothing has been written' : 'Applied'}
               </span>
               <Button variant="outline" size="sm" onClick={() => downloadCsv(`bulk-${kind}-${res.dryRun ? 'preview' : 'result'}.csv`,
-                res.results.map((r) => ({ 'Employee Code': r.code, Result: r.status, Detail: r.detail || '' })))}>
+                res.results.map((r) => ({ 'Employee Code': r.code, Result: label(r.status), Detail: r.detail || '' })))}>
                 Export result
               </Button>
             </div>
@@ -137,7 +152,7 @@ export default function BulkPage() {
                 <table className="w-full">
                   <thead>
                     <tr>
-                      <th className="text-left">Employee Code</th>
+                      <th className="text-left">{kind === 'employees' ? 'Row' : 'Employee Code'}</th>
                       <th className="text-left">Result</th>
                       <th className="text-left">Detail</th>
                     </tr>
@@ -146,7 +161,7 @@ export default function BulkPage() {
                     {res.results.map((r, i) => (
                       <tr key={`${r.code}-${i}`}>
                         <td className="px-4 font-mono text-[12.5px] text-ink">{r.code}</td>
-                        <td className="px-4 whitespace-nowrap"><Badge tone={TONE[r.status] || 'neutral'}>{r.status}</Badge></td>
+                        <td className="px-4 whitespace-nowrap"><Badge tone={TONE[r.status] || 'neutral'}>{label(r.status)}</Badge></td>
                         <td className="px-4 text-[12.5px] text-ink-soft">{r.detail || '—'}</td>
                       </tr>
                     ))}

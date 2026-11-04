@@ -27,15 +27,32 @@ export function Card({ className = '', hover = false, children }) {
   return <div className={`bg-white rounded-xl2 border border-line shadow-card ${interactive} ${className}`}>{children}</div>;
 }
 
-export function Field({ label, hint, required, children }) {
+// `error` shows the field's validation message under the input (v2 forms show
+// every error at once, keyed by field — see lib/validate.js and err.fields).
+export function Field({ label, hint, required, error, children }) {
   return (
     <label className="block">
       <span className="block text-[11px] font-semibold uppercase tracking-[.06em] text-ink-faint mb-1.5">
         {label}{required && <span className="text-brand-600"> *</span>}
       </span>
       {children}
-      {hint && <span className="block text-[11.5px] text-ink-faint mt-1.5">{hint}</span>}
+      {error
+        ? <span role="alert" className="block text-[11.5px] text-neg mt-1.5">{error}</span>
+        : hint && <span className="block text-[11.5px] text-ink-faint mt-1.5">{hint}</span>}
     </label>
+  );
+}
+
+// A form-level summary of field errors, for long forms where the failing field
+// may be scrolled out of view.
+export function ErrorSummary({ errors }) {
+  const list = Object.values(errors || {}).filter(Boolean);
+  if (!list.length) return null;
+  return (
+    <div role="alert" className="rounded border border-neg/40 bg-neg/5 px-3 py-2 text-[12.5px] text-neg">
+      <div className="font-semibold mb-1">Please fix {list.length === 1 ? 'this' : `these ${list.length}`} before continuing:</div>
+      <ul className="list-disc pl-5 space-y-0.5">{list.map((m, i) => <li key={i}>{m}</li>)}</ul>
+    </div>
   );
 }
 
@@ -57,9 +74,16 @@ export function Modal({ open, onClose, title, children, actions, tone = 'brand',
   // elements (seen live: modal backdrop clipped to the admin content area).
   const [mounted, setMounted] = React.useState(false);
   React.useEffect(() => { setMounted(true); }, []);
+  // Esc closes, like the backdrop and the X button.
+  React.useEffect(() => {
+    if (!open || !onClose) return undefined;
+    const onKey = (e) => { if (e.key === 'Escape') onClose(); };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [open, onClose]);
   if (!open || !mounted) return null;
   const bar = { brand: 'bg-brand-600', danger: 'bg-neg' }[tone] || 'bg-brand-600';
-  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl' };
+  const widths = { sm: 'max-w-sm', md: 'max-w-md', lg: 'max-w-2xl', xl: 'max-w-4xl', full: 'max-w-[min(96vw,1100px)]' };
   return createPortal(
     <div className="fixed inset-0 z-50 grid place-items-center p-4">
       <div className="absolute inset-0 bg-shell/45" onClick={onClose} />
@@ -67,7 +91,13 @@ export function Modal({ open, onClose, title, children, actions, tone = 'brand',
         {title && (
           <div className="flex items-center gap-3 px-5 py-3.5 border-b border-line bg-canvas shrink-0">
             <span className={`h-4 w-1 rounded-sm shrink-0 ${bar}`} />
-            <h3 className="text-[14px] font-semibold text-ink">{title}</h3>
+            <h3 className="text-[14px] font-semibold text-ink flex-1 min-w-0">{title}</h3>
+            {onClose && (
+              <button type="button" aria-label="Close" onClick={onClose}
+                className="-mr-1 grid place-items-center h-7 w-7 rounded text-ink-faint hover:text-ink hover:bg-white">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.2" strokeLinecap="round"><path d="M6 6l12 12M18 6L6 18"/></svg>
+              </button>
+            )}
           </div>
         )}
         {children && <div className="px-5 py-4 text-[13px] text-ink-soft leading-relaxed overflow-y-auto flex-1">{children}</div>}
@@ -264,4 +294,26 @@ export function ObjectHeader({ name, subtitle, facts = [], actions = null }) {
       {actions && <div className="flex gap-2 flex-wrap shrink-0">{actions}</div>}
     </Card>
   );
+}
+
+
+// Promise-based confirmation dialog, for actions that are destructive or hard to
+// undo (publish, delete, approve, regenerate…).
+//   const [confirm, confirmUi] = useConfirm();
+//   if (!(await confirm({ title: 'Publish payslip?', body: '…', confirmLabel: 'Publish', tone: 'danger' }))) return;
+//   …render {confirmUi} once in the page.
+export function useConfirm() {
+  const [state, setState] = React.useState(null);
+  const confirm = React.useCallback((opts) => new Promise((resolve) => setState({ ...opts, resolve })), []);
+  const close = (v) => { state?.resolve(v); setState(null); };
+  const ui = (
+    <Modal open={!!state} onClose={() => close(false)} title={state?.title || 'Are you sure?'} tone={state?.tone || 'brand'} size="sm"
+      actions={<>
+        <Button variant="ghost" onClick={() => close(false)}>{state?.cancelLabel || 'Cancel'}</Button>
+        <Button variant={state?.tone === 'danger' ? 'danger' : 'primary'} onClick={() => close(true)}>{state?.confirmLabel || 'Confirm'}</Button>
+      </>}>
+      {state?.body}
+    </Modal>
+  );
+  return [confirm, ui];
 }

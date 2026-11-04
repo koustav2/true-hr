@@ -1,27 +1,42 @@
 'use client';
-import { useEffect, useMemo, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
+import { useSearchParams } from 'next/navigation';
 import { api } from '@/lib/api.js';
-import { Card, Button, Input, Select, Textarea, Spinner, Empty, Modal } from '@/components/ui.jsx';
+import { label, fmtDate } from '@/lib/labels.js';
+import { Card, Button, Input, Select, Textarea, Spinner, Empty, Modal, useConfirm } from '@/components/ui.jsx';
+import { fmtMoney, StatusChip as Chip, ChainList, LinesTable, DocList, facts, STAGE_TONE, stageName } from '@/app/ess/nfa/NfaParts.jsx';
 
-const STATUS_TONE = {
-  PENDING: 'bg-amber-50 text-amber-700 border-amber-200',
-  QUERY: 'bg-sky-50 text-sky-700 border-sky-200',
-  APPROVED: 'bg-emerald-50 text-emerald-700 border-emerald-200',
-  PAYMENT_RELEASED: 'bg-emerald-100 text-emerald-800 border-emerald-300',
-  REJECTED: 'bg-red-50 text-red-700 border-red-200',
-};
-const fmtMoney = (v) => `₹${Number(v || 0).toLocaleString('en-IN')}`;
-const fmtDate = (d) => (d ? new Date(d).toLocaleDateString('en-IN') : '—');
+const STATUSES = ['PENDING', 'QUERY', 'APPROVED', 'PAYMENT_RELEASED', 'REJECTED', 'WITHDRAWN'];
+const PAYMENT_TYPES = ['ADVANCE_SELF', 'ADVANCE_VENDOR', 'REIMB_SELF', 'REIMB_VENDOR', 'PPS_CANDIDATE', 'INCENTIVE'];
 
+
+// The HR dashboard deep-links here with ?status= (and ?tab=); useSearchParams
+// needs a Suspense boundary on a client page.
 export default function NfaAdminPage() {
+  return <Suspense fallback={null}><NfaAdmin /></Suspense>;
+}
+
+// Nearest queue filter for a status from a link (?status=…).
+function nfaStatusFrom(v) {
+  const s = String(v || '').toUpperCase();
+  if (STATUSES.includes(s)) return s;
+  if (['QUERY_HOLD', 'ON_QUERY', 'HOLD'].includes(s)) return 'QUERY';
+  if (['PAID', 'RELEASED'].includes(s)) return 'PAYMENT_RELEASED';
+  if (['CANCELLED'].includes(s)) return 'WITHDRAWN';
+  if (['IN_PROGRESS', 'WAITING'].includes(s)) return 'PENDING';
+  return '';
+}
+
+function NfaAdmin() {
+  const sp = useSearchParams();
   const [rows, setRows] = useState(null);
   const [masters, setMasters] = useState(null);
-  const [f, setF] = useState({ status: '', q: '', projectId: '', companyId: '', paymentType: '' });
+  const [f, setF] = useState(() => ({ status: nfaStatusFrom(sp.get('status')), q: '', projectId: '', companyId: '', paymentType: '' }));
   const [openId, setOpenId] = useState(null);
   const [msg, setMsg] = useState('');
 
   const load = () => {
-    const qs = Object.entries(f).filter(([, v]) => v).map(([k, v]) => `${k}=${encodeURIComponent(v)}`).join('&');
+    const qs = Object.entries(f).filter(([, v]) => String(v).trim()).map(([k, v]) => `${k}=${encodeURIComponent(String(v).trim())}`).join('&');
     api.get(`/admin/nfa${qs ? `?${qs}` : ''}`).then(setRows).catch((e) => { setRows([]); setMsg(e.message); });
   };
   useEffect(() => { load(); }, []); // eslint-disable-line react-hooks/exhaustive-deps
@@ -37,7 +52,7 @@ export default function NfaAdminPage() {
       <Card className="p-3 flex flex-wrap gap-2 items-end">
         <div className="w-44"><Select value={f.status} onChange={(e) => setF({ ...f, status: e.target.value })}>
           <option value="">All statuses</option>
-          {['PENDING', 'QUERY', 'APPROVED', 'PAYMENT_RELEASED', 'REJECTED'].map((s) => <option key={s} value={s}>{s.replace('_', ' ')}</option>)}
+          {STATUSES.map((s) => <option key={s} value={s}>{label(s)}</option>)}
         </Select></div>
         <div className="w-48"><Select value={f.projectId} onChange={(e) => setF({ ...f, projectId: e.target.value })}>
           <option value="">All projects</option>
@@ -49,10 +64,10 @@ export default function NfaAdminPage() {
         </Select></div>
         <div className="w-44"><Select value={f.paymentType} onChange={(e) => setF({ ...f, paymentType: e.target.value })}>
           <option value="">All payment types</option>
-          {['ADVANCE_SELF', 'ADVANCE_VENDOR', 'REIMB_SELF', 'REIMB_VENDOR', 'PPS_CANDIDATE', 'INCENTIVE'].map((t) => <option key={t} value={t}>{t.replace(/_/g, ' ')}</option>)}
+          {PAYMENT_TYPES.map((t) => <option key={t} value={t}>{label(t)}</option>)}
         </Select></div>
         <div className="flex-1 min-w-[180px]"><Input placeholder="Search NFA code / employee…" value={f.q}
-          onChange={(e) => setF({ ...f, q: e.target.value })} onKeyDown={(e) => e.key === 'Enter' && load()} /></div>
+          onChange={(e) => setF({ ...f, q: e.target.value.trimStart() })} onKeyDown={(e) => e.key === 'Enter' && load()} /></div>
         <Button onClick={load}>Filter</Button>
       </Card>
 
@@ -60,11 +75,11 @@ export default function NfaAdminPage() {
 
       <Card className="p-0 overflow-x-auto">
         {!rows ? <div className="p-10 flex justify-center"><Spinner /></div> :
-          !rows.length ? <Empty title="No NFAs" subtitle="Nothing matches the current filters." /> : (
+          !rows.length ? <Empty title="No NFAs found" subtitle="No NFA matches the current filters." /> : (
           <table className="w-full text-sm min-w-[900px]">
             <thead>
               <tr className="text-left text-xs text-ink-faint border-b border-line">
-                <th className="px-4 py-2.5">NFA Code</th><th className="px-2 py-2.5">Employee</th>
+                <th className="px-4 py-2.5">NFA No.</th><th className="px-2 py-2.5">Employee</th>
                 <th className="px-2 py-2.5">Project</th><th className="px-2 py-2.5">Category</th>
                 <th className="px-2 py-2.5">Payment</th><th className="px-2 py-2.5 text-right">Grand Total</th>
                 <th className="px-2 py-2.5">Raised</th><th className="px-4 py-2.5">Status</th>
@@ -77,12 +92,12 @@ export default function NfaAdminPage() {
                   <td className="px-2 py-2.5">{r.employee.name}<span className="text-ink-faint text-xs ml-1">{r.employee.employeeCode}</span></td>
                   <td className="px-2 py-2.5">{r.project.name}</td>
                   <td className="px-2 py-2.5 text-ink-soft">{r.expenseCategory.name}</td>
-                  <td className="px-2 py-2.5 text-xs">{r.paymentType.replace(/_/g, ' ')}</td>
+                  <td className="px-2 py-2.5 text-xs">{label(r.paymentType)}</td>
                   <td className="px-2 py-2.5 text-right font-medium">{fmtMoney(r.totals.grand)}</td>
                   <td className="px-2 py-2.5 text-ink-faint text-xs">{fmtDate(r.createdAt)}</td>
                   <td className="px-4 py-2.5">
-                    <StatusChip status={r.status} label={r.statusLabel} />
-                    {r.settlementStatus && <div className="mt-1 text-[10px] text-ink-faint">Settlement: {r.settlementStatus}</div>}
+                    <Chip d={r} />
+                    {r.settlementStatus && <div className="mt-1 text-[10px] text-ink-faint">Settlement: {label(r.settlementStatus)}</div>}
                   </td>
                 </tr>
               ))}
@@ -97,6 +112,7 @@ export default function NfaAdminPage() {
 }
 
 function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
+  const [confirm, confirmUi] = useConfirm();
   const [s, setS] = useState(null);
   const [remarks, setRemarks] = useState('');
   const [busy, setBusy] = useState(false);
@@ -105,7 +121,13 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
   useEffect(() => { load(); }, [nfaId]); // eslint-disable-line react-hooks/exhaustive-deps
 
   async function act(action) {
-    if (action !== 'APPROVED' && !remarks.trim()) { setMsg('Remarks required.'); return; }
+    if (action !== 'APPROVED' && !remarks.trim()) { setMsg('Remarks are required to query or reject a settlement.'); return; }
+    if (action === 'APPROVED' && !(await confirm({
+      title: 'Approve this settlement stage?',
+      body: `Settlement of ${fmtMoney(s.amount)}. If you are not the stage approver this is recorded as an HR override under your name.`,
+      confirmLabel: 'Approve',
+    }))) return;
+    if (action === 'REJECTED' && !(await confirm({ title: 'Reject this settlement?', body: 'The employee will have to resubmit it.', confirmLabel: 'Reject', tone: 'danger' }))) return;
     setBusy(true); setMsg('');
     try { await api.post(`/settlements/${s.id}/act`, { action, remarks }); setRemarks(''); load(); onChanged(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
@@ -113,7 +135,8 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
 
   return (
     <div className="border-t border-line pt-3">
-      <div className="font-semibold text-sm mb-1.5">Settlement <span className="text-xs font-normal text-ink-faint">({settlementStatus || '—'})</span></div>
+      {confirmUi}
+      <div className="font-semibold text-sm mb-1.5">Settlement <span className="text-xs font-normal text-ink-faint">({settlementStatus ? label(settlementStatus) : '—'})</span></div>
       {s === null ? <Spinner /> : s === false ? (
         <p className="text-sm text-ink-faint">Not submitted yet{settlementStatus === 'AUTO_REJECTED' ? ' — auto-rejected by the system; the employee must resubmit from the app.' : '.'}</p>
       ) : (
@@ -124,8 +147,8 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
             <div className="space-y-1">
               {s.approval.chain.map((st) => (
                 <div key={st.seq} className="flex items-center justify-between text-xs border border-line rounded px-2.5 py-1">
-                  <span>{st.seq}. {st.roleKey.replace(/_/g, ' ')} <span className="text-ink-soft ml-1">{st.approver?.name || '—'}</span></span>
-                  <span className={`font-semibold ${STAGE_TONE[st.status] || ''}`}>{st.status}</span>
+                  <span>{st.seq}. {stageName(st)} <span className="text-ink-soft ml-1">{st.approver?.name || '—'}</span></span>
+                  <span className={`font-semibold ${STAGE_TONE[st.status] || ''}`}>{label(st.status)}</span>
                 </div>
               ))}
             </div>
@@ -147,133 +170,100 @@ function SettlementBlock({ nfaId, settlementStatus, onChanged }) {
   );
 }
 
-function StatusChip({ status, label }) {
-  return <span title={label} className={`inline-block px-2 py-0.5 rounded-full border text-[11px] font-medium ${STATUS_TONE[status] || 'bg-slate-50 text-slate-600 border-slate-200'}`}>
-    {(label || status).length > 34 ? `${(label || status).slice(0, 32)}…` : (label || status)}
-  </span>;
-}
-
-const STAGE_TONE = {
-  APPROVED: 'text-emerald-700', REJECTED: 'text-red-700', BYPASSED: 'text-slate-400',
-  PENDING: 'text-amber-700', QUERY: 'text-sky-700', WAITING: 'text-ink-faint',
-};
-
 function NfaDetail({ id, onClose, onChanged }) {
   const [d, setD] = useState(null);
   const [remarks, setRemarks] = useState('');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [confirm, confirmUi] = useConfirm();
 
   const load = () => api.get(`/nfa/${id}`).then(setD).catch((e) => setMsg(e.message));
   useEffect(() => { load(); }, [id]); // eslint-disable-line react-hooks/exhaustive-deps
 
+  const current = d?.approval?.chain.find((s) => s.seq === d.approval.currentStageSeq);
+  const isApprover = !!d?.viewerIsCurrentApprover;
+  const later = d?.approval ? d.approval.chain.filter((s) => s.seq > d.approval.currentStageSeq && !s.approver) : [];
+
   async function act(action) {
-    if ((action === 'REJECTED' || action === 'QUERY_HOLD') && !remarks.trim()) { setMsg('Remarks are required for reject / query.'); return; }
+    if ((action === 'REJECTED' || action === 'QUERY_HOLD') && !remarks.trim()) { setMsg('Remarks are required to reject or raise a query.'); return; }
+    const verb = { APPROVED: 'Approve', REJECTED: 'Reject', QUERY_HOLD: 'Raise a query on' }[action];
+    // C32: an override is never silent — say whose stage it is and what it skips.
+    const body = isApprover ? `You are the ${stageName(current)} approver for ${d.nfaCode}.` : (
+      <div className="space-y-2">
+        <p>You are not the approver for this stage. This is an <b>HR override</b> of the {current ? stageName(current) : 'current'} stage
+          {current?.approver ? <> (approver: {current.approver.name})</> : <> (no approver assigned)</>} and will be recorded under your name.</p>
+        {action === 'APPROVED' && !!later.length && (
+          <p>Later stages with no approver will then be skipped automatically: {later.map(stageName).join(', ')}.</p>
+        )}
+      </div>
+    );
+    if (!(await confirm({ title: `${verb} ${d.nfaCode}?`, body, confirmLabel: verb, tone: action === 'APPROVED' ? 'brand' : 'danger' }))) return;
     setBusy(true); setMsg('');
-    try { setD(await api.post(`/nfa/${id}/act`, { action, remarks })); setRemarks(''); onChanged(); }
+    try { setD(await api.post(`/nfa/${id}/act`, { action, remarks: remarks.trim() })); setRemarks(''); onChanged(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
   async function release() {
+    if (!(await confirm({ title: `Release payment for ${d.nfaCode}?`, confirmLabel: 'Release payment',
+      body: `${fmtMoney(d.totals.grand)} is marked as paid to ${d.employee.name} and the settlement window opens. This cannot be undone.` }))) return;
     setBusy(true); setMsg('');
     try { setD(await api.post(`/nfa/${id}/release-payment`)); onChanged(); }
     catch (e) { setMsg(e.message); } finally { setBusy(false); }
   }
 
-  const rows = useMemo(() => d ? [
-    ['Raise for', d.raiseFor], ['Business operation', d.businessOperation.name],
-    ['Cost to company', d.company.name], ['Project', d.project.name],
-    ['Expense category', d.expenseCategory.name], ['Zone', d.zone.name],
-    ['Location', d.location.name], ['Client / vendor', d.clientVendor?.name || '—'],
-    ['Month', `${d.expenseMonth}/${d.expenseYear}`], ['Payment type', d.paymentType.replace(/_/g, ' ')],
-    ['Billable type', d.billableType.replace(/_/g, ' ')], ['Settlement due', fmtDate(d.settlementDueDate)],
-    ['Priority', d.priority], ['Purpose', d.purpose],
-  ] : [], [d]);
-
   return (
-    <Modal open onClose={onClose} title={d ? `${d.nfaCode} — ${d.employee.name}` : 'NFA'} size="lg">
-      {!d ? <div className="p-8 flex justify-center"><Spinner /></div> : (
-        <div className="space-y-4 max-h-[70vh] overflow-y-auto pr-1">
+    <Modal open onClose={onClose} title={d ? `${d.nfaCode} — ${d.employee.name}` : 'NFA'} size="xl">
+      {confirmUi}
+      {!d ? <div className="p-8 flex justify-center">{msg ? <p className="text-sm text-red-600">{msg}</p> : <Spinner />}</div> : (
+        <div className="space-y-4">
           <div className="flex items-center justify-between">
-            <StatusChip status={d.status} label={d.statusLabel} />
+            <Chip d={d} />
             <span className="text-lg font-semibold">{fmtMoney(d.totals.grand)}</span>
           </div>
 
           <div className="grid sm:grid-cols-2 gap-x-6 gap-y-1.5 text-sm">
-            {rows.map(([k, v]) => (
+            {facts(d).map(([k, v]) => (
               <div key={k} className="flex justify-between gap-3 border-b border-line/60 py-1">
-                <span className="text-ink-faint">{k}</span><span className="text-ink text-right">{v}</span>
+                <span className="text-ink-faint">{k}</span><span className="text-ink text-right">{v || '—'}</span>
               </div>
             ))}
           </div>
 
-          <div>
-            <div className="font-semibold text-sm mb-1.5">Expense lines</div>
-            <table className="w-full text-sm border border-line rounded">
-              <thead><tr className="text-left text-xs text-ink-faint border-b border-line">
-                <th className="px-3 py-1.5">#</th><th className="px-2 py-1.5">Header</th><th className="px-2 py-1.5">Sub-header</th>
-                <th className="px-2 py-1.5 text-right">NFA</th><th className="px-2 py-1.5 text-right">Logistic</th><th className="px-3 py-1.5 text-right">Total</th></tr></thead>
-              <tbody>
-                {d.lines.map((l) => (
-                  <tr key={l.seq} className="border-b border-line last:border-0">
-                    <td className="px-3 py-1.5">{l.seq}</td><td className="px-2 py-1.5">{l.header.name}</td>
-                    <td className="px-2 py-1.5 text-ink-soft">{l.subheader?.name || '—'}</td>
-                    <td className="px-2 py-1.5 text-right">{fmtMoney(l.nfaAmount)}</td>
-                    <td className="px-2 py-1.5 text-right">{fmtMoney(l.logisticAmount)}</td>
-                    <td className="px-3 py-1.5 text-right font-medium">{fmtMoney(l.totalAmount)}</td>
-                  </tr>
-                ))}
-                <tr className="bg-slate-50 font-medium">
-                  <td colSpan={3} className="px-3 py-1.5 text-right text-xs text-ink-faint">Totals</td>
-                  <td className="px-2 py-1.5 text-right">{fmtMoney(d.totals.nfa)}</td>
-                  <td className="px-2 py-1.5 text-right">{fmtMoney(d.totals.logistic)}</td>
-                  <td className="px-3 py-1.5 text-right">{fmtMoney(d.totals.grand)}</td>
-                </tr>
-              </tbody>
-            </table>
-          </div>
-
-          {d.approval && (
-            <div>
-              <div className="font-semibold text-sm mb-1.5">Approval chain</div>
-              <div className="space-y-1">
-                {d.approval.chain.map((s) => (
-                  <div key={s.seq} className="flex items-center justify-between text-sm border border-line rounded px-3 py-1.5">
-                    <div>
-                      <span className="text-ink-faint text-xs mr-2">{s.seq}.</span>
-                      <span className="font-medium">{s.roleKey.replace(/_/g, ' ')}</span>
-                      <span className="text-ink-soft ml-2">{s.approver ? s.approver.name : '—'}</span>
-                      {s.remarks && <span className="text-ink-faint text-xs ml-2">“{s.remarks}”</span>}
-                    </div>
-                    <span className={`text-xs font-semibold ${STAGE_TONE[s.status] || ''}`}>{s.status}</span>
-                  </div>
-                ))}
-              </div>
-            </div>
-          )}
+          <div><div className="font-semibold text-sm mb-1.5">Expense lines</div><LinesTable d={d} /></div>
+          <div><div className="font-semibold text-sm mb-1.5">Attachments</div><DocList nfaId={d.id} docs={d.documents} onError={setMsg} /></div>
+          {d.approval && <div><div className="font-semibold text-sm mb-1.5">Approval chain</div><ChainList approval={d.approval} /></div>}
 
           {d.status === 'PAYMENT_RELEASED' && <SettlementBlock nfaId={id} settlementStatus={d.settlementStatus} onChanged={() => { load(); onChanged(); }} />}
 
           {msg && <p className="text-sm text-red-600">{msg}</p>}
 
+          {d.status === 'QUERY' && (
+            <div className="space-y-2 border-t border-line pt-3">
+              <p className="text-sm text-sky-800">Waiting for {d.employee.name} to reply to the query. The chain resumes at the querying stage once they resubmit.</p>
+              <Textarea rows={2} placeholder="Reason (required to close it as rejected)…" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+              <Button variant="danger" size="sm" onClick={() => act('REJECTED')} disabled={busy}>Reject without waiting</Button>
+            </div>
+          )}
+
           {['PENDING', 'APPROVED'].includes(d.status) && (
             <div className="space-y-2 border-t border-line pt-3">
               {d.status === 'PENDING' && <>
-                <Textarea rows={2} placeholder="Remarks (required for reject / query)…" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
+                <Textarea rows={2} placeholder="Remarks (required to reject or raise a query)…" value={remarks} onChange={(e) => setRemarks(e.target.value)} />
                 <div className="flex gap-2">
                   <Button onClick={() => act('APPROVED')} disabled={busy}>Approve</Button>
-                  <Button variant="outline" onClick={() => act('QUERY_HOLD')} disabled={busy}>Query / Hold</Button>
+                  <Button variant="outline" onClick={() => act('QUERY_HOLD')} disabled={busy}>Raise query</Button>
                   <Button variant="danger" onClick={() => act('REJECTED')} disabled={busy}>Reject</Button>
                 </div>
-                <p className="text-xs text-ink-faint">Acting as HR override if you are not the current-stage approver.</p>
+                {!isApprover && <p className="text-xs text-ink-faint">You are not the current-stage approver: any action is recorded as an HR override under your name.</p>}
               </>}
               {d.status === 'APPROVED' && (
                 <div className="flex items-center gap-3">
                   <Button onClick={release} disabled={busy}>{busy ? 'Releasing…' : 'Release payment'}</Button>
-                  <span className="text-xs text-ink-faint">Marks the NFA as PAYMENT RELEASED and opens the settlement window.</span>
+                  <span className="text-xs text-ink-faint">Marks the NFA as payment released and opens the settlement window.</span>
                 </div>
               )}
             </div>
           )}
+          <div className="flex justify-end border-t border-line pt-3"><Button size="sm" variant="ghost" onClick={onClose}>Close</Button></div>
         </div>
       )}
     </Modal>

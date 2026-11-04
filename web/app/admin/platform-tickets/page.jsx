@@ -1,6 +1,7 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
-import { api } from '@/lib/api.js';
+import { api, downloadFile } from '@/lib/api.js';
+import { validateContact } from '@/components/MasterTicket.jsx';
 import { Card, Button, Field, Textarea, Select, Input, Spinner, Empty, Badge, PageHeader, StatTile, Modal } from '@/components/ui.jsx';
 
 // Master ticket inbox — every tenant's tickets, in one queue. Only the platform
@@ -31,13 +32,25 @@ export default function PlatformTicketsPage() {
   const [newStatus, setNewStatus] = useState('RESOLVED');
   const [busy, setBusy] = useState(false);
   const [msg, setMsg] = useState('');
+  const [assignee, setAssignee] = useState('');       // '' | 'me' | 'none'
+  const [admins, setAdmins] = useState([]);           // who a ticket can be given to
+  const [orgs, setOrgs] = useState([]);
+  const blankNew = { organisationId: '', subject: '', description: '', contactEmail: '', contactPhone: '' };
+  const [creating, setCreating] = useState(null);     // new-ticket form, or null
+  const [newErrors, setNewErrors] = useState({});
+
+  useEffect(() => {
+    api.get('/admin/platform-tickets/assignees').then(setAdmins).catch(() => setAdmins([]));
+    api.get('/admin/organisations').then((r) => setOrgs(r.organisations || [])).catch(() => setOrgs([]));
+  }, []);
 
   const load = useCallback(() => {
     const p = new URLSearchParams();
     if (status) p.set('status', status);
     if (term) p.set('q', term);
+    if (assignee) p.set('assignee', assignee);
     api.get(`/admin/platform-tickets?${p}`).then(setData).catch(() => setData({ tickets: [], counts: {} }));
-  }, [status, term]);
+  }, [status, term, assignee]);
 
   useEffect(() => { load(); }, [load]);
 
@@ -58,18 +71,28 @@ export default function PlatformTicketsPage() {
   }
 
   async function download(id) {
+    try { await downloadFile(`/platform-tickets/${id}/screenshot`, `ticket-${id}`); }
+    catch (e) { setMsg(e.message); }
+  }
+
+  async function assignTo(t, userId) {
+    setMsg('');
+    try { await api.post(`/admin/platform-tickets/${t.id}/assign`, { userId: userId || null }); load(); }
+    catch (e) { setMsg(e.message); }
+  }
+
+  async function createTicket() {
+    const errs = validateContact(creating);
+    if (!creating.organisationId) errs.organisationId = 'Choose the organisation this ticket is for';
+    setNewErrors(errs);
+    if (Object.values(errs).some(Boolean)) return;
+    setBusy(true);
     try {
-      const auth = JSON.parse(localStorage.getItem('truehr_auth') || 'null');
-      const res = await fetch(`/api/platform-tickets/${id}/screenshot`, {
-        headers: { Authorization: `Bearer ${auth?.token}` },
-      });
-      if (!res.ok) throw new Error('Could not fetch the attachment');
-      const url = URL.createObjectURL(await res.blob());
-      const a = document.createElement('a');
-      a.href = url; a.download = `ticket-${id}`;
-      document.body.appendChild(a); a.click(); a.remove();
-      URL.revokeObjectURL(url);
-    } catch (e) { setMsg(e.message); }
+      await api.post('/admin/platform-tickets', { ...creating, organisationId: Number(creating.organisationId) });
+      setCreating(null); setNewErrors({});
+      load();
+    } catch (e) { setNewErrors(e.fields || { _: e.message }); }
+    finally { setBusy(false); }
   }
 
   const c = data?.counts || {};
@@ -80,13 +103,15 @@ export default function PlatformTicketsPage() {
       <PageHeader
         title="Master tickets"
         subtitle="Raised by people inside the tenants, visible only here. Their own admins never see them."
+        action={<Button onClick={() => { setCreating(blankNew); setNewErrors({}); }}>New ticket</Button>}
       />
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-5">
         <StatTile label="Needs a reply" value={(c.OPEN ?? 0) + (c.IN_PROGRESS ?? 0)} tone="warn" caption="Open + in progress" />
         <StatTile label="Open" value={c.OPEN ?? 0} tone="brand" caption="Not yet picked up" />
         <StatTile label="In progress" value={c.IN_PROGRESS ?? 0} tone="brand" caption="Being worked on" />
-        <StatTile label="Resolved" value={(c.RESOLVED ?? 0) + (c.CLOSED ?? 0)} tone="ok" caption="Closed out" />
+        <StatTile label="Resolved" value={c.RESOLVED ?? 0} tone="ok" caption="Fixed or answered" />
+        <StatTile label="Closed" value={c.CLOSED ?? 0} tone="neutral" caption="No action needed" />
       </div>
 
       <Card className="p-0 overflow-hidden">
@@ -101,12 +126,19 @@ export default function PlatformTicketsPage() {
               <option value="CLOSED">Closed</option>
             </Select>
           </Field>
+          <Field label="Assigned">
+            <Select value={assignee} onChange={(e) => setAssignee(e.target.value)}>
+              <option value="">Anyone</option>
+              <option value="me">Assigned to me</option>
+              <option value="none">Unassigned</option>
+            </Select>
+          </Field>
           <Field label="Search">
             <Input value={q} onChange={(e) => setQ(e.target.value)}
-              onKeyDown={(e) => e.key === 'Enter' && setTerm(q)}
+              onKeyDown={(e) => e.key === 'Enter' && setTerm(q.trim())}
               placeholder="Subject, code, person or organisation" />
           </Field>
-          <Button variant="secondary" onClick={() => setTerm(q)}>Search</Button>
+          <Button variant="secondary" onClick={() => setTerm(q.trim())}>Search</Button>
           {term && <Button variant="ghost" onClick={() => { setQ(''); setTerm(''); }}>Clear</Button>}
         </div>
 
@@ -116,7 +148,9 @@ export default function PlatformTicketsPage() {
           <div className="py-16 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>
         ) : tickets.length === 0 ? (
           <div className="p-10">
-            <Empty title="Nothing waiting" subtitle="Tickets raised from any organisation land here." />
+            {status === 'OPEN_ONLY' && !term && !assignee
+              ? <Empty title="Nothing waiting" subtitle="No open tickets. Tickets raised from any organisation land here." />
+              : <Empty title="No tickets found" subtitle="Nothing matches this filter. Try Show: Everything or clear the search." />}
           </div>
         ) : (
           <ul className="divide-y divide-line">
@@ -135,6 +169,7 @@ export default function PlatformTicketsPage() {
                         {' · '}<span className="font-semibold text-ink-soft">{t.organisation || 'No organisation'}</span>
                         {' · '}{t.raisedBy}{t.raiserRole ? ` (${t.raiserRole})` : ''}
                         {' · '}{stamp(t.createdAt)}
+                        {' · '}{t.assigneeEmail ? <>Assigned to <b className="text-ink-soft">{t.assigneeEmail}</b></> : 'Unassigned'}
                       </div>
                       <p className="mt-2 text-[13px] leading-relaxed text-ink-soft whitespace-pre-wrap max-w-[75ch]">
                         {t.description}
@@ -157,9 +192,15 @@ export default function PlatformTicketsPage() {
                         </div>
                       )}
                     </div>
-                    <Button variant="secondary" size="sm" onClick={() => answer(t)} className="shrink-0">
-                      {t.reply ? 'Update' : 'Reply'}
-                    </Button>
+                    <div className="flex items-center gap-2 shrink-0">
+                      <Select aria-label="Assign to" value={t.assignedTo ?? ''} onChange={(e) => assignTo(t, e.target.value)} className="w-44">
+                        <option value="">Unassigned</option>
+                        {admins.map((a) => <option key={a.id} value={a.id}>{a.name}</option>)}
+                      </Select>
+                      <Button variant="secondary" size="sm" onClick={() => answer(t)}>
+                        {t.reply ? 'Update' : 'Reply'}
+                      </Button>
+                    </div>
                   </div>
                 </li>
               );
@@ -203,6 +244,43 @@ export default function PlatformTicketsPage() {
                 placeholder="What we found, what we changed, and anything they need to do." />
             </Field>
             {msg && <p className="text-[13px] font-medium text-neg">{msg}</p>}
+          </div>
+        )}
+      </Modal>
+      <Modal
+        open={!!creating} onClose={() => setCreating(null)}
+        title="Log a ticket for an organisation"
+        actions={
+          <>
+            <Button variant="ghost" onClick={() => setCreating(null)}>Cancel</Button>
+            <Button onClick={createTicket} disabled={busy}>{busy ? 'Saving…' : 'Create ticket'}</Button>
+          </>
+        }
+      >
+        {creating && (
+          <div className="space-y-4">
+            <p className="text-[12.5px] text-ink-faint -mt-1">For an issue reported to you by phone or email. It lands in this queue like any other.</p>
+            <Field label="Organisation" required error={newErrors.organisationId}>
+              <Select value={creating.organisationId} onChange={(e) => setCreating({ ...creating, organisationId: e.target.value })}>
+                <option value="">Select…</option>
+                {orgs.map((o) => <option key={o.id} value={o.id}>{o.name}</option>)}
+              </Select>
+            </Field>
+            <Field label="Subject" required error={newErrors.subject}>
+              <Input value={creating.subject} maxLength={160} onChange={(e) => setCreating({ ...creating, subject: e.target.value })} />
+            </Field>
+            <Field label="Description" required error={newErrors.description}>
+              <Textarea rows={5} maxLength={5000} value={creating.description} onChange={(e) => setCreating({ ...creating, description: e.target.value })} />
+            </Field>
+            <div className="grid sm:grid-cols-2 gap-3">
+              <Field label="Contact email" error={newErrors.contactEmail}>
+                <Input value={creating.contactEmail} onChange={(e) => setCreating({ ...creating, contactEmail: e.target.value })} />
+              </Field>
+              <Field label="Contact phone" error={newErrors.contactPhone}>
+                <Input value={creating.contactPhone} onChange={(e) => setCreating({ ...creating, contactPhone: e.target.value })} />
+              </Field>
+            </div>
+            {newErrors._ && <p className="text-[13px] font-medium text-neg">{newErrors._}</p>}
           </div>
         )}
       </Modal>

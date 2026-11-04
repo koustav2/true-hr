@@ -1,19 +1,27 @@
 'use client';
 import { useEffect, useMemo, useState } from 'react';
 import { api } from '@/lib/api.js';
-import { Card, Button, Select, Field, Modal, Textarea, Spinner, Empty, Badge, PageHeader } from '@/components/ui.jsx';
+import { Card, Button, Select, Field, Modal, Textarea, Spinner, Empty, Badge, PageHeader, useConfirm } from '@/components/ui.jsx';
+import { label, fmtDate } from '@/lib/labels.js';
 import { downloadCsv } from '@/lib/csv.js';
 
-const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'ALL'];
+const STATUSES = ['PENDING', 'APPROVED', 'REJECTED', 'WITHDRAWN', 'ALL'];
 const KIND_LABEL = { PROFILE: 'Personal details', ADDRESS: 'Address', BANK: 'Bank account' };
 const FIELD_LABEL = {
   phone: 'Phone', personalEmail: 'Personal email', dob: 'Date of birth', gender: 'Gender',
   type: 'Address type', line1: 'Address line 1', line2: 'Address line 2', city: 'City',
-  state: 'State', pincode: 'PIN code', country: 'Country',
+  district: 'District', state: 'State', pincode: 'PIN code', country: 'Country',
   accountHolder: 'Account holder', bankName: 'Bank', branch: 'Branch',
   ifsc: 'IFSC', accountNumber: 'Account number',
 };
-const TONE = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'danger' };
+const TONE = { PENDING: 'warn', APPROVED: 'ok', REJECTED: 'danger', WITHDRAWN: 'neutral' };
+// Readable values: MALE → Male, CURRENT → Current, dates dd-mm-yyyy (C51).
+const show = (k, v) => {
+  if (v == null || v === '') return '—';
+  if (k === 'dob') return fmtDate(String(v).slice(0, 10));
+  if (k === 'gender' || k === 'type') return label(String(v).toUpperCase());
+  return String(v);
+};
 
 const dmy = (iso) => {
   if (!iso) return '—';
@@ -29,6 +37,12 @@ export default function ChangeRequestsPage() {
   const [msg, setMsg] = useState('');
   const [reject, setReject] = useState(null);
   const [note, setNote] = useState('');
+  const [confirm, confirmUi] = useConfirm();
+  // The dashboard links here with ?status=<CODE>.
+  useEffect(() => {
+    const s = new URLSearchParams(window.location.search).get('status');
+    if (s && STATUSES.includes(s.toUpperCase())) setStatus(s.toUpperCase());
+  }, []);
 
   const load = () => {
     setRows(null);
@@ -42,6 +56,16 @@ export default function ChangeRequestsPage() {
     return c;
   }, [rows]);
 
+  async function approve(r) {
+    const ok = await confirm({
+      title: `Approve this change for ${r.employee?.name || 'the employee'}?`,
+      body: <div className="space-y-1">{Object.entries(r.payload || {}).filter(([k]) => k !== 'type').map(([k, v]) => (
+        <div key={k}><b>{FIELD_LABEL[k] || k}</b>: {show(k, r.current?.[k])} → <b>{show(k, v)}</b></div>))}
+        <p className="pt-2">The employee record is updated immediately.</p></div>,
+      confirmLabel: 'Approve',
+    });
+    if (ok) decide(r.id, 'approve');
+  }
   async function decide(id, action, reason) {
     setBusy(id); setMsg('');
     try {
@@ -52,6 +76,7 @@ export default function ChangeRequestsPage() {
 
   return (
     <div className="space-y-5">
+      {confirmUi}
       <PageHeader
         title="Change requests"
         subtitle="Employees propose edits to their own record. Nothing is written until you approve it — payroll-critical fields always keep a checker."
@@ -59,15 +84,15 @@ export default function ChangeRequestsPage() {
           <div className="flex items-end gap-2.5">
             <Field label="Status">
               <Select value={status} onChange={(e) => setStatus(e.target.value)}>
-                {STATUSES.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All' : s[0] + s.slice(1).toLowerCase()}</option>)}
+                {STATUSES.map((s) => <option key={s} value={s}>{s === 'ALL' ? 'All' : label(s)}</option>)}
               </Select>
             </Field>
             <Button variant="outline" onClick={() => downloadCsv(`change-requests-${status.toLowerCase()}.csv`,
               (rows || []).map((r) => ({
                 'Employee ID': r.employee?.code || '', Name: r.employee?.name || '',
                 Type: KIND_LABEL[r.kind] || r.kind,
-                Changes: Object.entries(r.payload || {}).map(([k, v]) => `${FIELD_LABEL[k] || k}=${v}`).join('; '),
-                Status: r.status, Submitted: (r.submittedAt || '').slice(0, 10),
+                Changes: Object.entries(r.payload || {}).map(([k, v]) => `${FIELD_LABEL[k] || k}=${show(k, v)}`).join('; '),
+                Status: label(r.status), Submitted: (r.submittedAt || '').slice(0, 10),
                 Reviewed: (r.reviewedAt || '').slice(0, 10), Remark: r.reviewNote || '',
               })))}>
               Export CSV
@@ -92,7 +117,7 @@ export default function ChangeRequestsPage() {
           <div className="p-10 grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>
         ) : rows.length === 0 ? (
           <Empty
-            title={status === 'PENDING' ? 'No requests waiting' : `No ${status.toLowerCase()} requests`}
+            title={status === 'PENDING' ? 'No requests waiting' : 'No change requests found'}
             subtitle="When an employee proposes a change to their profile, address or bank details from the app, it lands here for review."
           />
         ) : (
@@ -102,7 +127,7 @@ export default function ChangeRequestsPage() {
                 <tr>
                   <th className="text-left">Employee</th>
                   <th className="text-left">Type</th>
-                  <th className="text-left">Proposed change</th>
+                  <th className="text-left">Current → proposed</th>
                   <th className="text-left">Submitted</th>
                   <th className="text-right">Action</th>
                 </tr>
@@ -116,15 +141,18 @@ export default function ChangeRequestsPage() {
                       <div className="text-ink-faint text-[11.5px]">{r.employee?.designation || '—'}</div>
                     </td>
                     <td className="px-4 whitespace-nowrap">
-                      <Badge tone={TONE[r.status] || 'neutral'}>{r.status}</Badge>
+                      <Badge tone={TONE[r.status] || 'neutral'}>{label(r.status)}</Badge>
                       <div className="text-ink-soft text-[12.5px] mt-1">{KIND_LABEL[r.kind] || r.kind}</div>
                     </td>
                     <td className="px-4 max-w-[420px]">
-                      <dl className="grid grid-cols-[minmax(0,140px)_1fr] gap-x-3 gap-y-1">
+                      <dl className="grid grid-cols-[minmax(0,120px)_1fr] gap-x-3 gap-y-1">
                         {Object.entries(r.payload || {}).map(([k, v]) => (
                           <div key={k} className="contents">
                             <dt className="text-[11.5px] text-ink-faint truncate">{FIELD_LABEL[k] || k}</dt>
-                            <dd className="text-[12.5px] text-ink font-medium break-words">{String(v)}</dd>
+                            <dd className="text-[12.5px] break-words">
+                              {r.current && k !== 'type' && <span className="text-ink-faint line-through mr-1.5">{show(k, r.current[k])}</span>}
+                              <span className="text-ink font-medium">{show(k, v)}</span>
+                            </dd>
                           </div>
                         ))}
                       </dl>
@@ -137,7 +165,7 @@ export default function ChangeRequestsPage() {
                     <td className="px-4 text-right whitespace-nowrap">
                       {r.status === 'PENDING' ? (
                         <>
-                          <button onClick={() => decide(r.id, 'approve')} disabled={busy === r.id}
+                          <button onClick={() => approve(r)} disabled={busy === r.id}
                             className="text-pos text-[12px] font-semibold hover:underline mr-4 disabled:opacity-50">Approve</button>
                           <button onClick={() => { setReject(r); setNote(''); }}
                             className="text-neg text-[12px] font-semibold hover:underline">Reject</button>

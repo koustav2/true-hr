@@ -5,7 +5,9 @@ import { api } from '@/lib/api.js';
 import { useAuth } from '@/lib/auth.jsx';
 import { usePerms } from '@/lib/perms.jsx';
 import { ROLE_LABEL } from '@/lib/permissions.js';
-import { Card, Button, Input, Select, Field, Spinner, Empty, Modal } from '@/components/ui.jsx';
+import { label as codeLabel } from '@/lib/labels.js';
+import { validator } from '@/lib/validate.js';
+import { Card, Button, Input, Select, Field, Spinner, Empty, Modal, ErrorSummary, useConfirm } from '@/components/ui.jsx';
 import { IconPlus, IconShield, IconCheck } from '@/components/icons.jsx';
 
 // ============================================================================
@@ -33,7 +35,13 @@ export default function UsersPage() {
   const [rows, setRows] = useState(null);
   const [roles, setRoles] = useState([]);
   const [show, setShow] = useState(false);
-  const [form, setForm] = useState({ email: '', password: '', roleId: '', companyId: '' });
+  const [form, setForm] = useState({ name: '', email: '', password: '', roleId: '', companyId: '' });
+  const [fieldErr, setFieldErr] = useState({});
+  const [showPw, setShowPw] = useState(false);
+  const [filter, setFilter] = useState('ALL');   // ALL | STAFF | EMPLOYEE_LOGIN
+  const [search, setSearch] = useState('');
+  const [naming, setNaming] = useState(null);    // { user, name, error }
+  const [confirm, confirmUi] = useConfirm();
   const [companies, setCompanies] = useState([]);
   const [err, setErr] = useState('');
   const [msg, setMsg] = useState('');
@@ -59,25 +67,58 @@ export default function UsersPage() {
   }
 
   async function create(e) {
-    e.preventDefault(); setErr(''); setMsg(''); setBusy(true);
+    e.preventDefault(); setErr(''); setMsg('');
+    // Every error at once, before sending (same rules as the server).
+    const v = validator();
+    v.name('name', form.name, 'Full name', { required: true });
+    v.email('email', form.email, 'Email', { required: true });
+    const pw = form.password || '';
+    if (!pw) v.add('password', 'Temporary password is required');
+    else if (pw.length < 8) v.add('password', 'Password must be at least 8 characters');
+    else if (!/[A-Za-z]/.test(pw) || !/\d/.test(pw)) v.add('password', 'Password must contain at least one letter and one digit');
+    if (!form.roleId) v.add('roleId', 'Choose a role');
+    setFieldErr(v.fields);
+    if (!v.ok) return;
+    setBusy(true);
     try {
       const created = await api.post('/admin/users', {
-        email: form.email, password: form.password, roleId: Number(form.roleId) || undefined,
+        name: form.name.trim(), email: form.email.trim(), password: form.password, roleId: Number(form.roleId) || undefined,
         companyId: form.companyId ? Number(form.companyId) : undefined,
       });
-      setMsg(`${created.email} created as ${created.roleLabel || 'staff'}. They must change this password at first sign-in.`);
-      setForm({ email: '', password: '', roleId: form.roleId, companyId: form.companyId });
+      setMsg(`${form.name.trim()} (${created.email}) created as ${created.roleLabel || 'staff'}. They must change this password at first sign-in.`);
+      setForm({ name: '', email: '', password: '', roleId: form.roleId, companyId: form.companyId });
+      setFieldErr({});
       setShow(false);
       await load();
-    } catch (e) { setErr(e.message); } finally { setBusy(false); }
+    } catch (e2) {
+      // The form stays open with what was typed.
+      setFieldErr(e2.fields || {});
+      if (!e2.fields) setErr(e2.message);
+    } finally { setBusy(false); }
+  }
+
+  async function saveName() {
+    const v = validator();
+    v.name('name', naming.name, 'Full name', { required: true });
+    if (!v.ok) { setNaming({ ...naming, error: v.fields.name }); return; }
+    try {
+      await api.post(`/admin/users/${naming.user.id}/name`, { name: naming.name.trim() });
+      setMsg(`Name saved for ${naming.user.email}.`);
+      setNaming(null);
+      await load();
+    } catch (e2) { setNaming({ ...naming, error: e2.fields?.name || e2.message }); }
   }
 
   async function toggle(u) {
     const status = u.status === 'ACTIVE' ? 'DISABLED' : 'ACTIVE';
+    if (status === 'DISABLED' && !(await confirm({
+      title: 'Disable this login?', tone: 'danger', confirmLabel: 'Disable',
+      body: `${u.name || u.email} will be signed out and will not be able to sign in until the login is enabled again.`,
+    }))) return;
     setErr(''); setMsg('');
     try {
       await api.post(`/admin/users/${u.id}/status`, { status });
-      setMsg(`${u.email} ${status === 'ACTIVE' ? 'enabled' : 'disabled'}.`);
+      setMsg(`${u.name || u.email} ${status === 'ACTIVE' ? 'enabled' : 'disabled'}.`);
       await load();
     } catch (e) { setErr(e.message); }
   }
@@ -89,7 +130,7 @@ export default function UsersPage() {
     setErr(''); setMsg(''); setConfirmRole(null);
     try {
       await api.post(`/admin/users/${u.id}/org-role`, { roleId: role.id });
-      setMsg(`${u.email} is now ${role.label}.`);
+      setMsg(`${u.name || u.email} is now ${role.label}.`);
       await load();
     } catch (e) { setErr(e.message); }
   }
@@ -109,6 +150,14 @@ export default function UsersPage() {
   };
 
   const assignableFor = (u) => roles.filter((r) => !r.requiresEmployeeProfile || u.employee_code);
+  const q = search.trim().toLowerCase();
+  const shown = (rows || []).filter((u) => (filter === 'ALL' || u.kind === filter)
+    && (!q || [u.name, u.email, u.employee_code, u.roleLabel].some((x) => String(x || '').toLowerCase().includes(q))));
+  const counts = {
+    ALL: (rows || []).length,
+    STAFF: (rows || []).filter((u) => u.kind === 'STAFF').length,
+    EMPLOYEE_LOGIN: (rows || []).filter((u) => u.kind === 'EMPLOYEE_LOGIN').length,
+  };
 
   return (
     <div className="space-y-6">
@@ -151,16 +200,25 @@ export default function UsersPage() {
           <h2 className="font-semibold text-ink mb-4 flex items-center gap-2">
             <IconShield width={18} height={18} className="text-brand-600" /> New staff account
           </h2>
-          <form onSubmit={create} className="grid sm:grid-cols-3 gap-4 items-end">
-            <Field label="Email" required>
-              <Input type="email" value={form.email} required
+          <form onSubmit={create} className="grid sm:grid-cols-3 gap-4 items-start" noValidate>
+            <div className="sm:col-span-3"><ErrorSummary errors={fieldErr} /></div>
+            <Field label="Full name" required error={fieldErr.name}>
+              <Input value={form.name} placeholder="e.g. Priya Sharma"
+                onChange={(e) => setForm((f) => ({ ...f, name: e.target.value }))} />
+            </Field>
+            <Field label="Email" required error={fieldErr.email}>
+              <Input type="email" value={form.email}
                 onChange={(e) => setForm((f) => ({ ...f, email: e.target.value }))} />
             </Field>
-            <Field label="Temporary password" required hint="≥ 8 characters; changed at first sign-in">
-              <Input type="text" value={form.password} required
-                onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+            {/* C39: masked like every password field, with an explicit reveal. */}
+            <Field label="Temporary password" required error={fieldErr.password} hint="At least 8 characters with a letter and a digit; changed at first sign-in">
+              <div className="flex gap-1.5">
+                <Input type={showPw ? 'text' : 'password'} autoComplete="new-password" value={form.password}
+                  onChange={(e) => setForm((f) => ({ ...f, password: e.target.value }))} />
+                <Button type="button" variant="outline" size="sm" onClick={() => setShowPw((x) => !x)}>{showPw ? 'Hide' : 'Show'}</Button>
+              </div>
             </Field>
-            <Field label="Role" hint={roles.length ? undefined : 'No roles available to you'}>
+            <Field label="Role" required error={fieldErr.roleId} hint={roles.length ? undefined : 'No roles available to you'}>
               <Select value={form.roleId} onChange={(e) => setForm((f) => ({ ...f, roleId: e.target.value }))}>
                 {roles.filter((r) => !r.requiresEmployeeProfile).map((r) => (
                   <option key={r.id} value={r.id}>{r.label}</option>
@@ -182,17 +240,28 @@ export default function UsersPage() {
             )}
             <div className="sm:col-span-3 flex gap-2">
               <Button type="submit" disabled={busy || !roles.length}>{busy ? <Spinner /> : 'Create user'}</Button>
-              <Button type="button" variant="outline" onClick={() => setShow(false)}>Cancel</Button>
+              <Button type="button" variant="outline" onClick={() => { setShow(false); setFieldErr({}); }}>Cancel</Button>
             </div>
           </form>
         </Card>
       )}
 
+      <div className="flex flex-wrap items-center gap-2">
+        {[['ALL', 'All logins'], ['STAFF', 'Staff'], ['EMPLOYEE_LOGIN', 'Employees']].map(([k, l]) => (
+          <button key={k} type="button" onClick={() => setFilter(k)}
+            className={`rounded-full px-3 py-1 text-[12.5px] font-semibold ring-1 ring-inset ${filter === k ? 'bg-brand-50 text-brand-700 ring-brand-200' : 'bg-white text-ink-soft ring-line hover:bg-canvas'}`}>
+            {l} <span className="tabular-nums text-ink-faint">{counts[k]}</span>
+          </button>
+        ))}
+        <Input value={search} onChange={(e) => setSearch(e.target.value)} placeholder="Search name, email or employee ID"
+          className="!w-64 ml-auto" />
+      </div>
+
       <Card className="overflow-hidden">
         {!rows ? (
           <div className="grid place-items-center py-20"><Spinner className="text-brand-600 h-6 w-6" /></div>
-        ) : rows.length === 0 ? (
-          <Empty title="No users" icon={<IconShield width={22} height={22} />} />
+        ) : shown.length === 0 ? (
+          <Empty title={rows.length ? 'No users match this filter' : 'No users'} icon={<IconShield width={22} height={22} />} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-sm">
@@ -206,16 +275,19 @@ export default function UsersPage() {
                 </tr>
               </thead>
               <tbody className="divide-y divide-line">
-                {rows.map((u) => {
+                {shown.map((u) => {
                   const base = u.role;
-                  const label = u.roleLabel || ROLE_LABEL[base] || base;
+                  const label = u.roleLabel || ROLE_LABEL[base] || codeLabel(base);
                   const options = assignableFor(u);
                   const editable = canEdit(u);
                   return (
                     <tr key={u.id} className="hover:bg-slate-50/70">
                       <td className="px-5 py-3.5">
                         <div className="font-medium text-ink flex items-center gap-2">
-                          {u.first_name ? `${u.first_name} ${u.last_name}` : u.email.split('@')[0]}
+                          {u.name || <span className="text-ink-faint italic font-normal">No name set</span>}
+                          {u.kind === 'EMPLOYEE_LOGIN' && (
+                            <span className="rounded-full bg-slate-100 text-slate-600 ring-1 ring-inset ring-slate-200 px-2 py-0.5 text-[10px] font-semibold">Employee</span>
+                          )}
                           {u.is_platform_admin && (
                             <span className="rounded-full bg-violet-50 text-violet-700 ring-1 ring-inset ring-violet-200 px-2 py-0.5 text-[10px] font-semibold">
                               Platform owner
@@ -232,6 +304,10 @@ export default function UsersPage() {
                         </div>
                         <div className="text-xs text-ink-faint">
                           {u.email}{u.employee_code ? ` · ${u.employee_code}` : ''}
+                          {!u.employee_id && editable && (
+                            <button type="button" onClick={() => setNaming({ user: u, name: u.name || '', error: '' })}
+                              className="ml-2 text-brand-600 font-semibold hover:underline">{u.name ? 'Rename' : 'Set name'}</button>
+                          )}
                         </div>
                       </td>
                       <td className="px-5 py-3.5">
@@ -257,7 +333,7 @@ export default function UsersPage() {
                         )}
                       </td>
                       <td className="px-5 py-3.5 hidden md:table-cell text-ink-soft">
-                        {u.last_login_at ? new Date(u.last_login_at).toLocaleString() : '—'}
+                        {u.last_login_at ? new Date(u.last_login_at).toLocaleString('en-IN') : 'Never'}
                       </td>
                       <td className="px-5 py-3.5">
                         <span className={`inline-flex items-center gap-1.5 text-xs font-semibold ${u.status === 'ACTIVE' ? 'text-emerald-700' : 'text-slate-400'}`}>
@@ -296,7 +372,7 @@ export default function UsersPage() {
         {confirmRole && (
           <div className="space-y-3 text-sm">
             <p>
-              <b>{confirmRole.user.email}</b> will become <b>{confirmRole.role.label}</b>.
+              <b>{confirmRole.user.name || confirmRole.user.email}</b> will become <b>{confirmRole.role.label}</b>.
             </p>
             {confirmRole.role.description && (
               <p className="text-ink-soft">{confirmRole.role.description}</p>
@@ -307,6 +383,18 @@ export default function UsersPage() {
           </div>
         )}
       </Modal>
+      <Modal open={!!naming} onClose={() => setNaming(null)} title="Name on this login" size="sm"
+        actions={<>
+          <Button variant="ghost" onClick={() => setNaming(null)}>Cancel</Button>
+          <Button onClick={saveName}>Save</Button>
+        </>}>
+        {naming && (
+          <Field label="Full name" required error={naming.error} hint={naming.user.email}>
+            <Input value={naming.name} autoFocus onChange={(e) => setNaming({ ...naming, name: e.target.value, error: '' })} />
+          </Field>
+        )}
+      </Modal>
+      {confirmUi}
     </div>
   );
 }

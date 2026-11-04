@@ -2,7 +2,8 @@
 import { useEffect, useState } from 'react';
 import { api } from '@/lib/api.js';
 import { usePerms } from '@/lib/perms.jsx';
-import { Button, Card, Field, Input, Modal, Select, Spinner, Empty, ConfirmClick } from '@/components/ui.jsx';
+import { Button, Card, Field, Input, Modal, Spinner, Empty, ConfirmClick, ErrorSummary } from '@/components/ui.jsx';
+import { validator } from '@/lib/validate.js';
 import { MasterText } from '@/components/MasterPicker.jsx';
 import { IconBriefcase, IconPlus, IconCheck, IconUsers, IconX } from '@/components/icons.jsx';
 
@@ -11,9 +12,45 @@ import { IconBriefcase, IconPlus, IconCheck, IconUsers, IconX } from '@/componen
 //
 // An organisation is the tenant; a company is a payroll/legal entity within it.
 // A group can run several: each mints its own employee codes from its prefix and
-// keeps its own departments, designations and salary template, while HR still
-// works across the whole organisation in one place.
+// keeps its own salary template. Departments and designations are shared by the
+// whole organisation (the same lists the Hierarchy screen edits).
 // ============================================================================
+
+// Same rules as the server (companyController.structureNameError), so every
+// problem shows at once before a request is sent.
+const NAME_CHARS = /^[A-Za-z0-9][A-Za-z0-9 &.,'()/+-]*$/;
+function structureNameError(name, label) {
+  const s = String(name ?? '').trim();
+  if (!s) return `${label} is required`;
+  if (s.length > 120) return `${label} must be at most 120 characters`;
+  if (/[<>]/.test(s)) return `${label} cannot contain < or >`;
+  if (!/[A-Za-z]/.test(s)) return `${label} must contain letters`;
+  if (!NAME_CHARS.test(s)) return `${label} can use letters, digits, spaces and & . , ' ( ) / + - only`;
+  return null;
+}
+
+function companyErrors(f, { prefix = true } = {}) {
+  const v = validator();
+  const nameErr = structureNameError(f.name, 'Company name');
+  if (nameErr) v.add('name', nameErr);
+  if (f.legalName && String(f.legalName).trim()) {
+    const e = structureNameError(f.legalName, 'Legal name'); if (e) v.add('legalName', e);
+  }
+  if (prefix) {
+    const px = String(f.codePrefix || '').trim().toUpperCase();
+    if (!px) v.add('codePrefix', 'Employee ID prefix is required');
+    else if (!/^[A-Z0-9]{2,6}$/.test(px)) v.add('codePrefix', 'Employee ID prefix must be 2–6 letters or digits (e.g. TKF)');
+  }
+  v.pattern('gstin', f.gstin, 'gstin', 'GSTIN');
+  v.pattern('pan', f.pan, 'pan', 'PAN');
+  v.pattern('pfCode', f.pfCode, 'pf', 'PF code');
+  v.pattern('esicCode', f.esicCode, 'esic', 'ESIC code');
+  const g = String(f.gstin || '').trim().toUpperCase(); const p = String(f.pan || '').trim().toUpperCase();
+  if (g && p && !v.fields.gstin && !v.fields.pan && g.slice(2, 12) !== p) {
+    v.add('gstin', 'GSTIN does not contain this PAN (characters 3-12 of a GSTIN are the PAN)');
+  }
+  return v.fields;
+}
 
 export default function CompaniesPage() {
   const { canManage, activeOrg } = usePerms();
@@ -34,6 +71,9 @@ export default function CompaniesPage() {
     seedStructure: true,
   });
   const [editing, setEditing] = useState(null);
+  const [errors, setErrors] = useState({});       // field errors of the open form
+  const [formError, setFormError] = useState(''); // non-field error of the open form
+  const [structErr, setStructErr] = useState('');
   const [structFor, setStructFor] = useState(null);   // { company, departments, designations }
   const [newDep, setNewDep] = useState('');
   const [newDes, setNewDes] = useState({ title: '', grade: '' });
@@ -44,7 +84,16 @@ export default function CompaniesPage() {
   }
   useEffect(() => { load(); }, []);
 
+  // Clear a field's error as soon as it is edited, so a corrected value never
+  // keeps showing the old message.
+  const clearErr = (k) => setErrors((e) => { if (!e[k]) return e; const n = { ...e }; delete n[k]; return n; });
+  const setF = (k, v) => { setForm((f) => ({ ...f, [k]: v })); clearErr(k); };
+  const setE = (k, v) => { setEditing((f) => ({ ...f, [k]: v })); clearErr(k); };
+
   async function create() {
+    const errs = companyErrors(form);
+    setErrors(errs); setFormError('');
+    if (Object.keys(errs).length) return;
     setSaving(true); setError('');
     try {
       const created = await api.post('/admin/companies', {
@@ -60,23 +109,33 @@ export default function CompaniesPage() {
       });
       setCreating(false);
       setForm({ name: '', codePrefix: '', legalName: '', gstin: '', pan: '', pfCode: '', esicCode: '', address: '', seedStructure: true });
-      setNotice(`${created.name} created. New hires there get employee IDs starting ${created.codePrefix}.`);
+      setNotice(`${created.name} created. New hires there get employee IDs starting ${created.codePrefix}.`
+        + (created.structureMessage ? ` ${created.structureMessage}` : ''));
       await load();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setErrors(e.fields || {}); setFormError(e.fields ? '' : e.message); }
     finally { setSaving(false); }
   }
 
   async function saveEdit() {
+    const errs = companyErrors(editing, { prefix: !editing.prefixLocked });
+    setErrors(errs); setFormError('');
+    if (Object.keys(errs).length) return;
     setSaving(true); setError('');
     try {
+      const trimOrNull = (v) => (v == null ? v : String(v).trim());
       await api.patch(`/admin/companies/${editing.id}`, {
-        name: editing.name, legalName: editing.legalName, gstin: editing.gstin,
-        pan: editing.pan, pfCode: editing.pfCode, esicCode: editing.esicCode, address: editing.address,
+        name: trimOrNull(editing.name), legalName: trimOrNull(editing.legalName),
+        gstin: trimOrNull(editing.gstin)?.toUpperCase(), pan: trimOrNull(editing.pan)?.toUpperCase(),
+        pfCode: trimOrNull(editing.pfCode)?.toUpperCase(), esicCode: trimOrNull(editing.esicCode),
+        address: trimOrNull(editing.address),
+        ...(editing.prefixLocked ? {} : { codePrefix: String(editing.codePrefix || '').trim().toUpperCase() }),
       });
       setEditing(null); setNotice('Company updated.'); await load();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setErrors(e.fields || {}); setFormError(e.fields ? '' : e.message); }
     finally { setSaving(false); }
   }
+  const openCreate = () => { setErrors({}); setFormError(''); setCreating(true); };
+  const openEdit = (c) => { setErrors({}); setFormError(''); setEditing({ ...c }); };
 
   async function setActive(c, active) {
     setError('');
@@ -90,7 +149,7 @@ export default function CompaniesPage() {
   }
 
   async function openStructure(c) {
-    setError('');
+    setError(''); setStructErr('');
     try {
       const s = await api.get(`/admin/companies/${c.id}/structure`);
       setStructFor({ company: c, ...s });
@@ -103,24 +162,32 @@ export default function CompaniesPage() {
   }
   async function addDep() {
     if (!newDep.trim()) return;
+    const bad = structureNameError(newDep, 'Department name');
+    if (bad) { setStructErr(bad); return; }
+    setStructErr('');
     try { await api.post(`/admin/companies/${structFor.company.id}/departments`, { name: newDep.trim() }); setNewDep(''); await refreshStructure(); await load(); }
-    catch (e) { setError(e.message); }
+    catch (e) { setStructErr(e.message); }
   }
   async function delDep(d) {
+    setStructErr('');
     try { await api.del(`/admin/companies/${structFor.company.id}/departments/${d.id}`); await refreshStructure(); await load(); }
-    catch (e) { setError(e.message); }
+    catch (e) { setStructErr(e.message); }
   }
   async function addDes() {
     if (!newDes.title.trim()) return;
+    const bad = structureNameError(newDes.title, 'Designation title');
+    if (bad) { setStructErr(bad); return; }
+    setStructErr('');
     try {
       await api.post(`/admin/companies/${structFor.company.id}/designations`,
         { title: newDes.title.trim(), grade: newDes.grade.trim() || undefined });
       setNewDes({ title: '', grade: '' }); await refreshStructure(); await load();
-    } catch (e) { setError(e.message); }
+    } catch (e) { setStructErr(e.message); }
   }
   async function delDes(d) {
+    setStructErr('');
     try { await api.del(`/admin/companies/${structFor.company.id}/designations/${d.id}`); await refreshStructure(); await load(); }
-    catch (e) { setError(e.message); }
+    catch (e) { setStructErr(e.message); }
   }
 
   if (rows === null) return <div className="grid place-items-center py-20"><Spinner className="h-6 w-6 text-brand-600" /></div>;
@@ -154,8 +221,9 @@ export default function CompaniesPage() {
           <IconUsers className="text-ink-faint" />
           <b className="text-ink tabular-nums">{c.employees ?? 0}</b> employees
         </span>
-        <span className="text-ink-soft"><b className="text-ink tabular-nums">{c.departments ?? 0}</b> departments</span>
-        <span className="text-ink-soft"><b className="text-ink tabular-nums">{c.designations ?? 0}</b> roles</span>
+      </div>
+      <div className="mt-1 text-[11px] text-ink-faint">
+        Uses the organisation&apos;s {c.departments ?? 0} departments and {c.designations ?? 0} designations
       </div>
 
       {(c.gstin || c.pan || c.pfCode || c.esicCode) && (
@@ -169,10 +237,10 @@ export default function CompaniesPage() {
       )}
 
       <div className="mt-4 flex flex-wrap items-center gap-2 border-t border-line pt-3">
-        <Button size="sm" variant="ghost" onClick={() => openStructure(c)}>Departments &amp; roles</Button>
+        <Button size="sm" variant="ghost" onClick={() => openStructure(c)}>Departments &amp; designations</Button>
         {mayManage && (
           <>
-            <Button size="sm" variant="ghost" onClick={() => setEditing({ ...c })}>Edit</Button>
+            <Button size="sm" variant="ghost" onClick={() => openEdit(c)}>Edit</Button>
             {c.active ? (
               <ConfirmClick onConfirm={() => setActive(c, false)} confirmLabel="Archive this company?" className="text-sm">
                 Archive
@@ -193,12 +261,12 @@ export default function CompaniesPage() {
           <h2 className="text-xl font-bold text-ink">Companies</h2>
           <p className="text-sm text-ink-soft mt-1 max-w-2xl">
             The legal entities inside {activeOrg?.name || 'this organisation'}. Each one issues its own employee
-            IDs and keeps its own departments, designations and payroll template — while HR works across all of
-            them in one place.
+            IDs and keeps its own payroll template. Departments and designations belong to the whole
+            organisation — every company draws on the same two lists (also edited under Hierarchy &amp; Levels).
           </p>
         </div>
         {mayManage
-          ? <Button onClick={() => setCreating(true)} className="shrink-0"><IconPlus /> New company</Button>
+          ? <Button onClick={openCreate} className="shrink-0"><IconPlus /> New company</Button>
           : mayManageStructure
             ? <p className="text-xs text-ink-faint max-w-[220px] shrink-0">
                 You can edit departments and designations. Creating a company is a Super Admin action.
@@ -240,45 +308,48 @@ export default function CompaniesPage() {
         actions={(
           <>
             <Button variant="ghost" onClick={() => setCreating(false)}>Cancel</Button>
-            <Button onClick={create} disabled={saving || !form.name.trim() || !form.codePrefix.trim()}>
+            <Button onClick={create} disabled={saving}>
               {saving ? <Spinner className="h-4 w-4" /> : 'Create company'}
             </Button>
           </>
         )}
       >
         <div className="space-y-4">
+          <ErrorSummary errors={errors} />
+          {formError && <div role="alert" className="text-[12.5px] text-neg">{formError}</div>}
           <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="Company name" required>
-              <Input value={form.name} placeholder="Acme Manufacturing Pvt Ltd"
-                onChange={(e) => setForm({ ...form, name: e.target.value })} />
+            <Field label="Company name" required error={errors.name}>
+              <Input value={form.name} placeholder="Acme Manufacturing Pvt Ltd" maxLength={120}
+                onChange={(e) => setF('name', e.target.value)} />
             </Field>
-            <Field label="Employee ID prefix" required
-              hint="2–6 letters or digits. Cannot be changed later — employee IDs are minted from it.">
+            <Field label="Employee ID prefix" required error={errors.codePrefix}
+              hint="2–6 letters or digits, your own (not another company's). Editable until the first employee ID is issued.">
               <Input value={form.codePrefix} placeholder="ACM"
-                onChange={(e) => setForm({ ...form, codePrefix: e.target.value.toUpperCase().slice(0, 6) })} />
+                onChange={(e) => setF('codePrefix', e.target.value.toUpperCase().slice(0, 6))} />
             </Field>
           </div>
-          <Field label="Legal name" hint="If different from the display name">
-            <Input value={form.legalName} onChange={(e) => setForm({ ...form, legalName: e.target.value })} />
+          <Field label="Legal name" hint="If different from the display name" error={errors.legalName}>
+            <Input value={form.legalName} maxLength={120} onChange={(e) => setF('legalName', e.target.value)} />
           </Field>
           <div className="grid sm:grid-cols-2 gap-4">
-            <Field label="GSTIN"><Input value={form.gstin} onChange={(e) => setForm({ ...form, gstin: e.target.value })} /></Field>
-            <Field label="PAN"><Input value={form.pan} onChange={(e) => setForm({ ...form, pan: e.target.value.toUpperCase() })} /></Field>
-            <Field label="PF code"><Input value={form.pfCode} onChange={(e) => setForm({ ...form, pfCode: e.target.value })} /></Field>
-            <Field label="ESIC code"><Input value={form.esicCode} onChange={(e) => setForm({ ...form, esicCode: e.target.value })} /></Field>
+            <Field label="GSTIN" error={errors.gstin} hint="15 characters, like 21ABCDE1234F1Z5"><Input value={form.gstin} maxLength={15} onChange={(e) => setF('gstin', e.target.value.toUpperCase())} /></Field>
+            <Field label="PAN" error={errors.pan} hint="Like ABCDE1234F"><Input value={form.pan} maxLength={10} onChange={(e) => setF('pan', e.target.value.toUpperCase())} /></Field>
+            <Field label="PF code" error={errors.pfCode} hint="Like MHBAN00123450000123456"><Input value={form.pfCode} maxLength={22} onChange={(e) => setF('pfCode', e.target.value.toUpperCase())} /></Field>
+            <Field label="ESIC code" error={errors.esicCode} hint="17 digits"><Input value={form.esicCode} maxLength={17} inputMode="numeric" onChange={(e) => setF('esicCode', e.target.value)} /></Field>
           </div>
-          <Field label="Registered address">
-            <Input value={form.address} onChange={(e) => setForm({ ...form, address: e.target.value })} />
+          <Field label="Registered address" error={errors.address}>
+            <Input value={form.address} maxLength={500} onChange={(e) => setF('address', e.target.value)} />
           </Field>
           <label className="flex items-start gap-3 rounded-xl border border-line bg-slate-50/60 p-4 cursor-pointer">
             <input type="checkbox" checked={form.seedStructure}
               onChange={(e) => setForm({ ...form, seedStructure: e.target.checked })}
               className="mt-0.5 h-4 w-4 accent-brand-600 cursor-pointer" />
             <span>
-              <span className="block text-sm font-semibold text-ink">Start with a standard department list</span>
+              <span className="block text-sm font-semibold text-ink">Add the standard department list to the organisation</span>
               <span className="block text-xs text-ink-soft mt-0.5">
-                Creates Engineering, HR, Sales, Operations and Finance plus common designations, so you can hire
-                straight away. You can edit them afterwards.
+                Adds Engineering, Human Resources, Sales, Operations and Finance plus 7 common designations to the
+                organisation-wide lists that every company shares. Names you already have are reused, not
+                duplicated; you will be told exactly what was added. Untick if your lists are already set up.
               </span>
             </span>
           </label>
@@ -300,24 +371,34 @@ export default function CompaniesPage() {
       >
         {editing && (
           <div className="space-y-4">
-            <div className="rounded-lg bg-slate-50 ring-1 ring-inset ring-line px-4 py-3 text-xs text-ink-soft">
-              Employee ID prefix is <b className="text-ink">{editing.codePrefix}</b> and cannot be changed —
-              existing employee IDs were issued from it.
-            </div>
+            <ErrorSummary errors={errors} />
+            {formError && <div role="alert" className="text-[12.5px] text-neg">{formError}</div>}
+            {editing.prefixLocked ? (
+              <div className="rounded-lg bg-slate-50 ring-1 ring-inset ring-line px-4 py-3 text-xs text-ink-soft">
+                Employee ID prefix is <b className="text-ink">{editing.codePrefix}</b> and can no longer be changed —
+                {` ${editing.idsIssued} employee ID${editing.idsIssued === 1 ? ' has' : 's have'}`} already been issued from it.
+              </div>
+            ) : (
+              <Field label="Employee ID prefix" required error={errors.codePrefix}
+                hint="No employee ID has been issued from it yet, so you can still change it.">
+                <Input value={editing.codePrefix || ''}
+                  onChange={(e) => setE('codePrefix', e.target.value.toUpperCase().slice(0, 6))} />
+              </Field>
+            )}
             <div className="grid sm:grid-cols-2 gap-4">
-              <Field label="Company name" required>
-                <Input value={editing.name || ''} onChange={(e) => setEditing({ ...editing, name: e.target.value })} />
+              <Field label="Company name" required error={errors.name}>
+                <Input value={editing.name || ''} maxLength={120} onChange={(e) => setE('name', e.target.value)} />
               </Field>
-              <Field label="Legal name">
-                <Input value={editing.legalName || ''} onChange={(e) => setEditing({ ...editing, legalName: e.target.value })} />
+              <Field label="Legal name" error={errors.legalName}>
+                <Input value={editing.legalName || ''} maxLength={120} onChange={(e) => setE('legalName', e.target.value)} />
               </Field>
-              <Field label="GSTIN"><Input value={editing.gstin || ''} onChange={(e) => setEditing({ ...editing, gstin: e.target.value })} /></Field>
-              <Field label="PAN"><Input value={editing.pan || ''} onChange={(e) => setEditing({ ...editing, pan: e.target.value.toUpperCase() })} /></Field>
-              <Field label="PF code"><Input value={editing.pfCode || ''} onChange={(e) => setEditing({ ...editing, pfCode: e.target.value })} /></Field>
-              <Field label="ESIC code"><Input value={editing.esicCode || ''} onChange={(e) => setEditing({ ...editing, esicCode: e.target.value })} /></Field>
+              <Field label="GSTIN" error={errors.gstin}><Input value={editing.gstin || ''} maxLength={15} onChange={(e) => setE('gstin', e.target.value.toUpperCase())} /></Field>
+              <Field label="PAN" error={errors.pan}><Input value={editing.pan || ''} maxLength={10} onChange={(e) => setE('pan', e.target.value.toUpperCase())} /></Field>
+              <Field label="PF code" error={errors.pfCode}><Input value={editing.pfCode || ''} maxLength={22} onChange={(e) => setE('pfCode', e.target.value.toUpperCase())} /></Field>
+              <Field label="ESIC code" error={errors.esicCode}><Input value={editing.esicCode || ''} maxLength={17} inputMode="numeric" onChange={(e) => setE('esicCode', e.target.value)} /></Field>
             </div>
-            <Field label="Registered address">
-              <Input value={editing.address || ''} onChange={(e) => setEditing({ ...editing, address: e.target.value })} />
+            <Field label="Registered address" error={errors.address}>
+              <Input value={editing.address || ''} maxLength={500} onChange={(e) => setE('address', e.target.value)} />
             </Field>
           </div>
         )}
@@ -328,11 +409,16 @@ export default function CompaniesPage() {
         open={!!structFor}
         onClose={() => setStructFor(null)}
         size="lg"
-        title={structFor ? `${structFor.company.name} — departments & roles` : ''}
+        title={structFor ? `Departments & designations (organisation-wide)` : ''}
         actions={<Button variant="ghost" onClick={() => setStructFor(null)}>Close</Button>}
       >
         {structFor && (
           <div className="grid sm:grid-cols-2 gap-6">
+            <p className="sm:col-span-2 text-xs text-ink-soft">
+              These lists belong to the whole organisation, not only to {structFor.company.name}: every company
+              shares them, and a change here shows everywhere (including Hierarchy &amp; Levels).
+            </p>
+            {structErr && <div role="alert" className="sm:col-span-2 text-[12.5px] text-neg">{structErr}</div>}
             <div>
               <div className="text-sm font-semibold text-ink mb-2">Departments</div>
               <div className="rounded-xl border border-line divide-y divide-line max-h-64 overflow-y-auto">
@@ -351,8 +437,8 @@ export default function CompaniesPage() {
               </div>
               {mayManageStructure && (
                 <div className="flex gap-2 mt-2">
-                  <Input value={newDep} placeholder="Add a department"
-                    onChange={(e) => setNewDep(e.target.value)}
+                  <Input value={newDep} placeholder="Add a department" maxLength={120}
+                    onChange={(e) => { setNewDep(e.target.value); setStructErr(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDep(); } }} />
                   <Button size="sm" onClick={addDep} disabled={!newDep.trim()}>Add</Button>
                 </div>
@@ -380,8 +466,8 @@ export default function CompaniesPage() {
               </div>
               {mayManageStructure && (
                 <div className="flex gap-2 mt-2">
-                  <Input value={newDes.title} placeholder="Add a designation"
-                    onChange={(e) => setNewDes({ ...newDes, title: e.target.value })}
+                  <Input value={newDes.title} placeholder="Add a designation" maxLength={120}
+                    onChange={(e) => { setNewDes({ ...newDes, title: e.target.value }); setStructErr(''); }}
                     onKeyDown={(e) => { if (e.key === 'Enter') { e.preventDefault(); addDes(); } }} />
                   <div className="w-28 shrink-0">
                     <MasterText kind="GRADE" value={newDes.grade} placeholder="Grade"

@@ -1,4 +1,5 @@
 import { Badge } from '@/components/ui.jsx';
+import { label } from '@/lib/labels.js';
 
 // ============================================================================
 // Onboarding / employment state chip.
@@ -14,7 +15,7 @@ import { Badge } from '@/components/ui.jsx';
 // grape = with HR, danger = stopped, neutral = no longer live.
 // ============================================================================
 const MAP = {
-  OFFER_SENT:        ['Pending',         'warn'],
+  OFFER_SENT:        ['Offer sent',      'warn'],
   OFFER_ACCEPTED:    ['Accepted',        'info'],
   REJECTED:          ['Rejected',        'danger'],
   DETAILS_PENDING:   ['Filling details', 'info'],
@@ -25,9 +26,11 @@ const MAP = {
   ACTIVE:            ['Active',          'ok'],
   INACTIVE:          ['Inactive',        'danger'],
   EXPIRED:           ['Expired',         'neutral'],
+  JOINING:           ['Joining',         'info'],
+  EXITED:            ['Exited',          'neutral'],
 };
 
 export default function StatusBadge({ status }) {
-  const [label, tone] = MAP[status] || [status, 'neutral'];
-  return <Badge tone={tone} dot>{label}</Badge>;
+  const [text, tone] = MAP[status] || [label(status), 'neutral'];
+  return <Badge tone={tone} dot>{text}</Badge>;
 }

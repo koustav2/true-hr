@@ -5,25 +5,37 @@ import { useRouter } from 'next/navigation';
 import { api } from '@/lib/api.js';
 import { useAuth } from '@/lib/auth.jsx';
 import { can } from '@/lib/permissions.js';
+import { usePerms } from '@/lib/perms.jsx';
+import StatusBadge from '@/components/StatusBadge.jsx';
 import { Card, Button, Spinner, Avatar, Badge, StatTile, Empty } from '@/components/ui.jsx';
 import { IconPlus, IconUsers, IconReview, IconChevronRight, IconUserPlus, IconSupport, IconMoney, IconExit, IconFile } from '@/components/icons.jsx';
 
+// Each stage opens the employee list filtered to it (H3).
 const PIPELINE = [
-  { key: 'offerSent', label: 'Offer sent', color: '#c9700c' },
-  { key: 'filling', label: 'Filling details', color: '#1a70da' },
-  { key: 'review', label: 'In review', color: '#7c3aed' },
-  { key: 'active', label: 'Active', color: '#0e7a3c' },
+  { key: 'offerSent', label: 'Offer sent', color: '#c9700c', href: '/admin/employees?status=OFFER_SENT' },
+  { key: 'filling', label: 'Filling details', color: '#1a70da', href: '/admin/employees?status=DETAILS_PENDING' },
+  { key: 'review', label: 'In review', color: '#7c3aed', href: '/admin/review' },
+  { key: 'active', label: 'Active employees', color: '#0e7a3c', href: '/admin/employees?status=ACTIVE' },
 ];
 
-const STATUS_TONE = {
-  ACTIVE: 'ok', OFFER_SENT: 'warn', OFFER_ACCEPTED: 'info',
-  DETAILS_PENDING: 'warn', SENT_BACK: 'warn', DETAILS_SUBMITTED: 'info',
-  HR_REVIEW: 'grape', REJECTED: 'danger', EXITED: 'neutral',
+// Leave-type requests: HR can open and act on them from Attendance (C1/H3).
+const APPROVAL_LINES = [
+  ['leave', 'Leave requests', '/admin/attendance?tab=leave&status=PENDING'],
+  ['od', 'On-duty', '/admin/attendance?tab=onduty&status=PENDING'],
+  ['missPunch', 'Miss-punch', '/admin/attendance?tab=misspunch&status=PENDING'],
+  ['compOff', 'Comp-off', '/admin/attendance?tab=compoff&status=PENDING'],
+];
+
+
+// Module behind each HR queue, so a role only sees the queues it may open.
+const QUEUE_MODULE = {
+  onboarding: 'ONBOARDING', changeRequests: 'CHANGEREQ', nfa: 'NFA', nfaQuery: 'NFA', vendors: 'VENDORS',
+  agreements: 'VENDORS', taxDeclarations: 'INVDECL', resignations: 'RESIGNATION', kpis: 'PMS', pms: 'PMS',
 };
-const pretty = (s) => (s || '').replace(/_/g, ' ').toLowerCase().replace(/^./, (c) => c.toUpperCase());
 
 export default function DashboardPage() {
   const { user } = useAuth();
+  const { canView } = usePerms();
   const router = useRouter();
   const [s, setS] = useState(null);
 
@@ -38,6 +50,9 @@ export default function DashboardPage() {
   const pipeTotal = pipe.reduce((a, p) => a + p.n, 0) || 1;
   const inProgress = (s.pipeline.offerSent || 0) + (s.pipeline.filling || 0);
   const payrollDone = s.payroll.published >= s.payroll.headcount && s.payroll.headcount > 0;
+  const queues = (s.queues || []).filter((q) => canView(QUEUE_MODULE[q.key] || 'DASHBOARD'));
+  const queuesOpen = queues.reduce((a, q) => a + q.count, 0);
+  const canAttendance = canView('ATTENDANCE');
 
   return (
     <div className="space-y-5">
@@ -53,15 +68,19 @@ export default function DashboardPage() {
 
       {/* ── Launchpad tiles ─────────────────────────────────────────── */}
       <div className="grid grid-cols-2 md:grid-cols-3 xl:grid-cols-5 gap-3">
-        <Link href="/admin/employees"><StatTile Icon={IconUsers} label="Headcount" caption="Total employees" value={s.headcount} tone="brand" /></Link>
+        <Link href="/admin/employees?status=ACTIVE"><StatTile Icon={IconUsers} label="Headcount" caption="Active employees" value={s.headcount} tone="brand"
+          foot={s.candidates ? `+ ${s.candidates} candidate${s.candidates === 1 ? '' : 's'} in onboarding` : undefined} footTone="brand" /></Link>
         <Link href="/admin/review"><StatTile Icon={IconReview} label="Awaiting review" caption="Onboarding submissions"
           value={s.pipeline.review} tone={s.pipeline.review ? 'warn' : 'ok'} foot={s.pipeline.review ? 'Needs approval' : 'All clear'} footTone={s.pipeline.review ? 'warn' : 'ok'} /></Link>
-        <Link href="/admin/payroll"><StatTile Icon={IconMoney} label={`Payroll · ${s.payroll.monthName}`} caption="Payslips published"
+        <Link href="/admin/payroll"><StatTile Icon={IconMoney} label={`Payroll · ${s.payroll.monthName}`} caption="Payslips published (active employees)"
           value={s.payroll.published} unit={`/${s.payroll.headcount}`} tone={payrollDone ? 'ok' : 'warn'}
           foot={payrollDone ? 'Complete' : `${Math.max(0, s.payroll.headcount - s.payroll.published)} pending`} footTone={payrollDone ? 'ok' : 'warn'} /></Link>
         <Link href="/admin/support"><StatTile Icon={IconSupport} label="Open tickets" caption="Support desk" value={s.openTickets} tone={s.openTickets ? 'brand' : 'ok'} /></Link>
-        <StatTile Icon={IconExit} label="Pending approvals" caption="Leave · OD · Comp-off" value={s.approvals.total}
-          tone={s.approvals.total ? 'warn' : 'ok'} foot={s.approvals.total ? 'Awaiting managers' : 'All clear'} footTone={s.approvals.total ? 'warn' : 'ok'} />
+        {/* C1: the label lists everything the number contains. */}
+        <Link href={canAttendance ? '/admin/attendance?status=PENDING' : '#pending-approvals'}>
+          <StatTile Icon={IconExit} label="Pending approvals" caption="Leave · OD · Miss-punch · Comp-off" value={s.approvals.total}
+            tone={s.approvals.total ? 'warn' : 'ok'} foot={s.approvals.total ? (canAttendance ? 'Open Attendance to act' : 'With managers or HR') : 'All clear'} footTone={s.approvals.total ? 'warn' : 'ok'} />
+        </Link>
       </div>
 
       <div className="grid xl:grid-cols-3 gap-4 items-start">
@@ -69,7 +88,7 @@ export default function DashboardPage() {
         <Card className="xl:col-span-2 overflow-hidden">
           <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
             <span className="text-[13.5px] font-semibold text-ink">Recent employees</span>
-            <span className="text-[11.5px] text-ink-faint">{(s.recentEmployees || []).length} of {s.headcount}</span>
+            <span className="text-[11.5px] text-ink-faint">Latest {(s.recentEmployees || []).length} people and candidates</span>
             <Link href="/admin/employees" className="ml-auto text-[12.5px] font-semibold text-brand-600 hover:underline">View all</Link>
           </div>
           {(!s.recentEmployees || s.recentEmployees.length === 0) ? (
@@ -91,7 +110,11 @@ export default function DashboardPage() {
                         </div>
                       </td>
                       <td className="px-4 text-ink-soft">{r.designation || '—'}</td>
-                      <td className="px-4"><Badge tone={STATUS_TONE[r.status] || 'neutral'} dot>{pretty(r.status)}</Badge></td>
+                      <td className="px-4">
+                        {/* H20: the same status vocabulary as the Employees list. */}
+                        <StatusBadge status={r.status} />
+                        {r.isCandidate && <span className="ml-1.5 text-[11px] text-ink-faint">Candidate</span>}
+                      </td>
                     </tr>
                   ))}
                 </tbody>
@@ -111,11 +134,13 @@ export default function DashboardPage() {
               <div className="flex h-2 w-full overflow-hidden rounded-sm bg-slate-200">
                 {pipe.map((p) => p.n > 0 && <div key={p.key} style={{ width: `${(p.n / pipeTotal) * 100}%`, background: p.color }} />)}
               </div>
-              <ul className="mt-3.5 space-y-2">
+              <ul className="mt-3.5 space-y-0.5">
                 {pipe.map((p) => (
-                  <li key={p.key} className="flex items-center justify-between text-[13px]">
-                    <span className="flex items-center gap-2 text-ink-soft"><span className="h-2 w-2 rounded-sm" style={{ background: p.color }} />{p.label}</span>
-                    <span className="font-semibold text-ink tabular-nums">{p.n}</span>
+                  <li key={p.key}>
+                    <Link href={p.href} className="flex items-center justify-between text-[13px] rounded px-1.5 py-1 -mx-1.5 hover:bg-canvas">
+                      <span className="flex items-center gap-2 text-ink-soft"><span className="h-2 w-2 rounded-sm" style={{ background: p.color }} />{p.label}</span>
+                      <span className="flex items-center gap-1 font-semibold text-ink tabular-nums">{p.n}<IconChevronRight width={12} height={12} className="text-ink-faint" /></span>
+                    </Link>
                   </li>
                 ))}
               </ul>
@@ -123,20 +148,57 @@ export default function DashboardPage() {
           </Card>
 
           <Card>
-            <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+            <div id="pending-approvals" className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
               <span className="text-[13.5px] font-semibold text-ink">Pending approvals</span>
+              <span className="text-[11.5px] text-ink-faint">Leave · OD · Miss-punch · Comp-off</span>
               <span className="ml-auto"><Badge tone={s.approvals.total ? 'warn' : 'neutral'}>{s.approvals.total}</Badge></span>
             </div>
             <ul className="divide-y divide-line">
-              {[['Leave requests', s.approvals.leave], ['On-duty', s.approvals.od], ['Miss-punch', s.approvals.missPunch], ['Comp-off', s.approvals.compOff]].map(([l, n]) => (
-                <li key={l} className="flex items-center justify-between px-4 py-2.5 text-[13px]">
-                  <span className="text-ink-soft">{l}</span>
-                  <span className={`font-semibold tabular-nums ${n ? 'text-ink' : 'text-ink-faint'}`}>{n}</span>
-                </li>
-              ))}
+              {APPROVAL_LINES.map(([k, l, href]) => {
+                const n = s.approvals[k] || 0;
+                const body = (
+                  <>
+                    <span className="text-ink-soft">{l}</span>
+                    <span className={`flex items-center gap-1 font-semibold tabular-nums ${n ? 'text-ink' : 'text-ink-faint'}`}>
+                      {n}{canAttendance && <IconChevronRight width={12} height={12} className="text-ink-faint" />}
+                    </span>
+                  </>
+                );
+                return (
+                  <li key={k}>
+                    {canAttendance
+                      ? <Link href={href} className="flex items-center justify-between px-4 py-2.5 text-[13px] hover:bg-canvas">{body}</Link>
+                      : <div className="flex items-center justify-between px-4 py-2.5 text-[13px]">{body}</div>}
+                  </li>
+                );
+              })}
             </ul>
-            <p className="text-[11.5px] text-ink-faint px-4 py-2.5 border-t border-line">Managers action these in the employee app.</p>
+            <p className="text-[11.5px] text-ink-faint px-4 py-2.5 border-t border-line">
+              Reporting managers approve these. Open a line to view the requests, or act when no manager is available.
+            </p>
           </Card>
+
+          {/* C2: every HR approval queue in one place, each opening its list. */}
+          {queues.length > 0 && (
+            <Card>
+              <div className="flex items-center gap-2.5 px-4 py-2.5 border-b border-line bg-canvas">
+                <span className="text-[13.5px] font-semibold text-ink">Waiting on HR</span>
+                <span className="ml-auto"><Badge tone={queuesOpen ? 'warn' : 'neutral'}>{queuesOpen}</Badge></span>
+              </div>
+              <ul className="divide-y divide-line">
+                {queues.map((q) => (
+                  <li key={q.key}>
+                    <Link href={q.href} className="flex items-center justify-between px-4 py-2.5 text-[13px] hover:bg-canvas">
+                      <span className="text-ink-soft">{q.label}</span>
+                      <span className={`flex items-center gap-1 font-semibold tabular-nums ${q.count ? 'text-ink' : 'text-ink-faint'}`}>
+                        {q.count}<IconChevronRight width={12} height={12} className="text-ink-faint" />
+                      </span>
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </Card>
+          )}
 
           <Card>
             <div className="px-4 py-2.5 border-b border-line bg-canvas"><span className="text-[13.5px] font-semibold text-ink">Quick actions</span></div>

@@ -1,12 +1,12 @@
 'use client';
-import { useEffect, useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import Link from 'next/link';
 import { usePathname, useRouter } from 'next/navigation';
 import { useAuth } from '@/lib/auth.jsx';
 import { can, ROLE_LABEL } from '@/lib/permissions.js';
-import { PermProvider, usePerms } from '@/lib/perms.jsx';
+import { PermProvider, usePerms, initialsFor } from '@/lib/perms.jsx';
 import { FEATURES } from '@/lib/flags.js';
-import { Spinner, Button, Card } from '@/components/ui.jsx';
+import { Spinner, Button, Card, useConfirm } from '@/components/ui.jsx';
 import {
   IconDashboard, IconUsers, IconReview, IconLogout, IconShield, IconActivity,
   IconClock, IconSupport, IconFile, IconMoney, IconMenu, IconChevronLeft, IconX, IconExit,
@@ -37,12 +37,13 @@ const SECTIONS = [
     items: [
       { href: '/admin/employees', label: 'Employees', Icon: IconUsers, module: 'EMPLOYEES' },
       { href: '/admin/review', label: 'Review queue', Icon: IconReview, module: 'ONBOARDING' },
+      { href: '/admin/attendance', label: 'Attendance', Icon: IconClock, module: 'ATTENDANCE' },
       { href: '/admin/change-requests', label: 'Change requests', Icon: IconCheck, module: 'CHANGEREQ' },
       { href: '/admin/org-chart', label: 'Org chart', Icon: IconUsers, module: 'ORGCHART' },
       { href: '/admin/hierarchy', label: 'Hierarchy & levels', Icon: IconBriefcase, module: 'STRUCTURE' },
       { href: '/admin/org-masters', label: 'Master data', Icon: IconBriefcase, module: 'ORGMASTERS' },
       { href: '/admin/leave-config', label: 'Leave config', Icon: IconClock, module: 'LEAVE' },
-      { href: '/admin/wishes', label: 'Wishes', Icon: IconSparkle, module: 'EMPLOYEES' },
+      { href: '/admin/wishes', label: 'Wishes', Icon: IconSparkle, module: 'WISHES' },
     ],
   },
   {
@@ -73,14 +74,15 @@ const SECTIONS = [
       { href: '/admin/branding', label: 'Document branding', Icon: IconSparkle, module: 'DOCBRAND' },
       { href: '/admin/policies', label: 'Policies', Icon: IconFile, module: 'POLICIES' },
       { href: '/admin/banners', label: 'App Banners', Icon: IconSparkle, module: 'BANNERS' },
-      { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'BANNERS' },
+      { href: '/admin/notification-scheduler', label: 'Scheduler', Icon: IconClock, module: 'SCHEDULER' },
     ],
   },
   {
     key: 'finance',
     title: 'NFA & Finance',
     items: [
-      { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, module: 'NFA', nfa: true },
+      // Settlements are reviewed inside each NFA, so either module opens the queue.
+      { href: '/admin/nfa', label: 'NFA queue', Icon: IconMoney, module: ['NFA', 'SETTLEMENTS'], nfa: true },
       { href: '/admin/nfa-reports', label: 'Reports', Icon: IconFile, module: 'NFA_REPORTS', nfa: true },
       { href: '/admin/masters', label: 'Masters', Icon: IconBriefcase, module: 'MASTERS', nfa: true },
       { href: '/admin/approvers', label: 'Approvers', Icon: IconShield, module: 'APPROVERS', nfa: true },
@@ -111,10 +113,12 @@ const SECTIONS = [
       { href: '/admin/roles', label: 'Roles & permissions', Icon: IconShield, module: 'ROLES' },
       { href: '/admin/assets', label: 'Asset management', Icon: IconBriefcase, module: 'ASSETS' },
       { href: '/admin/audit', label: 'Audit log', Icon: IconActivity, module: 'AUDIT' },
-      { href: '/admin/organisations', label: 'Master Admin', Icon: IconShield, module: 'ORGANISATIONS' },
     ],
   },
 ];
+
+// A nav item may name one module or several (any of them opens it).
+const viewable = (canView, mod) => (Array.isArray(mod) ? mod.some((m) => canView(m)) : canView(mod));
 
 const ALL = SECTIONS.flatMap((s) => s.items);
 // The platform owner (Master) manages only organisations and the master-ticket
@@ -127,6 +131,8 @@ const MASTER = [
 // organisation list, so this list and the MASTER nav must stay in step.
 const MASTER_PATHS = MASTER.map((i) => i.href);
 const isMasterPath = (pathname) => MASTER_PATHS.some((p) => pathname.startsWith(p));
+// One label for the Master's console on every Master screen (M9).
+const MASTER_LABEL = 'Master Admin';
 
 const ROLE_BADGE = {
   MASTER: 'bg-shell/10 text-shell',
@@ -137,7 +143,8 @@ const ROLE_BADGE = {
 
 function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate }) {
   return (
-    <Link href={href} title={collapsed ? label : undefined} onClick={onNavigate}
+    <Link href={href} title={collapsed ? label : undefined} onClick={onNavigate} data-active={active ? 'true' : undefined}
+      aria-current={active ? 'page' : undefined}
       className={`relative flex items-center gap-2.5 rounded px-2.5 py-2 text-[14.5px] transition-colors duration-100 border-l-[3px] ${collapsed ? 'justify-center' : ''} ${
         active
           ? 'bg-brand-50 text-brand-700 border-brand-600 font-semibold'
@@ -156,7 +163,7 @@ function NavItem({ item: { href, label, Icon }, active, collapsed, onNavigate })
  * actually are.
  */
 function NavGroup({ title, items, canView, isActive, collapsed, onNavigate, open = true, onToggle, hasActive }) {
-  const visible = items.filter((i) => (i.nfa ? FEATURES.nfaSuite : true) && canView(i.module));
+  const visible = items.filter((i) => (i.nfa ? FEATURES.nfaSuite : true) && viewable(canView, i.module));
   if (visible.length === 0) return null;
   const shown = open || hasActive;
   return (
@@ -226,6 +233,7 @@ function OrgSwitcher() {
       <span className="hidden md:inline-flex items-center gap-1.5 rounded-sm bg-white/10 px-2.5 py-1 text-[11.5px] font-semibold text-white/80 max-w-[210px]">
         <IconBriefcase className="text-white/55 shrink-0" />
         <span className="truncate">{activeOrg.name}</span>
+        {activeOrg.code && <span className="shrink-0 font-mono text-white/55">{activeOrg.code}</span>}
       </span>
     );
   }
@@ -236,6 +244,7 @@ function OrgSwitcher() {
         title="Switch organisation">
         <IconBriefcase className="text-white/60 shrink-0" />
         <span className="truncate">{activeOrg.name}</span>
+        {activeOrg.code && <span className="shrink-0 font-mono text-white/60">{activeOrg.code}</span>}
         <IconChevronLeft className="-rotate-90 text-white/60 shrink-0" />
       </button>
       {open && (
@@ -250,12 +259,16 @@ function OrgSwitcher() {
                 const active = String(o.id) === String(orgs.activeOrganisationId);
                 return (
                   <button key={o.id} disabled={active}
+                    title={`${o.name}${o.code ? ` (${o.code})` : ''}`}
                     onClick={() => { setOpen(false); switchOrg(o.id); }}
                     className={`flex w-full items-center justify-between gap-2 rounded-lg px-3 py-2 text-left text-sm ${
                       active ? 'bg-brand-50 text-brand-700 font-semibold' : 'text-ink-soft hover:bg-slate-50'}`}>
                     <span className="min-w-0">
                       <span className="block truncate">{o.name}</span>
-                      <span className="block text-[11px] text-ink-faint">{o.employees ?? 0} employees</span>
+                      {/* Short code first: two orgs can differ only by letter case (M9). */}
+                      <span className="block text-[11px] text-ink-faint">
+                        <span className="font-mono font-semibold text-ink-soft">{o.code || 'no code'}</span> · {o.employees ?? 0} employees
+                      </span>
                     </span>
                     {active && <IconCheck className="text-brand-600 shrink-0" />}
                   </button>
@@ -299,11 +312,85 @@ function AccessDenied({ label, onHome }) {
   );
 }
 
+// The sidebar's contents. Defined at module level (H4): declared inside
+// AdminShell it was a new component type on every render, so React remounted
+// it on each navigation and the scroll position snapped back to the top.
+function SidebarBody({
+  collapsed, isPlatformAdmin, workingInside, canView, isActive, hidden, toggleSection, onNavigate,
+  displayName, email, roleLabel, badgeRole, onSignOut,
+}) {
+  const scrollRef = useRef(null);
+  const activeHref = [...(isPlatformAdmin && !workingInside ? MASTER : ALL)]
+    .sort((a, b) => b.href.length - a.href.length).find((i) => isActive(i.href))?.href;
+  // Keep the current page's entry in view, without jumping when it already is.
+  useEffect(() => {
+    // Scrolls only the sidebar itself (scrollIntoView could move the page).
+    const box = scrollRef.current;
+    const el = box?.querySelector('[data-active="true"]');
+    if (!box || !el) return;
+    const top = el.offsetTop; // the scroll box is the positioned ancestor
+    if (top < box.scrollTop) box.scrollTop = Math.max(0, top - 24);
+    else if (top + el.offsetHeight > box.scrollTop + box.clientHeight) box.scrollTop = top + el.offsetHeight - box.clientHeight + 24;
+  }, [activeHref, collapsed]);
+  return (
+    <>
+      <div ref={scrollRef} className={`relative pt-2 flex-1 overflow-y-auto scroll-fade ${collapsed ? 'px-1.5' : 'px-2'}`}>
+        {isPlatformAdmin && !workingInside ? (
+          <NavGroup title="Platform" items={MASTER} canView={() => true} isActive={(h) => h === activeHref} collapsed={collapsed} onNavigate={onNavigate} />
+        ) : (
+          SECTIONS.map((sec) => (
+            <NavGroup
+              key={sec.key}
+              title={sec.title}
+              items={sec.items}
+              canView={canView}
+              isActive={(h) => h === activeHref}
+              collapsed={collapsed}
+              onNavigate={onNavigate}
+              open={!hidden.has(sec.key)}
+              onToggle={() => toggleSection(sec.key)}
+              hasActive={sec.items.some((i) => i.href === activeHref)}
+            />
+          ))
+        )}
+      </div>
+      <div className={`mt-auto border-t border-line ${collapsed ? 'p-1.5' : 'p-2'}`}>
+        {!collapsed && (
+          <div className="px-2.5 py-2 min-w-0">
+            <div className="text-[12px] font-semibold text-ink truncate">{displayName || email}</div>
+            {displayName && <div className="text-[11px] text-ink-faint truncate">{email}</div>}
+            <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
+          </div>
+        )}
+        {/* A line to us, not to this organisation's own HR/IT desk. Outside the
+            module system on purpose: every login must be able to reach us, even
+            when their roles grant them almost nothing. */}
+        {!isPlatformAdmin && (
+          <Link href="/admin/help" onClick={onNavigate} title="Contact TrueHR"
+            className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
+              isActive('/admin/help') ? 'text-brand-700 bg-brand-50' : 'text-ink-soft hover:bg-canvas hover:text-ink'
+            } ${collapsed ? 'justify-center' : ''}`}>
+            <IconSupport className="text-ink-faint" />{!collapsed && 'Contact TrueHR'}
+          </Link>
+        )}
+        <button onClick={onSignOut} title="Sign out"
+          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
+          <IconLogout className="text-ink-faint" />{!collapsed && 'Sign out'}
+        </button>
+      </div>
+    </>
+  );
+}
+
 function AdminShell({ children }) {
   const { auth, user, logout, ready } = useAuth();
-  const { canView, loading: permsLoading, role: liveRole, activeOrg, isPlatformAdmin } = usePerms();
+  const {
+    canView, loading: permsLoading, role: liveRole, activeOrg, isPlatformAdmin,
+    workingInside, exitWorkspace, displayName, organisationName,
+  } = usePerms();
   const pathname = usePathname();
   const router = useRouter();
+  const [confirm, confirmUi] = useConfirm();
   const role = user?.role;
   // Prefer the custom role's label ("Chief Technology Officer") over the base
   // enum, so a CEO is not shown as "HR Admin".
@@ -311,6 +398,8 @@ function AdminShell({ children }) {
   // org role ("Super Admin" of the seed org) is the wrong thing to show.
   const roleLabel = isPlatformAdmin ? 'Master' : (liveRole?.label || ROLE_LABEL[role] || 'Staff');
   const badgeRole = isPlatformAdmin ? 'MASTER' : (liveRole?.baseRole || role);
+  // C52/E66: an employee login has no admin console — send it to ESS.
+  const isEmployeeLogin = !isPlatformAdmin && (liveRole?.baseRole || role) === 'EMPLOYEE';
 
   const [collapsed, setCollapsed] = useState(false);
   const [mobileOpen, setMobileOpen] = useState(false);
@@ -322,81 +411,56 @@ function AdminShell({ children }) {
   useEffect(() => {
     if (ready && !auth?.token) router.replace('/login');
   }, [ready, auth, router]);
-  // The Master (platform owner) works only in the Master Admin section — any
-  // other admin route bounces back, so the organisation list is the whole surface.
   useEffect(() => {
-    if (ready && auth?.token && isPlatformAdmin && !isMasterPath(pathname)) {
+    if (ready && auth?.token && !permsLoading && isEmployeeLogin) router.replace('/ess');
+  }, [ready, auth, permsLoading, isEmployeeLogin, router]);
+  // The Master works in the Master Admin section, unless it has switched into
+  // a tenant (D1) — then the tenant's console is open to it, with a banner.
+  useEffect(() => {
+    if (ready && auth?.token && !permsLoading && isPlatformAdmin && !workingInside && !isMasterPath(pathname)) {
       router.replace('/admin/organisations');
     }
-  }, [ready, auth, isPlatformAdmin, pathname, router]);
+  }, [ready, auth, permsLoading, isPlatformAdmin, workingInside, pathname, router]);
+  // Opening the organisation list (e.g. "Manage organisations") leaves the tenant console.
+  useEffect(() => {
+    if (workingInside && isMasterPath(pathname)) exitWorkspace();
+  }, [workingInside, pathname, exitWorkspace]);
 
   function toggleCollapse() {
     setCollapsed((c) => { localStorage.setItem('truehr_nav_collapsed', c ? '0' : '1'); return !c; });
   }
 
-  if (!ready || !auth?.token || permsLoading) {
+  // E64: signing out is confirmed.
+  async function signOut() {
+    setMenuOpen(false);
+    if (!(await confirm({ title: 'Sign out?', body: 'Are you sure you want to sign out?', confirmLabel: 'Sign out' }))) return;
+    logout();
+    router.replace('/login');
+  }
+
+  if (!ready || !auth?.token || permsLoading || isEmployeeLogin) {
     return <div className="min-h-screen grid place-items-center"><Spinner className="text-brand-600 h-6 w-6" /></div>;
   }
 
-  const initials = (user?.email || 'HR').slice(0, 2).toUpperCase();
+  // E63: a person's name and initials, not the email's first two letters.
+  const initials = initialsFor(displayName, user?.email);
   const isActive = (href) => (href === '/admin' ? pathname === '/admin' : pathname.startsWith(href));
-  const current = [...ALL].sort((a, b) => b.href.length - a.href.length).find((i) => isActive(i.href));
-  const pageTitle = current?.label || 'Admin Console';
+  const masterConsole = isPlatformAdmin && !workingInside;
+  const current = [...(masterConsole ? MASTER : ALL)].sort((a, b) => b.href.length - a.href.length).find((i) => isActive(i.href));
+  const pageTitle = current?.label || (masterConsole ? 'Organisations' : 'Dashboard');
   // Route-level permission gate. Nav hides links, but a directly-typed URL would
   // still render; block it unless the live permissions allow this section.
-  const firstAllowed = ALL.find((i) => canView(i.module));
-  const masterElsewhere = isPlatformAdmin && !isMasterPath(pathname);
-  const blocked = !isPlatformAdmin && current && !canView(current.module);
-
-  const SidebarBody = ({ collapsed }) => (
-    <>
-      <div className={`pt-2 flex-1 overflow-y-auto scroll-fade ${collapsed ? 'px-1.5' : 'px-2'}`}>
-        {isPlatformAdmin ? (
-          <NavGroup title="Platform" items={MASTER} canView={() => true} isActive={isActive} collapsed={collapsed} onNavigate={() => setMobileOpen(false)} />
-        ) : (
-          <>
-            {SECTIONS.map((sec) => (
-              <NavGroup
-                key={sec.key}
-                title={sec.title}
-                items={sec.items}
-                canView={canView}
-                isActive={isActive}
-                collapsed={collapsed}
-                onNavigate={() => setMobileOpen(false)}
-                open={!hidden.has(sec.key)}
-                onToggle={() => toggleSection(sec.key)}
-                hasActive={sec.items.some((i) => isActive(i.href))}
-              />
-            ))}
-          </>
-        )}
-      </div>
-      <div className={`mt-auto border-t border-line ${collapsed ? 'p-1.5' : 'p-2'}`}>
-        {!collapsed && (
-          <div className="px-2.5 py-2 min-w-0">
-            <div className="text-[12px] font-semibold text-ink truncate">{user?.email}</div>
-            <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
-          </div>
-        )}
-        {/* A line to us, not to this organisation's own HR/IT desk. Outside the
-            module system on purpose: every login must be able to reach us, even
-            when their roles grant them almost nothing. */}
-        {!isPlatformAdmin && (
-          <Link href="/admin/help" onClick={() => setMobileOpen(false)} title="Contact TrueHR"
-            className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium transition-colors ${
-              isActive('/admin/help') ? 'text-brand-700 bg-brand-50' : 'text-ink-soft hover:bg-canvas hover:text-ink'
-            } ${collapsed ? 'justify-center' : ''}`}>
-            <IconSupport className="text-ink-faint" />{!collapsed && 'Contact TrueHR'}
-          </Link>
-        )}
-        <button onClick={() => { logout(); router.replace('/login'); }} title="Sign out"
-          className={`flex items-center gap-2.5 w-full rounded px-2.5 py-1.5 text-[13px] font-medium text-ink-soft hover:bg-canvas hover:text-ink transition-colors ${collapsed ? 'justify-center' : ''}`}>
-          <IconLogout className="text-ink-faint" />{!collapsed && 'Sign out'}
-        </button>
-      </div>
-    </>
-  );
+  const firstAllowed = ALL.find((i) => viewable(canView, i.module));
+  const masterElsewhere = masterConsole && !isMasterPath(pathname);
+  const blocked = !isPlatformAdmin && current && !viewable(canView, current.module);
+  // M9: one consistent context label. The Master's console always reads
+  // "Master Admin"; a tenant console reads the tenant's own name.
+  const contextLabel = masterConsole ? MASTER_LABEL : (organisationName || activeOrg?.name || 'True HR');
+  const sidebarProps = {
+    isPlatformAdmin, workingInside, canView, isActive, hidden, toggleSection,
+    onNavigate: () => setMobileOpen(false),
+    displayName, email: user?.email, roleLabel, badgeRole, onSignOut: signOut,
+  };
 
   return (
     <div className="h-screen flex flex-col overflow-hidden bg-canvas">
@@ -406,28 +470,32 @@ function AdminShell({ children }) {
         <button onClick={toggleCollapse} className="hidden md:grid place-items-center h-8 w-8 rounded text-white/85 hover:bg-white/10" title={collapsed ? 'Expand navigation' : 'Collapse navigation'}>
           <IconChevronLeft className={`transition-transform ${collapsed ? 'rotate-180' : ''}`} />
         </button>
-        <Link href="/admin" className="flex items-center gap-2.5 shrink-0">
+        <Link href={masterConsole ? '/admin/organisations' : '/admin'} className="flex items-center gap-2.5 shrink-0">
           <span className="grid place-items-center h-6 w-6 rounded bg-brand-gradient text-[9.5px] font-bold">TK</span>
           <span className="hidden sm:block font-semibold text-[14px] tracking-tight">True HR</span>
         </Link>
         <span className="hidden md:block h-5 w-px bg-white/20 shrink-0" />
         <div className="hidden md:block min-w-0 text-[12.5px] text-white/70 truncate">
-          {activeOrg?.name || 'True HR'} · {pageTitle}
+          {contextLabel} · {pageTitle}
         </div>
         <div className="ml-auto flex items-center gap-2 relative">
           <OrgSwitcher />
           <span className="hidden sm:inline-flex rounded-sm bg-white/10 px-2 py-0.5 text-[10.5px] font-bold text-white/85">{roleLabel}</span>
-          <button onClick={() => setMenuOpen((o) => !o)} title={user?.email}
+          <button onClick={() => setMenuOpen((o) => !o)} title={displayName || user?.email}
             className="grid place-items-center h-7 w-7 rounded-full bg-white/[.18] hover:bg-white/25 text-[10.5px] font-bold transition-colors">{initials}</button>
           {menuOpen && (
             <>
               <div className="fixed inset-0 z-30" onClick={() => setMenuOpen(false)} />
               <div className="absolute right-0 top-9 z-40 w-60 rounded-xl2 border border-line bg-white shadow-pop p-1.5 animate-in">
                 <div className="px-2.5 py-2 border-b border-line mb-1">
-                  <div className="text-[12.5px] font-semibold text-ink truncate">{user?.email}</div>
+                  <div className="text-[12.5px] font-semibold text-ink truncate">{displayName || user?.email}</div>
+                  {displayName && <div className="text-[11.5px] text-ink-faint truncate">{user?.email}</div>}
                   <span className={`inline-flex mt-1 rounded-sm px-1.5 py-0.5 text-[10px] font-bold ${ROLE_BADGE[badgeRole] || 'bg-slate-100 text-ink-soft'}`}>{roleLabel}</span>
                 </div>
-                <button onClick={() => { logout(); router.replace('/login'); }} className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14.5px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
+                <Link href="/change-password" className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
+                  <IconShield className="text-ink-faint" /> Change password
+                </Link>
+                <button onClick={signOut} className="flex items-center gap-2.5 w-full rounded px-2.5 py-2 text-[14.5px] font-medium text-ink-soft hover:bg-canvas hover:text-ink">
                   <IconLogout className="text-ink-faint" /> Sign out
                 </button>
               </div>
@@ -436,20 +504,33 @@ function AdminShell({ children }) {
         </div>
       </header>
 
+      {/* D1: the Master is working inside a tenant's console. */}
+      {workingInside && (
+        <div className="shrink-0 bg-amber-50 border-b border-amber-200 text-amber-900 text-[12.5px] px-3.5 py-1.5 flex flex-wrap items-center gap-x-3 gap-y-1">
+          <span>
+            Working inside <b>{workingInside.name}</b>{workingInside.code ? <span className="font-mono"> ({workingInside.code})</span> : null} as Master.
+            Changes you make here apply to this organisation.
+          </span>
+          <button onClick={exitWorkspace} className="ml-auto font-semibold text-amber-900 underline hover:no-underline">
+            Back to Organisations
+          </button>
+        </div>
+      )}
+
       <div className="flex-1 min-w-0 flex overflow-hidden">
         {/* Desktop navigation */}
         <aside className={`shrink-0 hidden md:flex flex-col bg-white border-r border-line overflow-hidden transition-[width] duration-150 ${collapsed ? 'w-[60px]' : 'w-[228px]'}`}>
-          <SidebarBody collapsed={collapsed} />
+          <SidebarBody collapsed={collapsed} {...sidebarProps} />
         </aside>
 
         {/* Mobile drawer */}
         {mobileOpen && <div className="fixed inset-0 z-40 bg-shell/50 md:hidden" onClick={() => setMobileOpen(false)} />}
         <aside className={`fixed z-50 md:hidden top-0 left-0 h-screen w-[248px] flex flex-col bg-white border-r border-line shadow-pop transition-transform duration-150 ${mobileOpen ? 'translate-x-0' : '-translate-x-full'}`}>
           <div className="h-12 flex items-center justify-between px-3 bg-shell text-white shrink-0">
-            <span className="font-semibold text-[13.5px]">True HR</span>
+            <span className="font-semibold text-[13.5px] truncate">{contextLabel}</span>
             <button onClick={() => setMobileOpen(false)} className="text-white/80 hover:text-white"><IconX /></button>
           </div>
-          <SidebarBody collapsed={false} />
+          <SidebarBody collapsed={false} {...sidebarProps} />
         </aside>
 
         {/* Work area */}
@@ -463,6 +544,7 @@ function AdminShell({ children }) {
           </div>
         </main>
       </div>
+      {confirmUi}
     </div>
   );
 }
